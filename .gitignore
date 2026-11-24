@@ -1,0 +1,17 @@
+# Local deploy config
+docker-compose.yml
+
+# Council workflow kit (aidlc-ship v3) — local only, not published
+CLAUDE.md
+RULESET.md
+aidlc.toml
+.claude/
+.gitattributes
+.github/
+docs/
+scripts/
+tests/
+
+# Python caches from council.py
+__pycache__/
+*.pyc
