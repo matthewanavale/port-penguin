@@ -1,0 +1,43 @@
+// Manual pages for `man`. Ported from index.html:1244-1282 at 5e96ce5.
+
+export const MAN: Record<string, string> = {
+  pwd: "pwd\n  Print the folder you’re in right now.",
+  ls: "ls [-l] [-a] [-h] [path]\n  List files. -l shows details, -a shows hidden files, -h makes sizes readable.",
+  cd: "cd [path]\n  Change folder. cd .. goes up, cd ~ or plain cd goes home, cd - goes back.",
+  cat: "cat FILE...\n  Print a file’s contents.",
+  tree: "tree [path]\n  Draw folders and files as a tree.",
+  mkdir:
+    "mkdir [-p] FOLDER\n  Make a folder. -p also makes any missing parent folders.",
+  touch: "touch FILE\n  Make an empty file.",
+  cp: "cp [-r] SOURCE DEST\n  Copy a file. Use -r to copy a folder.",
+  mv: "mv SOURCE DEST\n  Move or rename a file or folder.",
+  rm: "rm [-r] [-f] FILE\n  Delete. -r for folders, -f to skip errors. There’s no undo.",
+  find: 'find [PATH] [-name PATTERN] [-type f|d]\n  Search for files by name under PATH. Quote patterns: -name "*.log"',
+  tar: "tar -czf ARCHIVE.tar.gz FILES   create\ntar -tzf ARCHIVE.tar.gz         list contents\ntar -xzf ARCHIVE.tar.gz [-C DIR] extract",
+  echo: "echo TEXT\n  Print text. Pair with > (overwrite) or >> (append) to write into a file.",
+  grep: "grep [-i] [-n] [-c] [-v] [-r] PATTERN [FILE]\n  Show matching lines. -i ignore case, -n line numbers, -c count, -v invert, -r search folders.",
+  head: "head [-n N] FILE\n  Show the first N lines (10 by default).",
+  tail: "tail [-n N] FILE\n  Show the last N lines (10 by default).",
+  wc: "wc [-l] [-w] [-c] FILE\n  Count lines, words and bytes.",
+  sort: "sort [-r] [-n] [-u] [FILE]\n  Sort lines. -r reverse, -n by number, -u drop duplicates.",
+  uniq: "uniq [-c] [-d] [FILE]\n  Collapse repeated lines that are next to each other (so sort first). -c counts them.",
+  cut: 'cut -d DELIM -f FIELDS [FILE]\ncut -c RANGE [FILE]\n  Pick out columns. Example: cut -d" " -f3 file',
+  awk: "awk [-F SEP] '{print $N}' [FILE]\n  Print chosen columns. $1 is the first word on each line.",
+  sed: "sed [-i] 's/OLD/NEW/[g]' FILE\n  Replace text. -i edits the file in place, g replaces every match on a line.",
+  chmod:
+    "chmod MODE FILE\n  Change permissions. +x lets a file run. 600 means rw-------, 755 means rwxr-xr-x.",
+  export: "export NAME=value\n  Set a variable. Read it back with $NAME.",
+  env: "env\n  List environment variables.",
+  which: "which COMMAND\n  Show where a program lives.",
+  ps: "ps [aux]\n  List processes. Plain ps shows yours, ps aux shows everyone’s.",
+  top: "top\n  Show processes sorted by CPU use.",
+  kill: "kill [-9] PID\n  Ask a process to stop. -9 forces it.",
+  pkill: "pkill [-9] NAME\n  Stop processes by name.",
+  df: "df [-h]\n  Show how full each disk is.",
+  du: "du [-s] [-h] PATH...\n  Show how much space files and folders use.",
+  free: "free -h\n  Show memory use.",
+  curl: "curl URL\n  Fetch a web address. Try localhost:PORT after publishing a container port.",
+  docker:
+    "docker COMMAND\n  Manage containers and images. Type docker help for the list.",
+  history: "history\n  List the commands you’ve typed.",
+};

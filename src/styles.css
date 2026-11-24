@@ -1,0 +1,500 @@
+/* Page styles, from the inline <style> of index.html at 5e96ce5. The DOM
+   terminal rules (#out, .ln, .inline, ...) are replaced by the xterm.js
+   container rules at the end. */
+:root {
+  --bg: #e6ecf0;
+  --panel: #f8fafb;
+  --ink: #12263a;
+  --muted: #55697b;
+  --line: #c6d1da;
+  --accent: #2858a6;
+  --c1: #2e62b3;
+  --c2: #2f8a82;
+  --c3: #c98f1e;
+  --c4: #7b57b0;
+  --c5: #5e8c31;
+  --c6: #c2503a;
+  --c7: #1f7a9e;
+  --c8: #b0407a;
+  --term: #0f2133;
+  --tink: #d8e4ed;
+  --tdim: #8199ad;
+  --tprompt: #f2c14e;
+  --tpath: #8fb8f5;
+  --tok: #7dd3c4;
+  --terr: #f5a08b;
+  --texe: #9ee493;
+  --sans:
+    "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1822;
+    --panel: #132331;
+    --ink: #e2ebf1;
+    --muted: #94a9ba;
+    --line: #263c4e;
+    --accent: #7ea9ec;
+    --c1: #5c8fdb;
+    --c2: #4db0a6;
+    --c3: #e6b550;
+    --c4: #a585db;
+    --c5: #8dbe5c;
+    --c6: #e07158;
+    --c7: #4fb0d6;
+    --c8: #de6fa8;
+    --term: #08131d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1822;
+  --panel: #132331;
+  --ink: #e2ebf1;
+  --muted: #94a9ba;
+  --line: #263c4e;
+  --accent: #7ea9ec;
+  --c1: #5c8fdb;
+  --c2: #4db0a6;
+  --c3: #e6b550;
+  --c4: #a585db;
+  --c5: #8dbe5c;
+  --c6: #e07158;
+  --c7: #4fb0d6;
+  --c8: #de6fa8;
+  --term: #08131d;
+  color-scheme: dark;
+}
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+html {
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo {
+  font-size: 30px;
+  line-height: 1;
+}
+.top h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+.top p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.rank {
+  text-align: right;
+  line-height: 1.25;
+}
+.rank strong {
+  display: block;
+  font-size: 16px;
+}
+.rank span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 18px;
+  padding: 18px 22px;
+  min-height: 0;
+}
+
+.term {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--term);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.term:focus-within {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.term-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  color: var(--tdim);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.term-bar button {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--tdim);
+  border-radius: 5px;
+  padding: 2px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.term-bar button:hover {
+  color: var(--tink);
+}
+.keys {
+  display: none;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  overflow-x: auto;
+}
+.keys button {
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.07);
+  border: 0;
+  color: var(--tink);
+  font-family: var(--mono);
+  font-size: 15px;
+  border-radius: 6px;
+  padding: 8px 13px;
+}
+@media (pointer: coarse) {
+  .keys {
+    display: flex;
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.mission {
+  border-top: 5px solid var(--cc);
+}
+.meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.meta b {
+  color: var(--cc);
+  font-weight: 600;
+}
+.mission h2 {
+  margin: 6px 0 8px;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.mission p {
+  margin: 0 0 12px;
+}
+.goal {
+  background: color-mix(in srgb, var(--cc) 12%, transparent);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.hint {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  font-size: 15px;
+}
+.hint[hidden],
+.unlock[hidden] {
+  display: none;
+}
+.chip {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  background: var(--term);
+  color: var(--tink);
+  border: 0;
+  border-radius: 5px;
+  padding: 3px 8px;
+  margin: 2px 0;
+  text-align: left;
+}
+.chip:hover {
+  color: var(--tprompt);
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.btn {
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 7px;
+  padding: 6px 13px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.btn.primary {
+  background: var(--cc);
+  border-color: var(--cc);
+  color: #fff;
+}
+.btn:hover {
+  border-color: var(--ink);
+}
+.unlock {
+  margin-top: 12px;
+}
+.unlock label {
+  display: block;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.unlock .pwrow {
+  display: flex;
+  gap: 8px;
+}
+.unlock input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 16px;
+}
+.unlock p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--c6);
+}
+
+.yard h3,
+.learned summary {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.row span {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.25;
+}
+.boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.box {
+  display: block;
+  width: 24px;
+  height: 15px;
+  padding: 0;
+  border: 2px dashed var(--line);
+  border-radius: 2px;
+  background: transparent;
+}
+.box.cur {
+  border-style: solid;
+  border-color: var(--cc);
+}
+.box.done {
+  border: 2px solid color-mix(in srgb, var(--cc) 70%, #000);
+  background: repeating-linear-gradient(
+    90deg,
+    var(--cc) 0 3px,
+    color-mix(in srgb, var(--cc) 72%, #000) 3px 4px
+  );
+}
+.box.land {
+  animation: land 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes land {
+  from {
+    transform: translateY(-14px) scale(1.15);
+  }
+  to {
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .box.land {
+    animation: none;
+  }
+}
+.yard small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 8px;
+}
+.learned summary {
+  cursor: pointer;
+  margin: 0;
+}
+.learned dl {
+  margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  font-size: 14.5px;
+}
+.learned dt code {
+  white-space: nowrap;
+}
+.learned dd {
+  margin: 0;
+  color: var(--muted);
+}
+.foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.foot button {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  padding: 0;
+  font-size: 13px;
+}
+
+@media (min-width: 881px) {
+  html,
+  body {
+    height: 100%;
+  }
+}
+@media (max-width: 880px) {
+  .layout {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+  .panel {
+    order: -1;
+    overflow: visible;
+  }
+  .term {
+    height: 64svh;
+    min-height: 380px;
+  }
+  .top {
+    padding: 12px;
+  }
+  .top p {
+    display: none;
+  }
+  .row {
+    grid-template-columns: 100px 1fr;
+  }
+}
+
+/* xterm.js terminal (D2). The fit addon sizes it to #term. */
+#term {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: text;
+}
+#term .xterm {
+  height: 100%;
+  padding: 12px 14px;
+}
+/* 16px keeps iOS Safari from zooming when the hidden input gets focus. */
+#term .xterm-helper-textarea {
+  font-size: 16px;
+}
+/* The bar holds the "Esc: leave terminal" hint too; it wraps on a phone. */
+.term-bar {
+  flex-wrap: wrap;
+  gap: 4px 0;
+}
+.term-bar .esc-hint {
+  margin-left: auto;
+  margin-right: 12px;
+}
+/* Shown in #term when xterm.js cannot start. */
+#term .term-error {
+  margin: 0;
+  padding: 12px 14px;
+  color: var(--terr);
+  font-family: var(--mono);
+}

@@ -1,0 +1,310 @@
+{
+  "script": "perms-scripts",
+  "steps": [
+    {
+      "input": "ls -l projects/webapp",
+      "text": "total 4\n-rw-r--r-- 1 cadet cadet         184 Nov 24 09:00 app.py\n-rw-r--r-- 1 cadet cadet         156 Nov 24 09:00 deploy.sh\n-rw-r--r-- 1 cadet cadet         146 Nov 24 09:00 Dockerfile\n-rw-r--r-- 1 cadet cadet         122 Nov 24 09:00 index.html",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "./projects/webapp/deploy.sh",
+      "text": "bash: ./projects/webapp/deploy.sh: Permission denied",
+      "cleared": false,
+      "code": 126,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod",
+      "text": "chmod: try something like: chmod +x deploy.sh",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod +x",
+      "text": "chmod: try something like: chmod +x deploy.sh",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod +x nosuch.sh",
+      "text": "chmod: cannot access 'nosuch.sh': No such file or directory",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod bogus notes.txt",
+      "text": "chmod: invalid mode: 'bogus'",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod 600 notes.txt",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod u+x notes.txt",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod go-r crew.txt",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod a=r welcome.txt",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod o+w logs",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "ls -l",
+      "text": "total 5\n-rw------- 1 cadet cadet          56 Nov 24 09:00 crew.txt\ndrwxr-xrwx 1 cadet cadet        4096 Nov 24 09:00 logs\n-rwx------ 1 cadet cadet         130 Nov 24 09:00 notes.txt\ndrwxr-xr-x 1 cadet cadet        4096 Nov 24 09:00 projects\n-r--r--r-- 1 cadet cadet         484 Nov 24 09:00 welcome.txt",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "cd projects/webapp",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet/projects/webapp",
+      "cur": 0
+    },
+    {
+      "input": "chmod +x deploy.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet/projects/webapp",
+      "cur": 0
+    },
+    {
+      "input": "./deploy.sh",
+      "text": "Loading cargo...\nSecuring containers...\n🚢 Website deployed. Nice work, dockhand!",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet/projects/webapp",
+      "cur": 0
+    },
+    {
+      "input": "cd ~",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "projects/webapp/deploy.sh",
+      "text": "Loading cargo...\nSecuring containers...\n🚢 Website deployed. Nice work, dockhand!",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "bash projects/webapp/deploy.sh",
+      "text": "Loading cargo...\nSecuring containers...\n🚢 Website deployed. Nice work, dockhand!",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "sh projects/webapp/app.py",
+      "text": "from: command not found. Type help to see what this terminal knows.\napp: command not found. Type help to see what this terminal knows.\nbash: @app.route(/): No such file or directory\ndef: command not found. Type help to see what this terminal knows.\nreturn: command not found. Type help to see what this terminal knows.\nif: command not found. Type help to see what this terminal knows.\napp.run(host=0.0.0.0,: command not found. Type help to see what this terminal knows.",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "bash",
+      "text": "bash: this sandbox can’t open a nested shell. Try: bash script.sh",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "bash nosuch.sh",
+      "text": "bash: nosuch.sh: No such file or directory",
+      "cleared": false,
+      "code": 127,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "bash logs",
+      "text": "bash: logs: Is a directory",
+      "cleared": false,
+      "code": 126,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "./nosuch.sh",
+      "text": "bash: ./nosuch.sh: No such file or directory",
+      "cleared": false,
+      "code": 127,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "./logs",
+      "text": "bash: ./logs: Is a directory",
+      "cleared": false,
+      "code": 126,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo \"echo Ahoy\" > hello.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "./hello.sh",
+      "text": "bash: ./hello.sh: Permission denied",
+      "cleared": false,
+      "code": 126,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "chmod +x hello.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "./hello.sh",
+      "text": "Ahoy",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo \"# comment\" > s.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo \"echo one; echo two\" >> s.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo \"echo 'bad\" >> s.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo \"ls | grep txt\" >> s.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo nosuch >> s.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "bash s.sh",
+      "text": "one echo two\ncrew.txt\nnotes.txt\nwelcome.txt\nnosuch: command not found. Type help to see what this terminal knows.",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo \"bash loop.sh\" > loop.sh",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "bash loop.sh",
+      "text": "bash: scripts nested too deep",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "CREW=Marina",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo $CREW",
+      "text": "Marina",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    }
+  ],
+  "save": "{\"fs\":{\"t\":\"d\",\"c\":{\"home\":{\"t\":\"d\",\"c\":{\"cadet\":{\"t\":\"d\",\"c\":{\"welcome.txt\":{\"t\":\"f\",\"x\":\"Welcome to Port Penguin, dockhand! 🐧\\n\\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\\nso experiment freely.\\n\\nYour logbook lists one task at a time. Finish it and the next one appears.\\nThere are 70 tasks, and they get harder as you go.\\n\\nHandy keys\\n  Tab        finish a file or command name for you\\n  ↑ and ↓    bring back commands you typed before\\n  help       list every command this terminal knows\\n  man NAME   explain one command, like: man grep\\n\",\"m\":\"r--r--r--\"},\".secret\":{\"t\":\"f\",\"x\":\"Psst. You found the hidden file.\\n\\nCaptain’s code word: BARNACLE\\n\\nFiles whose names start with a dot are hidden from a plain ls.\\nSettings files often hide this way, like .bashrc.\\n\",\"m\":\"rw-r--r--\"},\".bashrc\":{\"t\":\"f\",\"x\":\"alias ll='ls -l'\\n\",\"m\":\"rw-r--r--\"},\"notes.txt\":{\"t\":\"f\",\"x\":\"Shipment schedule\\nMonday     40 containers of bananas\\nWednesday  12 containers of rubber ducks\\nFriday     1 very suspicious crate\\n\",\"m\":\"rwx------\"},\"crew.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nGus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nGus\\n\",\"m\":\"rw-------\"},\"logs\":{\"t\":\"d\",\"c\":{\"system.log\":{\"t\":\"f\",\"x\":\"2026-11-24 06:00:01 INFO  Harbor systems online\\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\\n2026-11-24 06:21:52 INFO  Unloading started\\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\\n2026-11-24 06:30:00 INFO  Coffee machine refilled\\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\\n2026-11-24 06:52:26 INFO  Unloading complete\\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\\n2026-11-24 07:10:00 INFO  Shift change\\n\",\"m\":\"rw-r--r--\"},\"crane.log\":{\"t\":\"f\",\"x\":\"crane-1 lift ok 18t\\ncrane-2 lift ok 22t\\ncrane-2 pressure low\\ncrane-1 idle\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xrwx\"},\"projects\":{\"t\":\"d\",\"c\":{\"webapp\":{\"t\":\"d\",\"c\":{\"index.html\":{\"t\":\"f\",\"x\":\"<!DOCTYPE html>\\n<html>\\n  <head><title>Port Penguin</title></head>\\n  <body><h1>Welcome to Port Penguin</h1></body>\\n</html>\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Hello from the harbor! 🚢\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"},\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Start from a small official Python image\\nFROM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"deploy.sh\":{\"t\":\"f\",\"x\":\"#!/bin/bash\\n# Deploy script for the harbor website\\necho \\\"Loading cargo...\\\"\\necho \\\"Securing containers...\\\"\\necho \\\"🚢 Website deployed. Nice work, dockhand!\\\"\\n\",\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"legacy\":{\"t\":\"d\",\"c\":{\"old\":{\"t\":\"d\",\"c\":{\"crate-manifest.txt\":{\"t\":\"f\",\"x\":\"CRATE MANIFEST (1998)\\nCrate 0001  Cargo: 300 tins of sardines\\nCrate 0002  Cargo: one (1) grand piano\\nCrate 0003  Cargo: classified\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"README\":{\"t\":\"f\",\"x\":\"Nobody remembers what this folder is for.\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"stack\":{\"t\":\"d\",\"c\":{\"docker-compose.yml\":{\"t\":\"f\",\"x\":\"# The harbor stack: a web server and a cache\\nservices:\\n  web:\\n    image: nginx\\n    ports:\\n      - \\\"8081:80\\\"\\n    depends_on:\\n      - cache\\n  cache:\\n    image: redis\\n    volumes:\\n      - cache-data:/data\\n\\nvolumes:\\n  cache-data:\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"broken\":{\"t\":\"d\",\"c\":{\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Harbor status page\\nFORM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Status: all piers operational ⚓\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"hello.sh\":{\"t\":\"f\",\"x\":\"echo Ahoy\\n\",\"m\":\"rwxr-xr-x\"},\"s.sh\":{\"t\":\"f\",\"x\":\"# comment\\necho one; echo two\\necho 'bad\\nls | grep txt\\nnosuch\\n\",\"m\":\"rw-r--r--\"},\"loop.sh\":{\"t\":\"f\",\"x\":\"bash loop.sh\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"etc\":{\"t\":\"d\",\"c\":{\"hostname\":{\"t\":\"f\",\"x\":\"port-penguin\\n\",\"m\":\"rw-r--r--\"},\"os-release\":{\"t\":\"f\",\"x\":\"NAME=\\\"Penguin Linux\\\"\\nVERSION=\\\"26.04 (Harbor)\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"tmp\":{\"t\":\"d\",\"c\":{\"old-cargo.log\":{\"t\":\"f\",\"x\":\"2026-11-01 crate 7781 lost at sea\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"usr\":{\"t\":\"d\",\"c\":{\"bin\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"},\"share\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"var\":{\"t\":\"d\",\"c\":{\"log\":{\"t\":\"d\",\"c\":{\"syslog\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\\n\",\"m\":\"rw-r-----\",\"sz\":48000000},\"auth.log\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:03 sshd: session opened for cadet\\n\",\"m\":\"rw-r-----\",\"sz\":2100000},\"dpkg.log\":{\"t\":\"f\",\"x\":\"2026-11-20 status installed docker-ce\\n\",\"m\":\"rw-r--r--\",\"sz\":900000}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"cwd\":\"/home/cadet\",\"oldpwd\":\"/home/cadet/projects/webapp\",\"env\":{\"CREW\":\"Marina\"},\"procs\":[{\"pid\":1,\"user\":\"root\",\"cpu\":0,\"mem\":0.3,\"cmd\":\"/sbin/init\"},{\"pid\":214,\"user\":\"root\",\"cpu\":0,\"mem\":0.2,\"cmd\":\"/usr/sbin/sshd -D\"},{\"pid\":388,\"user\":\"root\",\"cpu\":0.4,\"mem\":1.9,\"cmd\":\"/usr/bin/dockerd\"},{\"pid\":1021,\"user\":\"cadet\",\"cpu\":0.2,\"mem\":0.8,\"cmd\":\"harbor-radio --station 16\"},{\"pid\":4242,\"user\":\"cadet\",\"cpu\":99.1,\"mem\":2.3,\"cmd\":\"crane-sim --loop\"},{\"pid\":5150,\"user\":\"cadet\",\"cpu\":0,\"mem\":0.1,\"cmd\":\"-bash\"}],\"lastCode\":0,\"dk\":{\"images\":[],\"containers\":[],\"volumes\":[],\"networks\":[{\"name\":\"bridge\",\"id\":\"b4f16a5485f7\",\"driver\":\"bridge\",\"subnet\":\"172.17\",\"next\":1},{\"name\":\"host\",\"id\":\"a648dc235504\",\"driver\":\"host\"},{\"name\":\"none\",\"id\":\"0584f0b1beb9\",\"driver\":\"null\"}]},\"done\":[],\"cur\":0,\"hist\":[\"ls -l projects/webapp\",\"./projects/webapp/deploy.sh\",\"chmod\",\"chmod +x\",\"chmod +x nosuch.sh\",\"chmod bogus notes.txt\",\"chmod 600 notes.txt\",\"chmod u+x notes.txt\",\"chmod go-r crew.txt\",\"chmod a=r welcome.txt\",\"chmod o+w logs\",\"ls -l\",\"cd projects/webapp\",\"chmod +x deploy.sh\",\"./deploy.sh\",\"cd ~\",\"projects/webapp/deploy.sh\",\"bash projects/webapp/deploy.sh\",\"sh projects/webapp/app.py\",\"bash\",\"bash nosuch.sh\",\"bash logs\",\"./nosuch.sh\",\"./logs\",\"echo \\\"echo Ahoy\\\" > hello.sh\",\"./hello.sh\",\"chmod +x hello.sh\",\"./hello.sh\",\"echo \\\"# comment\\\" > s.sh\",\"echo \\\"echo one; echo two\\\" >> s.sh\",\"echo \\\"echo 'bad\\\" >> s.sh\",\"echo \\\"ls | grep txt\\\" >> s.sh\",\"echo nosuch >> s.sh\",\"bash s.sh\",\"echo \\\"bash loop.sh\\\" > loop.sh\",\"bash loop.sh\",\"CREW=Marina\",\"echo $CREW\"],\"setup\":{},\"unlocked\":false}"
+}

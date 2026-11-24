@@ -1,0 +1,268 @@
+{
+  "script": "completion",
+  "steps": [
+    {
+      "tab": "",
+      "cursor": 0,
+      "value": "",
+      "newCursor": 0,
+      "listing": "awk  bash  cat  cd  chmod  clear  cp  curl  cut  date  df  docker  docker-compose  du  echo  env  exit  export  find  free  grep  head  help  hint  history  hostname  kill  killall  ll  ls  man  mkdir  mv  pkill  ps  pwd  rm  sed  sh  sort  sudo  tail  tar  top  touch  tree  uname  uniq  unset  uptime  wc  which  whoami"
+    },
+    {
+      "tab": "pw",
+      "cursor": 2,
+      "value": "pwd ",
+      "newCursor": 4,
+      "listing": null
+    },
+    {
+      "tab": "d",
+      "cursor": 1,
+      "value": "d",
+      "newCursor": 1,
+      "listing": "date  df  docker  docker-compose  du"
+    },
+    {
+      "tab": "doc",
+      "cursor": 3,
+      "value": "docker",
+      "newCursor": 6,
+      "listing": null
+    },
+    {
+      "tab": "docker ",
+      "cursor": 7,
+      "value": "docker ",
+      "newCursor": 7,
+      "listing": "run  ps  images  pull  build  tag  stop  start  restart  rm  rmi  logs  exec  inspect  stats  volume  network  system  compose  help  version"
+    },
+    {
+      "tab": "docker r",
+      "cursor": 8,
+      "value": "docker r",
+      "newCursor": 8,
+      "listing": "run  restart  rm  rmi"
+    },
+    {
+      "tab": "docker com",
+      "cursor": 10,
+      "value": "docker compose ",
+      "newCursor": 15,
+      "listing": null
+    },
+    {
+      "tab": "docker compose ",
+      "cursor": 15,
+      "value": "docker compose ",
+      "newCursor": 15,
+      "listing": "up  ps  logs  down  stop  start"
+    },
+    {
+      "tab": "docker volume c",
+      "cursor": 15,
+      "value": "docker volume create ",
+      "newCursor": 21,
+      "listing": null
+    },
+    {
+      "tab": "docker network d",
+      "cursor": 16,
+      "value": "docker network disconnect ",
+      "newCursor": 26,
+      "listing": null
+    },
+    {
+      "tab": "cat wel",
+      "cursor": 7,
+      "value": "cat welcome.txt ",
+      "newCursor": 16,
+      "listing": null
+    },
+    {
+      "tab": "cat .",
+      "cursor": 5,
+      "value": "cat .",
+      "newCursor": 5,
+      "listing": ".bashrc  .secret"
+    },
+    {
+      "tab": "cat .s",
+      "cursor": 6,
+      "value": "cat .secret ",
+      "newCursor": 12,
+      "listing": null
+    },
+    {
+      "tab": "ls pro",
+      "cursor": 6,
+      "value": "ls projects/",
+      "newCursor": 12,
+      "listing": null
+    },
+    {
+      "tab": "ls projects/",
+      "cursor": 12,
+      "value": "ls projects/",
+      "newCursor": 12,
+      "listing": "broken/  legacy/  stack/  webapp/"
+    },
+    {
+      "tab": "cat projects/webapp/D",
+      "cursor": 21,
+      "value": "cat projects/webapp/Dockerfile ",
+      "newCursor": 31,
+      "listing": null
+    },
+    {
+      "tab": "ls | gr",
+      "cursor": 7,
+      "value": "ls | grep ",
+      "newCursor": 10,
+      "listing": null
+    },
+    {
+      "tab": "echo hi && ec",
+      "cursor": 13,
+      "value": "echo hi && echo ",
+      "newCursor": 16,
+      "listing": null
+    },
+    {
+      "tab": "kill 4",
+      "cursor": 6,
+      "value": "kill 4242 ",
+      "newCursor": 10,
+      "listing": null
+    },
+    {
+      "tab": "kill ",
+      "cursor": 5,
+      "value": "kill ",
+      "newCursor": 5,
+      "listing": "1  214  388  1021  4242  5150"
+    },
+    {
+      "tab": "cat nosuch",
+      "cursor": 10,
+      "value": "cat nosuch",
+      "newCursor": 10,
+      "listing": null
+    },
+    {
+      "tab": "cat wel more",
+      "cursor": 7,
+      "value": "cat welcome.txt  more",
+      "newCursor": 16,
+      "listing": null
+    },
+    {
+      "tab": "cat /e",
+      "cursor": 6,
+      "value": "cat /etc/",
+      "newCursor": 9,
+      "listing": null
+    },
+    {
+      "tab": "cd ~/pro",
+      "cursor": 8,
+      "value": "cd ~/projects/",
+      "newCursor": 14,
+      "listing": null
+    },
+    {
+      "input": "docker run -d --name web nginx",
+      "text": "Unable to find image 'nginx:latest' locally\nlatest: Pulling from library/nginx\ndc21399a9bf1: Pull complete\n26fa1a614c75: Pull complete\nDigest: sha256:ec9a765bf48e4638095f4aa439e0653c7fb029382b15fe643caf4d84e3dd0d65\nStatus: Downloaded newer image for nginx:latest\ndocker.io/library/nginx:latest\n45152efb280ec80f1a4b0919f454f1d8c766162d855b311ca0d6e4eccdfc795f",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -d --name worker redis",
+      "text": "Unable to find image 'redis:latest' locally\nlatest: Pulling from library/redis\n06f01414060c: Pull complete\nc2cd9d9d588a: Pull complete\n2c3e3415b8ff: Pull complete\nDigest: sha256:c5842e679b5d82515e1a7aa5e2f1cd92d712ba26bfbbaa822b1e82bbb159fd9f\nStatus: Downloaded newer image for redis:latest\ndocker.io/library/redis:latest\n1193a14abbe82c27a7d4e4c3f2d5f08a497cbd444cedb7f25427fa35e0ad7bb7",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "tab": "docker stop w",
+      "cursor": 13,
+      "value": "docker stop w",
+      "newCursor": 13,
+      "listing": "web  worker"
+    },
+    {
+      "tab": "docker logs web",
+      "cursor": 15,
+      "value": "docker logs web ",
+      "newCursor": 16,
+      "listing": null
+    },
+    {
+      "tab": "docker rmi ng",
+      "cursor": 13,
+      "value": "docker rmi nginx ",
+      "newCursor": 17,
+      "listing": null
+    },
+    {
+      "tab": "docker run al",
+      "cursor": 13,
+      "value": "docker run alpine ",
+      "newCursor": 18,
+      "listing": null
+    },
+    {
+      "tab": "docker run ",
+      "cursor": 11,
+      "value": "docker run ",
+      "newCursor": 11,
+      "listing": "nginx  redis  alpine  ubuntu  python  hello-world  postgres  node  busybox"
+    },
+    {
+      "tab": "docker run -",
+      "cursor": 12,
+      "value": "docker run -",
+      "newCursor": 12,
+      "listing": null
+    },
+    {
+      "tab": "docker tag ",
+      "cursor": 11,
+      "value": "docker tag ",
+      "newCursor": 11,
+      "listing": "nginx  redis"
+    },
+    {
+      "tab": "cd projects/webapp && ls ",
+      "cursor": 25,
+      "value": "cd projects/webapp && ls ",
+      "newCursor": 25,
+      "listing": "crew.txt  logs/  notes.txt  projects/  welcome.txt"
+    },
+    {
+      "input": "cd projects",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet/projects",
+      "cur": 0
+    },
+    {
+      "tab": "ls we",
+      "cursor": 5,
+      "value": "ls webapp/",
+      "newCursor": 10,
+      "listing": null
+    },
+    {
+      "tab": "cat webapp/app",
+      "cursor": 14,
+      "value": "cat webapp/app.py ",
+      "newCursor": 18,
+      "listing": null
+    }
+  ],
+  "save": "{\"fs\":{\"t\":\"d\",\"c\":{\"home\":{\"t\":\"d\",\"c\":{\"cadet\":{\"t\":\"d\",\"c\":{\"welcome.txt\":{\"t\":\"f\",\"x\":\"Welcome to Port Penguin, dockhand! 🐧\\n\\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\\nso experiment freely.\\n\\nYour logbook lists one task at a time. Finish it and the next one appears.\\nThere are 70 tasks, and they get harder as you go.\\n\\nHandy keys\\n  Tab        finish a file or command name for you\\n  ↑ and ↓    bring back commands you typed before\\n  help       list every command this terminal knows\\n  man NAME   explain one command, like: man grep\\n\",\"m\":\"rw-r--r--\"},\".secret\":{\"t\":\"f\",\"x\":\"Psst. You found the hidden file.\\n\\nCaptain’s code word: BARNACLE\\n\\nFiles whose names start with a dot are hidden from a plain ls.\\nSettings files often hide this way, like .bashrc.\\n\",\"m\":\"rw-r--r--\"},\".bashrc\":{\"t\":\"f\",\"x\":\"alias ll='ls -l'\\n\",\"m\":\"rw-r--r--\"},\"notes.txt\":{\"t\":\"f\",\"x\":\"Shipment schedule\\nMonday     40 containers of bananas\\nWednesday  12 containers of rubber ducks\\nFriday     1 very suspicious crate\\n\",\"m\":\"rw-r--r--\"},\"crew.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nGus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nGus\\n\",\"m\":\"rw-r--r--\"},\"logs\":{\"t\":\"d\",\"c\":{\"system.log\":{\"t\":\"f\",\"x\":\"2026-11-24 06:00:01 INFO  Harbor systems online\\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\\n2026-11-24 06:21:52 INFO  Unloading started\\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\\n2026-11-24 06:30:00 INFO  Coffee machine refilled\\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\\n2026-11-24 06:52:26 INFO  Unloading complete\\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\\n2026-11-24 07:10:00 INFO  Shift change\\n\",\"m\":\"rw-r--r--\"},\"crane.log\":{\"t\":\"f\",\"x\":\"crane-1 lift ok 18t\\ncrane-2 lift ok 22t\\ncrane-2 pressure low\\ncrane-1 idle\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"projects\":{\"t\":\"d\",\"c\":{\"webapp\":{\"t\":\"d\",\"c\":{\"index.html\":{\"t\":\"f\",\"x\":\"<!DOCTYPE html>\\n<html>\\n  <head><title>Port Penguin</title></head>\\n  <body><h1>Welcome to Port Penguin</h1></body>\\n</html>\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Hello from the harbor! 🚢\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"},\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Start from a small official Python image\\nFROM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"deploy.sh\":{\"t\":\"f\",\"x\":\"#!/bin/bash\\n# Deploy script for the harbor website\\necho \\\"Loading cargo...\\\"\\necho \\\"Securing containers...\\\"\\necho \\\"🚢 Website deployed. Nice work, dockhand!\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"legacy\":{\"t\":\"d\",\"c\":{\"old\":{\"t\":\"d\",\"c\":{\"crate-manifest.txt\":{\"t\":\"f\",\"x\":\"CRATE MANIFEST (1998)\\nCrate 0001  Cargo: 300 tins of sardines\\nCrate 0002  Cargo: one (1) grand piano\\nCrate 0003  Cargo: classified\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"README\":{\"t\":\"f\",\"x\":\"Nobody remembers what this folder is for.\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"stack\":{\"t\":\"d\",\"c\":{\"docker-compose.yml\":{\"t\":\"f\",\"x\":\"# The harbor stack: a web server and a cache\\nservices:\\n  web:\\n    image: nginx\\n    ports:\\n      - \\\"8081:80\\\"\\n    depends_on:\\n      - cache\\n  cache:\\n    image: redis\\n    volumes:\\n      - cache-data:/data\\n\\nvolumes:\\n  cache-data:\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"broken\":{\"t\":\"d\",\"c\":{\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Harbor status page\\nFORM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Status: all piers operational ⚓\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"etc\":{\"t\":\"d\",\"c\":{\"hostname\":{\"t\":\"f\",\"x\":\"port-penguin\\n\",\"m\":\"rw-r--r--\"},\"os-release\":{\"t\":\"f\",\"x\":\"NAME=\\\"Penguin Linux\\\"\\nVERSION=\\\"26.04 (Harbor)\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"tmp\":{\"t\":\"d\",\"c\":{\"old-cargo.log\":{\"t\":\"f\",\"x\":\"2026-11-01 crate 7781 lost at sea\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"usr\":{\"t\":\"d\",\"c\":{\"bin\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"},\"share\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"var\":{\"t\":\"d\",\"c\":{\"log\":{\"t\":\"d\",\"c\":{\"syslog\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\\n\",\"m\":\"rw-r-----\",\"sz\":48000000},\"auth.log\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:03 sshd: session opened for cadet\\n\",\"m\":\"rw-r-----\",\"sz\":2100000},\"dpkg.log\":{\"t\":\"f\",\"x\":\"2026-11-20 status installed docker-ce\\n\",\"m\":\"rw-r--r--\",\"sz\":900000}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"cwd\":\"/home/cadet/projects\",\"oldpwd\":\"/home/cadet\",\"env\":{},\"procs\":[{\"pid\":1,\"user\":\"root\",\"cpu\":0,\"mem\":0.3,\"cmd\":\"/sbin/init\"},{\"pid\":214,\"user\":\"root\",\"cpu\":0,\"mem\":0.2,\"cmd\":\"/usr/sbin/sshd -D\"},{\"pid\":388,\"user\":\"root\",\"cpu\":0.4,\"mem\":1.9,\"cmd\":\"/usr/bin/dockerd\"},{\"pid\":1021,\"user\":\"cadet\",\"cpu\":0.2,\"mem\":0.8,\"cmd\":\"harbor-radio --station 16\"},{\"pid\":4242,\"user\":\"cadet\",\"cpu\":99.1,\"mem\":2.3,\"cmd\":\"crane-sim --loop\"},{\"pid\":5150,\"user\":\"cadet\",\"cpu\":0,\"mem\":0.1,\"cmd\":\"-bash\"}],\"lastCode\":0,\"dk\":{\"images\":[{\"repo\":\"nginx\",\"tag\":\"latest\",\"id\":\"bd1c3dfef959\",\"size\":\"192MB\",\"created\":0,\"official\":true},{\"repo\":\"redis\",\"tag\":\"latest\",\"id\":\"96730fce49fe\",\"size\":\"117MB\",\"created\":0,\"official\":true}],\"containers\":[{\"id\":\"45152efb280e\",\"name\":\"web\",\"image\":\"nginx\",\"repo\":\"nginx\",\"cmd\":\"\\\"/docker-entrypoint.…\\\"\",\"ports\":[],\"env\":[],\"mounts\":[],\"networks\":{\"bridge\":\"172.17.0.2\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795510800000,\"status\":\"running\",\"exit\":0,\"logs\":[\"/docker-entrypoint.sh: Configuration complete; ready for start up\",\"2026/11/24 09:00:00 [notice] 1#1: nginx/1.27.2\",\"2026/11/24 09:00:00 [notice] 1#1: start worker processes\"]},{\"id\":\"1193a14abbe8\",\"name\":\"worker\",\"image\":\"redis\",\"repo\":\"redis\",\"cmd\":\"\\\"docker-entrypoint.s…\\\"\",\"ports\":[],\"env\":[],\"mounts\":[],\"networks\":{\"bridge\":\"172.17.0.3\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795510800000,\"status\":\"running\",\"exit\":0,\"logs\":[\"1:C Redis version=7.4.1, bits=64, just started\",\"1:M Server initialized\",\"1:M Ready to accept connections tcp\"]}],\"volumes\":[],\"networks\":[{\"name\":\"bridge\",\"id\":\"b4f16a5485f7\",\"driver\":\"bridge\",\"subnet\":\"172.17\",\"next\":3},{\"name\":\"host\",\"id\":\"a648dc235504\",\"driver\":\"host\"},{\"name\":\"none\",\"id\":\"0584f0b1beb9\",\"driver\":\"null\"}]},\"done\":[],\"cur\":0,\"hist\":[\"docker run -d --name web nginx\",\"docker run -d --name worker redis\",\"cd projects\"],\"setup\":{},\"unlocked\":false}"
+}

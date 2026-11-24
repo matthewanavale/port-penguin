@@ -1,0 +1,166 @@
+{
+  "script": "processes",
+  "steps": [
+    {
+      "input": "ps",
+      "text": "PID    TTY     TIME       CMD\n1021   pts/0   00:00:00   harbor-radio\n4242   pts/0   01:12:07   crane-sim\n5150   pts/0   00:00:00   bash",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "ps aux",
+      "text": "USER    PID    %CPU   %MEM   COMMAND\nroot    1      0.0    0.3    /sbin/init\nroot    214    0.0    0.2    /usr/sbin/sshd -D\nroot    388    0.4    1.9    /usr/bin/dockerd\ncadet   1021   0.2    0.8    harbor-radio --station 16\ncadet   4242   99.1   2.3    crane-sim --loop\ncadet   5150   0.0    0.1    -bash",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "ps -ef",
+      "text": "USER    PID    %CPU   %MEM   COMMAND\nroot    1      0.0    0.3    /sbin/init\nroot    214    0.0    0.2    /usr/sbin/sshd -D\nroot    388    0.4    1.9    /usr/bin/dockerd\ncadet   1021   0.2    0.8    harbor-radio --station 16\ncadet   4242   99.1   2.3    crane-sim --loop\ncadet   5150   0.0    0.1    -bash",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "top",
+      "text": "top - 09:00:00 up 3 days,  2:14,  1 user,  load average: 1.00, 1.00, 1.00\nTasks: 6 total,   1 running\nMiB Mem :   3936.0 total,   1412.4 free,   1201.7 used\n\nPID    USER    %CPU   %MEM   COMMAND\n4242   cadet   99.1   2.3    crane-sim --loop\n388    root    0.4    1.9    /usr/bin/dockerd\n1021   cadet   0.2    0.8    harbor-radio --station 16\n1      root    0.0    0.3    /sbin/init\n214    root    0.0    0.2    /usr/sbin/sshd -D\n5150   cadet   0.0    0.1    -bash\n\n(top normally updates live until you press q. Here you get one snapshot.)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "kill",
+      "text": "kill: usage: kill [-9] PID",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "kill -l",
+      "text": " 1) SIGHUP   2) SIGINT   9) SIGKILL  15) SIGTERM  19) SIGSTOP",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "kill 1",
+      "text": "kill: (1) - Operation not permitted",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "kill 99999",
+      "text": "kill: (99999) - No such process",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "kill 1021",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "ps",
+      "text": "PID    TTY     TIME       CMD\n4242   pts/0   01:12:07   crane-sim\n5150   pts/0   00:00:00   bash",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "pkill",
+      "text": "pkill: no process name given",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "pkill nosuch",
+      "text": "",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo $?",
+      "text": "1",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "pkill sshd",
+      "text": "pkill: killing pid 214 failed: Operation not permitted",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "killall crane",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "ps",
+      "text": "PID    TTY     TIME       CMD\n5150   pts/0   00:00:00   bash",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "kill -s KILL 5150",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "kill -9 5150 1",
+      "text": "kill: (5150) - No such process\nkill: (1) - Operation not permitted",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "ps aux",
+      "text": "USER   PID   %CPU   %MEM   COMMAND\nroot   1     0.0    0.3    /sbin/init\nroot   214   0.0    0.2    /usr/sbin/sshd -D\nroot   388   0.4    1.9    /usr/bin/dockerd",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "top",
+      "text": "top - 09:00:00 up 3 days,  2:14,  1 user,  load average: 0.00, 0.00, 0.00\nTasks: 3 total,   0 running\nMiB Mem :   3936.0 total,   1412.4 free,   1201.7 used\n\nPID   USER   %CPU   %MEM   COMMAND\n388   root   0.4    1.9    /usr/bin/dockerd\n1     root   0.0    0.3    /sbin/init\n214   root   0.0    0.2    /usr/sbin/sshd -D\n\n(top normally updates live until you press q. Here you get one snapshot.)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    }
+  ],
+  "save": "{\"fs\":{\"t\":\"d\",\"c\":{\"home\":{\"t\":\"d\",\"c\":{\"cadet\":{\"t\":\"d\",\"c\":{\"welcome.txt\":{\"t\":\"f\",\"x\":\"Welcome to Port Penguin, dockhand! 🐧\\n\\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\\nso experiment freely.\\n\\nYour logbook lists one task at a time. Finish it and the next one appears.\\nThere are 70 tasks, and they get harder as you go.\\n\\nHandy keys\\n  Tab        finish a file or command name for you\\n  ↑ and ↓    bring back commands you typed before\\n  help       list every command this terminal knows\\n  man NAME   explain one command, like: man grep\\n\",\"m\":\"rw-r--r--\"},\".secret\":{\"t\":\"f\",\"x\":\"Psst. You found the hidden file.\\n\\nCaptain’s code word: BARNACLE\\n\\nFiles whose names start with a dot are hidden from a plain ls.\\nSettings files often hide this way, like .bashrc.\\n\",\"m\":\"rw-r--r--\"},\".bashrc\":{\"t\":\"f\",\"x\":\"alias ll='ls -l'\\n\",\"m\":\"rw-r--r--\"},\"notes.txt\":{\"t\":\"f\",\"x\":\"Shipment schedule\\nMonday     40 containers of bananas\\nWednesday  12 containers of rubber ducks\\nFriday     1 very suspicious crate\\n\",\"m\":\"rw-r--r--\"},\"crew.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nGus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nGus\\n\",\"m\":\"rw-r--r--\"},\"logs\":{\"t\":\"d\",\"c\":{\"system.log\":{\"t\":\"f\",\"x\":\"2026-11-24 06:00:01 INFO  Harbor systems online\\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\\n2026-11-24 06:21:52 INFO  Unloading started\\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\\n2026-11-24 06:30:00 INFO  Coffee machine refilled\\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\\n2026-11-24 06:52:26 INFO  Unloading complete\\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\\n2026-11-24 07:10:00 INFO  Shift change\\n\",\"m\":\"rw-r--r--\"},\"crane.log\":{\"t\":\"f\",\"x\":\"crane-1 lift ok 18t\\ncrane-2 lift ok 22t\\ncrane-2 pressure low\\ncrane-1 idle\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"projects\":{\"t\":\"d\",\"c\":{\"webapp\":{\"t\":\"d\",\"c\":{\"index.html\":{\"t\":\"f\",\"x\":\"<!DOCTYPE html>\\n<html>\\n  <head><title>Port Penguin</title></head>\\n  <body><h1>Welcome to Port Penguin</h1></body>\\n</html>\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Hello from the harbor! 🚢\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"},\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Start from a small official Python image\\nFROM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"deploy.sh\":{\"t\":\"f\",\"x\":\"#!/bin/bash\\n# Deploy script for the harbor website\\necho \\\"Loading cargo...\\\"\\necho \\\"Securing containers...\\\"\\necho \\\"🚢 Website deployed. Nice work, dockhand!\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"legacy\":{\"t\":\"d\",\"c\":{\"old\":{\"t\":\"d\",\"c\":{\"crate-manifest.txt\":{\"t\":\"f\",\"x\":\"CRATE MANIFEST (1998)\\nCrate 0001  Cargo: 300 tins of sardines\\nCrate 0002  Cargo: one (1) grand piano\\nCrate 0003  Cargo: classified\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"README\":{\"t\":\"f\",\"x\":\"Nobody remembers what this folder is for.\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"stack\":{\"t\":\"d\",\"c\":{\"docker-compose.yml\":{\"t\":\"f\",\"x\":\"# The harbor stack: a web server and a cache\\nservices:\\n  web:\\n    image: nginx\\n    ports:\\n      - \\\"8081:80\\\"\\n    depends_on:\\n      - cache\\n  cache:\\n    image: redis\\n    volumes:\\n      - cache-data:/data\\n\\nvolumes:\\n  cache-data:\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"broken\":{\"t\":\"d\",\"c\":{\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Harbor status page\\nFORM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Status: all piers operational ⚓\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"etc\":{\"t\":\"d\",\"c\":{\"hostname\":{\"t\":\"f\",\"x\":\"port-penguin\\n\",\"m\":\"rw-r--r--\"},\"os-release\":{\"t\":\"f\",\"x\":\"NAME=\\\"Penguin Linux\\\"\\nVERSION=\\\"26.04 (Harbor)\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"tmp\":{\"t\":\"d\",\"c\":{\"old-cargo.log\":{\"t\":\"f\",\"x\":\"2026-11-01 crate 7781 lost at sea\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"usr\":{\"t\":\"d\",\"c\":{\"bin\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"},\"share\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"var\":{\"t\":\"d\",\"c\":{\"log\":{\"t\":\"d\",\"c\":{\"syslog\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\\n\",\"m\":\"rw-r-----\",\"sz\":48000000},\"auth.log\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:03 sshd: session opened for cadet\\n\",\"m\":\"rw-r-----\",\"sz\":2100000},\"dpkg.log\":{\"t\":\"f\",\"x\":\"2026-11-20 status installed docker-ce\\n\",\"m\":\"rw-r--r--\",\"sz\":900000}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"cwd\":\"/home/cadet\",\"oldpwd\":\"/home/cadet\",\"env\":{},\"procs\":[{\"pid\":1,\"user\":\"root\",\"cpu\":0,\"mem\":0.3,\"cmd\":\"/sbin/init\"},{\"pid\":214,\"user\":\"root\",\"cpu\":0,\"mem\":0.2,\"cmd\":\"/usr/sbin/sshd -D\"},{\"pid\":388,\"user\":\"root\",\"cpu\":0.4,\"mem\":1.9,\"cmd\":\"/usr/bin/dockerd\"}],\"lastCode\":0,\"dk\":{\"images\":[],\"containers\":[],\"volumes\":[],\"networks\":[{\"name\":\"bridge\",\"id\":\"b4f16a5485f7\",\"driver\":\"bridge\",\"subnet\":\"172.17\",\"next\":1},{\"name\":\"host\",\"id\":\"a648dc235504\",\"driver\":\"host\"},{\"name\":\"none\",\"id\":\"0584f0b1beb9\",\"driver\":\"null\"}]},\"done\":[],\"cur\":0,\"hist\":[\"ps\",\"ps aux\",\"ps -ef\",\"top\",\"kill\",\"kill -l\",\"kill 1\",\"kill 99999\",\"kill 1021\",\"ps\",\"pkill\",\"pkill nosuch\",\"echo $?\",\"pkill sshd\",\"killall crane\",\"ps\",\"kill -s KILL 5150\",\"kill -9 5150 1\",\"ps aux\",\"top\"],\"setup\":{},\"unlocked\":false}"
+}

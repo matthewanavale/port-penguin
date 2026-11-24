@@ -1,0 +1,3 @@
+src/legacy/**
+src/test/golden/**
+dist/
