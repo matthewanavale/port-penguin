@@ -491,12 +491,6 @@ code {
   margin-left: auto;
   margin-right: 12px;
 }
-/* Phones show the extra-keys bar and have no Esc key, so the hint is noise. */
-@media (pointer: coarse) {
-  .term-bar .esc-hint {
-    display: none;
-  }
-}
 /* Shown in #term when xterm.js cannot start. */
 #term .term-error {
   margin: 0;
