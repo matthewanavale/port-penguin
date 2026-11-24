@@ -21,6 +21,8 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@types/jsdom": "30.0.0",
+    "@types/node": "24.19.2",
     "eslint": "10.15.0",
     "jsdom": "31.0.1",
     "prettier": "3.10.1",
