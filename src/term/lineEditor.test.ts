@@ -332,6 +332,41 @@ describe("paste (AC6, D16c)", () => {
       cursor: 15,
     });
   });
+
+  it("keeps a tab inside a paste as text and does not run completion", () => {
+    const complete = vi.fn(() => ({
+      value: "x",
+      cursor: 1,
+      listing: ["a", "b"],
+    }));
+    const ed = createLineEditor({ history: () => [], complete });
+    expect(ed.input("a\tb\rc\td")).toEqual<EditorAction[]>([
+      { type: "submit", line: "a\tb" },
+    ]);
+    expect(complete).not.toHaveBeenCalled();
+    expect({ line: ed.line, cursor: ed.cursor }).toEqual({
+      line: "c\td",
+      cursor: 3,
+    });
+  });
+
+  it("still completes on a single Tab key", () => {
+    const complete = vi.fn(() => ({ value: "ls ", cursor: 3, listing: [] }));
+    const ed = createLineEditor({ history: () => [], complete });
+    ed.set("l");
+    expect(ed.input("\t")).toEqual([]);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(ed.line).toBe("ls ");
+  });
+
+  it("drops C1 control characters (0x80-0x9f) from typed or pasted text", () => {
+    const ed = editor("", 0);
+    expect(ed.input("a\x85b\x9bc\x80\x9f")).toEqual([]);
+    expect({ line: ed.line, cursor: ed.cursor }).toEqual({
+      line: "abc",
+      cursor: 3,
+    });
+  });
 });
 
 describe("extra keys and hint chips (AC8)", () => {

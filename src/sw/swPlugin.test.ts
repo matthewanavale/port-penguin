@@ -6,7 +6,16 @@
 //   buildServiceWorker({ template, files }) -> { code, cacheName, assets }
 //     files: every file in dist/ as { fileName, source }
 //   swPlugin(): a Vite plugin (used in vite.config.ts) that calls it
-import { describe, expect, it } from "vitest";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildServiceWorker, swPlugin } from "./swPlugin";
 import realTemplate from "./sw.template.js?raw";
 
@@ -118,10 +127,49 @@ describe("the real template (src/sw/sw.template.js)", () => {
   });
 });
 
+type Hooks = {
+  configResolved: (config: { root: string; build: { outDir: string } }) => void;
+  writeBundle: { sequential: boolean; order: string; handler: () => void };
+};
+
 describe("the Vite plugin", () => {
+  let root = "";
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "pp-sw-"));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it("is a named plugin", () => {
     const p = swPlugin();
     expect(typeof p.name).toBe("string");
     expect(p.name.length).toBeGreaterThan(0);
+  });
+
+  it("runs after the other writeBundle hooks, one at a time, on build only", () => {
+    const p = swPlugin() as unknown as Hooks & { apply: string };
+    expect(p.apply).toBe("build");
+    expect(p.writeBundle.order).toBe("post");
+    expect(p.writeBundle.sequential).toBe(true);
+  });
+
+  it("writes dist/sw.js from the real template, listing every file but sw.js", () => {
+    const dist = join(root, "out");
+    mkdirSync(join(dist, "assets"), { recursive: true });
+    for (const f of DIST) writeFileSync(join(dist, f.fileName), f.source);
+    // A stale sw.js from public/ or a past build must not list itself.
+    writeFileSync(join(dist, "sw.js"), "old");
+
+    const p = swPlugin() as unknown as Hooks;
+    p.configResolved({ root, build: { outDir: "out" } });
+    p.writeBundle.handler();
+
+    const written = readFileSync(join(dist, "sw.js"), "utf8");
+    const expected = build(DIST, realTemplate);
+    expect(written).toBe(expected.code);
+    expect(written).toContain(expected.cacheName);
+    expect(expected.assets).not.toContain("sw.js");
+    expect(expected.assets).toContain("assets/index-a1b2.js");
   });
 });
