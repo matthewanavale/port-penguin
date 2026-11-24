@@ -1,5 +1,14 @@
+# Build stage: install the locked packages and build the static site.
+FROM node:24-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Runtime stage: nginx serves dist/. No Node.js in this image.
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY index.html sw.js manifest.webmanifest icon.svg icon-192.png icon-512.png icon-maskable-512.png /usr/share/nginx/html/
+COPY --from=build /app/dist/ /usr/share/nginx/html/
 EXPOSE 80
 HEALTHCHECK CMD wget -qO- http://localhost/ >/dev/null || exit 1
