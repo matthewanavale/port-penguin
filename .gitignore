@@ -19,3 +19,6 @@ __pycache__/
 # Build
 node_modules/
 dist/
+
+# Local env files (never built into the public bundle)
+.env*
