@@ -58,11 +58,95 @@ function cells(cp: number): number {
     return 2;
   return 1;
 }
-const width = (s: string): number => {
+/** Terminal cells a string takes. A tab counts as one cell (see `shown`). */
+export const width = (s: string): number => {
   let w = 0;
   for (const ch of s) w += cells(ch.codePointAt(0) ?? 0);
   return w;
 };
+
+/** The input line as drawn: a pasted tab shows as one space, so `width` matches the screen. */
+const shown = (line: string): string => line.replace(/\t/g, " ");
+
+/** Text to write, and the rows between the first prompt row and the cursor row after it. */
+export interface Drawn {
+  out: string;
+  rowsAbove: number;
+}
+
+/** Rows between the first prompt row and the cursor row, for a cursor at `cursor`. */
+export function cursorRow(
+  promptWidth: number,
+  line: string,
+  cursor: number,
+  cols: number,
+): number {
+  const c = Math.max(1, cols);
+  return Math.floor((promptWidth + width(line.slice(0, cursor))) / c);
+}
+
+/**
+ * Redraws the prompt and `line` from the first prompt row, then puts the
+ * cursor at `cursor`. `prompt` is the prompt as ANSI text; `promptWidth` is
+ * its width in cells; `rowsAbove` is where the cursor is now.
+ */
+export function drawInput(p: {
+  prompt: string;
+  promptWidth: number;
+  line: string;
+  cursor: number;
+  cols: number;
+  rowsAbove: number;
+}): Drawn {
+  const cols = Math.max(1, p.cols);
+  let out = p.rowsAbove > 0 ? `\x1b[${p.rowsAbove}A` : "";
+  out += "\r\x1b[J" + p.prompt + renderRuns([{ text: shown(p.line) }]);
+  const total = p.promptWidth + width(p.line);
+  const at = p.promptWidth + width(p.line.slice(0, p.cursor));
+  // After exactly a full row the cursor waits at the last column; a line
+  // break moves it to the next row, where the math below expects it.
+  const endRow = Math.floor(total / cols);
+  if (total > 0 && total % cols === 0) out += "\r\n";
+  const row = Math.floor(at / cols),
+    col = at % cols;
+  if (endRow > row) out += `\x1b[${endRow - row}A`;
+  out += "\r" + (col > 0 ? `\x1b[${col}C` : "");
+  return { out, rowsAbove: row };
+}
+
+/**
+ * The typing fast path: when a key only added text at the end of the line,
+ * gives just the new text to write. Gives null when the line needs a full redraw.
+ */
+export function appendTyped(p: {
+  before: string;
+  beforeCursor: number;
+  line: string;
+  cursor: number;
+  actions: number;
+  promptWidth: number;
+  cols: number;
+}): Drawn | null {
+  if (
+    p.actions > 0 ||
+    p.beforeCursor !== p.before.length ||
+    p.cursor !== p.line.length ||
+    !p.line.startsWith(p.before) ||
+    p.line.length <= p.before.length
+  )
+    return null;
+  const cols = Math.max(1, p.cols);
+  const total = p.promptWidth + width(p.line);
+  let out = renderRuns([{ text: shown(p.line.slice(p.before.length)) }]);
+  if (total % cols === 0) out += "\r\n";
+  return { out, rowsAbove: Math.floor(total / cols) };
+}
+
+/** Shown in #term when xterm.js cannot start. */
+export const START_ERROR = "The terminal could not start. Reload the page.";
+
+/** How long to wait for the web font before opening the terminal anyway. */
+export const FONT_WAIT_MS = 2000;
 
 /** Copies text: the Clipboard API, or a hidden textarea when there is no secure context (D16). */
 async function copyText(text: string, refocus: () => void): Promise<void> {
@@ -126,23 +210,16 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
 
   /** Draws the prompt and `line` with the cursor at `cursor`. */
   function draw(line: string, cursor: number): string {
-    const cols = Math.max(1, term.cols);
-    let out = rowsAbove > 0 ? `\x1b[${rowsAbove}A` : "";
-    out +=
-      "\r\x1b[J" + renderRuns(engine.prompt()) + renderRuns([{ text: line }]);
-    const promptW = width(promptText());
-    const total = promptW + width(line);
-    const at = promptW + width(line.slice(0, cursor));
-    // After exactly a full row the cursor waits at the last column; a line
-    // break moves it to the next row, where the math below expects it.
-    const endRow = Math.floor(total / cols);
-    if (total > 0 && total % cols === 0) out += "\r\n";
-    const row = Math.floor(at / cols),
-      col = at % cols;
-    if (endRow > row) out += `\x1b[${endRow - row}A`;
-    out += "\r" + (col > 0 ? `\x1b[${col}C` : "");
-    rowsAbove = row;
-    return out;
+    const d = drawInput({
+      prompt: renderRuns(engine.prompt()),
+      promptWidth: width(promptText()),
+      line,
+      cursor,
+      cols: term.cols,
+      rowsAbove,
+    });
+    rowsAbove = d.rowsAbove;
+    return d.out;
   }
 
   const redraw = () => term.write(draw(editor.line, editor.cursor));
@@ -184,21 +261,19 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
     const before = editor.line,
       beforeCursor = editor.cursor;
     const actions = editor.input(data);
-    if (
-      !actions.length &&
-      beforeCursor === before.length &&
-      editor.cursor === editor.line.length &&
-      editor.line.startsWith(before) &&
-      editor.line.length > before.length
-    ) {
-      // Typing at the end of the line: write just the new text.
-      const added = editor.line.slice(before.length);
-      const cols = Math.max(1, term.cols);
-      const total = width(promptText()) + width(editor.line);
-      let out = renderRuns([{ text: added }]);
-      if (total % cols === 0) out += "\r\n";
-      rowsAbove = Math.floor(total / cols);
-      term.write(out);
+    // Typing at the end of the line: write just the new text.
+    const typed = appendTyped({
+      before,
+      beforeCursor,
+      line: editor.line,
+      cursor: editor.cursor,
+      actions: actions.length,
+      promptWidth: width(promptText()),
+      cols: term.cols,
+    });
+    if (typed) {
+      rowsAbove = typed.rowsAbove;
+      term.write(typed.out);
       return;
     }
     term.write(run(actions) + draw(editor.line, editor.cursor));
@@ -258,9 +333,12 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
     } catch {
       return;
     }
-    const cols = Math.max(1, term.cols);
-    const at = width(promptText()) + width(editor.line.slice(0, editor.cursor));
-    rowsAbove = Math.floor(at / cols);
+    rowsAbove = cursorRow(
+      width(promptText()),
+      editor.line,
+      editor.cursor,
+      term.cols,
+    );
     redraw();
   };
 
@@ -268,10 +346,17 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
   term.write(renderLines(opts.intro));
   redraw();
 
-  // Open after the fonts load, so the cell grid is measured with JetBrains Mono.
+  // Open after the fonts load, so the cell grid is measured with JetBrains
+  // Mono. A slow or blocked font server delays this by FONT_WAIT_MS at most.
   const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } })
     .fonts;
-  void (fonts ? fonts.ready : Promise.resolve())
+  const fontWait = fonts
+    ? Promise.race([
+        fonts.ready,
+        new Promise((resolve) => setTimeout(resolve, FONT_WAIT_MS)),
+      ])
+    : Promise.resolve();
+  void fontWait
     .catch(() => undefined)
     .then(() => {
       term.open(container);
@@ -281,6 +366,11 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
     })
     .catch((e: unknown) => {
       console.error("The terminal could not start:", e);
+      const msg = document.createElement("p");
+      msg.className = "term-error";
+      msg.setAttribute("role", "alert");
+      msg.textContent = START_ERROR;
+      container.replaceChildren(msg);
     });
 
   return {
@@ -314,4 +404,31 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       term.focus();
     },
   };
+}
+
+/**
+ * The extra-keys bar. A touch or mouse press acts on pointerdown and keeps
+ * focus in the terminal, so the soft keyboard stays open. A keyboard or
+ * switch press (a click with detail 0) acts on click and leaves focus on
+ * the key, so the user can press it again.
+ */
+export function bindExtraKeys(
+  bar: HTMLElement,
+  terminal: Pick<GameTerminal, "key" | "focus">,
+): void {
+  const keyOf = (e: Event) =>
+    (e.target as Element | null)?.closest<HTMLElement>("button[data-k]");
+  bar.addEventListener("pointerdown", (e) => {
+    const b = keyOf(e);
+    if (!b) return;
+    e.preventDefault();
+    terminal.key(b.dataset.k ?? "");
+    terminal.focus();
+  });
+  bar.addEventListener("click", (e) => {
+    if (e.detail !== 0) return; // A pointer press, handled on pointerdown.
+    const b = keyOf(e);
+    if (!b) return;
+    terminal.key(b.dataset.k ?? "");
+  });
 }

@@ -7,7 +7,7 @@ import { createEngine, M, rankFor, sha256 } from "./engine/index";
 import type { Mission, State } from "./engine/index";
 import { htmlLine } from "./engine/output";
 import type { OutLine } from "./engine/output";
-import { createTerminal } from "./term/terminal";
+import { bindExtraKeys, createTerminal } from "./term/terminal";
 import { createPanel } from "./ui/panel";
 
 declare global {
@@ -95,13 +95,7 @@ $("clearBtn").onclick = () => {
   terminal.focus();
 };
 
-$("keys").addEventListener("pointerdown", (e) => {
-  const b = (e.target as Element | null)?.closest<HTMLElement>("button");
-  if (!b) return;
-  e.preventDefault();
-  terminal.key(b.dataset.k ?? "");
-  terminal.focus();
-});
+bindExtraKeys($("keys"), terminal);
 
 window.__pp = { sha256, state: () => engine.state, M };
 

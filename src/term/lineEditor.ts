@@ -159,7 +159,10 @@ export function createLineEditor(opts: LineEditorOptions): LineEditor {
         i += len - 1;
         continue;
       }
-      if (code >= 0x20 && code !== 0x7f) {
+      // C1 controls (0x80-0x9f) are dropped: the screen never shows them.
+      if (code >= 0x80 && code <= 0x9f) continue;
+      // A tab inside a paste is text, as in bash; a lone Tab key completes.
+      if ((code >= 0x20 && code !== 0x7f) || (ch === "\t" && data.length > 1)) {
         text += ch;
         continue;
       }
