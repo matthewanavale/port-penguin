@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
-const LIMIT_KB = 200;
+const LIMIT_KB = 210; // AC11, Amendment A1
 const dir = join(process.cwd(), "dist", "assets");
 
 let files: string[] = [];

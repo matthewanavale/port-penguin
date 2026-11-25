@@ -38,7 +38,7 @@ npm run lint          # ESLint, then the TypeScript type check
 npm run format:check  # Prettier
 npm test              # Vitest
 npm run build
-npm run size          # gzip size of dist/assets/, at most 200 KB
+npm run size          # gzip size of dist/assets/, at most 210 KB
 ```
 
 ## Setup
