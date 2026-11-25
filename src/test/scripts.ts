@@ -2,11 +2,21 @@
 // fake clock at START_MS, and Math.random reseeded with SEED (D15b).
 // Together they use every command name in CMDS, every docker and docker
 // compose subcommand, pipes, redirects, &&, ;, globs, quotes, variables,
-// and error paths. legacy.test.ts checks this coverage.
+// and error paths. coverage.test.ts checks this coverage.
 
 /** One step of a script: a command line, a clock move, or a Tab press. */
 export type Step =
-  string | { advanceMs: number } | { tab: string; cursor?: number };
+  | string
+  | { advanceMs: number }
+  | { tab: string; cursor?: number }
+  /** A command line with a note (D9 (4)-(5)): `reason` and `replaces` go into the recorded JSON. */
+  | { input: string; reason: string; replaces?: number };
+
+/** The command line of a step, or undefined for a clock move or a Tab press. */
+export function lineOf(step: Step): string | undefined {
+  if (typeof step === "string") return step;
+  return "input" in step ? step.input : undefined;
+}
 
 export interface GoldenScript {
   /** Also the golden file name: src/test/golden/<name>.json */

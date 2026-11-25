@@ -1,0 +1,481 @@
+{
+  "fs": {
+    "t": "d",
+    "c": {
+      "home": {
+        "t": "d",
+        "c": {
+          "cadet": {
+            "t": "d",
+            "c": {
+              "welcome.txt": {
+                "t": "f",
+                "x": "Welcome to Port Penguin, dockhand! 🐧\n\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\nso experiment freely.\n\nYour logbook lists one task at a time. Finish it and the next one appears.\nThere are 70 tasks, and they get harder as you go.\n\nHandy keys\n  Tab        finish a file or command name for you\n  ↑ and ↓    bring back commands you typed before\n  help       list every command this terminal knows\n  man NAME   explain one command, like: man grep\n",
+                "m": "rw-r--r--"
+              },
+              ".secret": {
+                "t": "f",
+                "x": "Psst. You found the hidden file.\n\nCaptain’s code word: BARNACLE\n\nFiles whose names start with a dot are hidden from a plain ls.\nSettings files often hide this way, like .bashrc.\n",
+                "m": "rw-r--r--"
+              },
+              ".bashrc": {
+                "t": "f",
+                "x": "alias ll='ls -l'\n",
+                "m": "rw-r--r--"
+              },
+              "notes.txt": {
+                "t": "f",
+                "x": "Shipment schedule\nMonday     40 containers of bananas\nWednesday  12 containers of rubber ducks\nFriday     1 very suspicious crate\n",
+                "m": "rw-r--r--"
+              },
+              "crew.txt": {
+                "t": "f",
+                "x": "Marina\nOtto\nGus\nPearl\nOtto\nBarney\nMarina\nSkip\nCoral\nGus\n",
+                "m": "rw-r--r--"
+              },
+              "logs": {
+                "t": "d",
+                "c": {
+                  "system.log": {
+                    "t": "f",
+                    "x": "2026-11-24 06:00:01 INFO  Harbor systems online\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\n2026-11-24 06:21:52 INFO  Unloading started\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\n2026-11-24 06:30:00 INFO  Coffee machine refilled\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\n2026-11-24 06:52:26 INFO  Unloading complete\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\n2026-11-24 07:10:00 INFO  Shift change\n",
+                    "m": "rw-r--r--"
+                  },
+                  "crane.log": {
+                    "t": "f",
+                    "x": "crane-1 lift ok 18t\ncrane-2 lift ok 22t\ncrane-2 pressure low\ncrane-1 idle\n",
+                    "m": "rw-r--r--"
+                  }
+                },
+                "m": "rwxr-xr-x"
+              },
+              "projects": {
+                "t": "d",
+                "c": {
+                  "webapp": {
+                    "t": "d",
+                    "c": {
+                      "index.html": {
+                        "t": "f",
+                        "x": "<!DOCTYPE html>\n<html>\n  <head><title>Port Penguin</title></head>\n  <body><h1>Welcome to Port Penguin</h1></body>\n</html>\n",
+                        "m": "rw-r--r--"
+                      },
+                      "app.py": {
+                        "t": "f",
+                        "x": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Hello from the harbor! 🚢\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+                        "m": "rw-r--r--"
+                      },
+                      "Dockerfile": {
+                        "t": "f",
+                        "x": "# Start from a small official Python image\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+                        "m": "rw-r--r--"
+                      },
+                      "deploy.sh": {
+                        "t": "f",
+                        "x": "#!/bin/bash\n# Deploy script for the harbor website\necho \"Loading cargo...\"\necho \"Securing containers...\"\necho \"🚢 Website deployed. Nice work, dockhand!\"\n",
+                        "m": "rw-r--r--"
+                      }
+                    },
+                    "m": "rwxr-xr-x"
+                  },
+                  "legacy": {
+                    "t": "d",
+                    "c": {
+                      "old": {
+                        "t": "d",
+                        "c": {
+                          "crate-manifest.txt": {
+                            "t": "f",
+                            "x": "CRATE MANIFEST (1998)\nCrate 0001  Cargo: 300 tins of sardines\nCrate 0002  Cargo: one (1) grand piano\nCrate 0003  Cargo: classified\n",
+                            "m": "rw-r--r--"
+                          }
+                        },
+                        "m": "rwxr-xr-x"
+                      },
+                      "README": {
+                        "t": "f",
+                        "x": "Nobody remembers what this folder is for.\n",
+                        "m": "rw-r--r--"
+                      }
+                    },
+                    "m": "rwxr-xr-x"
+                  },
+                  "stack": {
+                    "t": "d",
+                    "c": {
+                      "docker-compose.yml": {
+                        "t": "f",
+                        "x": "# The harbor stack: a web server and a cache\nservices:\n  web:\n    image: nginx\n    ports:\n      - \"8081:80\"\n    depends_on:\n      - cache\n  cache:\n    image: redis\n    volumes:\n      - cache-data:/data\n\nvolumes:\n  cache-data:\n",
+                        "m": "rw-r--r--"
+                      }
+                    },
+                    "m": "rwxr-xr-x"
+                  },
+                  "broken": {
+                    "t": "d",
+                    "c": {
+                      "Dockerfile": {
+                        "t": "f",
+                        "x": "# Harbor status page\nFORM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+                        "m": "rw-r--r--"
+                      },
+                      "app.py": {
+                        "t": "f",
+                        "x": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Status: all piers operational ⚓\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+                        "m": "rw-r--r--"
+                      }
+                    },
+                    "m": "rwxr-xr-x"
+                  }
+                },
+                "m": "rwxr-xr-x"
+              },
+              "app2": {
+                "t": "d",
+                "c": {
+                  "app.py": {
+                    "t": "f",
+                    "x": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Hello from the harbor! 🚢\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+                    "m": "rw-r--r--"
+                  },
+                  "Dockerfile": {
+                    "t": "f",
+                    "x": "# Start from a small official Python image\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+                    "m": "rw-r--r--"
+                  },
+                  "compose.yaml": {
+                    "t": "f",
+                    "x": "services:\n  app:\n    build: .\n    ports:\n      - \"5001:5000\"\n    environment:\n      MODE: prod\n    command: python app.py\n  other:\n    restart: always\n",
+                    "m": "rw-r--r--"
+                  }
+                },
+                "m": "rwxr-xr-x"
+              },
+              "bad": {
+                "t": "d",
+                "c": {
+                  "compose.yml": {
+                    "t": "f",
+                    "x": "services: x\n",
+                    "m": "rw-r--r--"
+                  }
+                },
+                "m": "rwxr-xr-x"
+              },
+              "clash": {
+                "t": "d",
+                "c": {
+                  "docker-compose.yaml": {
+                    "t": "f",
+                    "x": "services:\n  a:\n    image: nginx\n    ports:\n      - \"8086:80\"\n  b:\n    image: nosuchimg\n",
+                    "m": "rw-r--r--"
+                  }
+                },
+                "m": "rwxr-xr-x"
+              }
+            },
+            "m": "rwxr-xr-x"
+          }
+        },
+        "m": "rwxr-xr-x"
+      },
+      "etc": {
+        "t": "d",
+        "c": {
+          "hostname": {
+            "t": "f",
+            "x": "port-penguin\n",
+            "m": "rw-r--r--"
+          },
+          "os-release": {
+            "t": "f",
+            "x": "NAME=\"Penguin Linux\"\nVERSION=\"26.04 (Harbor)\"\n",
+            "m": "rw-r--r--"
+          }
+        },
+        "m": "rwxr-xr-x"
+      },
+      "tmp": {
+        "t": "d",
+        "c": {
+          "old-cargo.log": {
+            "t": "f",
+            "x": "2026-11-01 crate 7781 lost at sea\n",
+            "m": "rw-r--r--"
+          }
+        },
+        "m": "rwxr-xr-x"
+      },
+      "usr": {
+        "t": "d",
+        "c": {
+          "bin": {
+            "t": "d",
+            "c": {},
+            "m": "rwxr-xr-x"
+          },
+          "share": {
+            "t": "d",
+            "c": {},
+            "m": "rwxr-xr-x"
+          }
+        },
+        "m": "rwxr-xr-x"
+      },
+      "var": {
+        "t": "d",
+        "c": {
+          "log": {
+            "t": "d",
+            "c": {
+              "syslog": {
+                "t": "f",
+                "x": "Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\n",
+                "m": "rw-r-----",
+                "sz": 48000000
+              },
+              "auth.log": {
+                "t": "f",
+                "x": "Nov 24 06:00:03 sshd: session opened for cadet\n",
+                "m": "rw-r-----",
+                "sz": 2100000
+              },
+              "dpkg.log": {
+                "t": "f",
+                "x": "2026-11-20 status installed docker-ce\n",
+                "m": "rw-r--r--",
+                "sz": 900000
+              }
+            },
+            "m": "rwxr-xr-x"
+          }
+        },
+        "m": "rwxr-xr-x"
+      }
+    },
+    "m": "rwxr-xr-x"
+  },
+  "cwd": "/home/cadet/clash",
+  "oldpwd": "/home/cadet",
+  "env": {},
+  "procs": [
+    {
+      "pid": 1,
+      "user": "root",
+      "cpu": 0,
+      "mem": 0.3,
+      "cmd": "/sbin/init"
+    },
+    {
+      "pid": 214,
+      "user": "root",
+      "cpu": 0,
+      "mem": 0.2,
+      "cmd": "/usr/sbin/sshd -D"
+    },
+    {
+      "pid": 388,
+      "user": "root",
+      "cpu": 0.4,
+      "mem": 1.9,
+      "cmd": "/usr/bin/dockerd"
+    },
+    {
+      "pid": 1021,
+      "user": "cadet",
+      "cpu": 0.2,
+      "mem": 0.8,
+      "cmd": "harbor-radio --station 16"
+    },
+    {
+      "pid": 4242,
+      "user": "cadet",
+      "cpu": 99.1,
+      "mem": 2.3,
+      "cmd": "crane-sim --loop"
+    },
+    {
+      "pid": 5150,
+      "user": "cadet",
+      "cpu": 0,
+      "mem": 0.1,
+      "cmd": "-bash"
+    }
+  ],
+  "lastCode": 0,
+  "dk": {
+    "images": [
+      {
+        "repo": "app2-app",
+        "tag": "latest",
+        "id": "730fce49fe11",
+        "size": "156MB",
+        "created": 1795510800000,
+        "cmd": "python app.py",
+        "server": true,
+        "expose": "5000",
+        "reply": "Hello from the harbor! 🚢",
+        "files": [
+          "Dockerfile",
+          "app.py",
+          "compose.yaml"
+        ],
+        "filesText": {
+          "Dockerfile": "# Start from a small official Python image\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+          "app.py": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Hello from the harbor! 🚢\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+          "compose.yaml": "services:\n  app:\n    build: .\n    ports:\n      - \"5001:5000\"\n    environment:\n      MODE: prod\n    command: python app.py\n"
+        },
+        "logs": [
+          " * Serving Flask app 'app'",
+          " * Debug mode: off",
+          " * Running on all addresses (0.0.0.0)",
+          " * Running on http://127.0.0.1:5000",
+          "Press CTRL+C to quit"
+        ]
+      },
+      {
+        "repo": "nginx",
+        "tag": "latest",
+        "id": "4567140e044b",
+        "size": "192MB",
+        "created": 0,
+        "official": true
+      }
+    ],
+    "containers": [
+      {
+        "id": "2b759ccc1b85",
+        "name": "hog",
+        "image": "nginx",
+        "repo": "nginx",
+        "cmd": "\"/docker-entrypoint.…\"",
+        "ports": [
+          "8085:80"
+        ],
+        "env": [],
+        "mounts": [],
+        "networks": {
+          "bridge": "172.17.0.2"
+        },
+        "aliases": [],
+        "project": null,
+        "service": null,
+        "created": 1795510800000,
+        "started": 1795510800000,
+        "status": "running",
+        "exit": 0,
+        "logs": [
+          "/docker-entrypoint.sh: Configuration complete; ready for start up",
+          "2026/11/24 09:00:00 [notice] 1#1: nginx/1.27.2",
+          "2026/11/24 09:00:00 [notice] 1#1: start worker processes"
+        ]
+      },
+      {
+        "id": "ffbf9f9dd1d2",
+        "name": "clash-a-1",
+        "image": "nginx",
+        "repo": "nginx",
+        "cmd": "\"/docker-entrypoint.…\"",
+        "ports": [
+          "8086:80"
+        ],
+        "env": [],
+        "mounts": [],
+        "networks": {
+          "clash_default": "172.18.0.2"
+        },
+        "aliases": [
+          "a"
+        ],
+        "project": "clash",
+        "service": "a",
+        "created": 1795510800000,
+        "started": 1795510800000,
+        "status": "running",
+        "exit": 0,
+        "logs": [
+          "/docker-entrypoint.sh: Configuration complete; ready for start up",
+          "2026/11/24 09:00:00 [notice] 1#1: nginx/1.27.2",
+          "2026/11/24 09:00:00 [notice] 1#1: start worker processes"
+        ]
+      }
+    ],
+    "volumes": [],
+    "networks": [
+      {
+        "name": "bridge",
+        "id": "b4f16a5485f7",
+        "driver": "bridge",
+        "subnet": "172.17",
+        "next": 2
+      },
+      {
+        "name": "host",
+        "id": "a648dc235504",
+        "driver": "host"
+      },
+      {
+        "name": "none",
+        "id": "0584f0b1beb9",
+        "driver": "null"
+      },
+      {
+        "name": "clash_default",
+        "id": "6abafa5a5ee5",
+        "driver": "bridge",
+        "subnet": "172.18",
+        "next": 2,
+        "user": true
+      }
+    ]
+  },
+  "done": [],
+  "cur": 0,
+  "hist": [
+    "mkdir app2",
+    "cp projects/webapp/app.py projects/webapp/Dockerfile app2/",
+    "cd app2",
+    "echo \"services:\" > compose.yaml",
+    "echo \"  app:\" >> compose.yaml",
+    "echo \"    build: .\" >> compose.yaml",
+    "echo \"    ports:\" >> compose.yaml",
+    "echo '      - \"5001:5000\"' >> compose.yaml",
+    "echo \"    environment:\" >> compose.yaml",
+    "echo \"      MODE: prod\" >> compose.yaml",
+    "echo \"    command: python app.py\" >> compose.yaml",
+    "docker compose config",
+    "docker compose up -d",
+    "docker compose ps",
+    "docker inspect app2-app-1",
+    "docker compose up -d --build",
+    "docker images",
+    "docker compose down",
+    "echo \"  other:\" >> compose.yaml",
+    "echo \"    restart: always\" >> compose.yaml",
+    "docker compose up -d",
+    "docker compose down",
+    "cd ~",
+    "mkdir bad",
+    "echo \"services: x\" > bad/compose.yml",
+    "cd bad",
+    "docker compose up -d",
+    "cd ~",
+    "mkdir clash",
+    "echo \"services:\" > clash/docker-compose.yaml",
+    "echo \"  a:\" >> clash/docker-compose.yaml",
+    "echo \"    image: nginx\" >> clash/docker-compose.yaml",
+    "echo '    ports:' >> clash/docker-compose.yaml",
+    "echo '      - \"8085:80\"' >> clash/docker-compose.yaml",
+    "echo \"  b:\" >> clash/docker-compose.yaml",
+    "echo \"    image: nosuchimg\" >> clash/docker-compose.yaml",
+    "docker run -d --name hog -p 8085:80 nginx",
+    "cd clash",
+    "cat docker-compose.yaml",
+    "docker compose up -d",
+    "sed -i 's/8085/8086/' docker-compose.yaml",
+    "docker compose up -d",
+    "docker compose ps"
+  ],
+  "setup": {},
+  "unlocked": false
+}

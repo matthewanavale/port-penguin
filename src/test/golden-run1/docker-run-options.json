@@ -1,0 +1,390 @@
+{
+  "script": "docker-run-options",
+  "steps": [
+    {
+      "input": "docker run",
+      "text": "\"docker run\" requires at least 1 argument.\nUsage:  docker run [OPTIONS] IMAGE [COMMAND] [ARG...]",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run nosuchimage",
+      "text": "Unable to find image 'nosuchimage:latest' locally\ndocker: Error response from daemon: pull access denied for nosuchimage, repository does not exist or may require 'docker login'.",
+      "cleared": false,
+      "code": 125,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run --name a alpine echo hi",
+      "text": "Unable to find image 'alpine:latest' locally\nlatest: Pulling from library/alpine\ndc21399a9bf1: Pull complete\n26fa1a614c75: Pull complete\nDigest: sha256:ec9a765bf48e4638095f4aa439e0653c7fb029382b15fe643caf4d84e3dd0d65\nStatus: Downloaded newer image for alpine:latest\ndocker.io/library/alpine:latest\nhi",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run --name a alpine echo again",
+      "text": "docker: Error response from daemon: Conflict. The container name \"/a\" is already in use by container \"45152efb280e\". You have to remove (or rename) that container to be able to reuse that name.",
+      "cleared": false,
+      "code": 125,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -p bad alpine",
+      "text": "docker: invalid port mapping \"bad\". Use HOST:CONTAINER, like 8080:80.",
+      "cleared": false,
+      "code": 125,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -p 80:80 -e BAD alpine",
+      "text": "docker: invalid environment variable \"BAD\". Use KEY=value.",
+      "cleared": false,
+      "code": 125,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -v bad alpine",
+      "text": "docker: invalid volume spec \"bad\". Use NAME:/path/in/container, like harbor-data:/data.",
+      "cleared": false,
+      "code": 125,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run --network nonet alpine",
+      "text": "docker: Error response from daemon: network nonet not found.",
+      "cleared": false,
+      "code": 125,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run alpine",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -it ubuntu",
+      "text": "Unable to find image 'ubuntu:latest' locally\nlatest: Pulling from library/ubuntu\n92d712ba26bf: Pull complete\nbbaa822b1e82: Pull complete\nbbb159fd9f96: Pull complete\n730fce49fe11: Pull complete\nDigest: sha256:93a14abbe82c27a7d4e4c3f2d5f08a497cbd444cedb7f25427fa35e0ad7bb7a2\nStatus: Downloaded newer image for ubuntu:latest\ndocker.io/library/ubuntu:latest\n(This sandbox can’t open an interactive shell. Try a single command, like: docker run alpine echo hello)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run python",
+      "text": "Unable to find image 'python:latest' locally\nlatest: Pulling from library/python\nb13feadcb4e6: Pull complete\n39f458185402: Pull complete\n27d982c512ce: Pull complete\nDigest: sha256:6f352a62946e208b8558e35d47454a62ee277153307e3661bfb111fb836ba771\nStatus: Downloaded newer image for python:latest\ndocker.io/library/python:latest\n(This sandbox can’t open an interactive shell. Try a single command, like: docker run alpine echo hello)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run node",
+      "text": "Unable to find image 'node:latest' locally\nlatest: Pulling from library/node\n9041c93d8294: Pull complete\n7f21ecb6149e: Pull complete\n05606add4716: Pull complete\nDigest: sha256:abafa5a5ee5414771587376b15a20ddda0cc91f90c1ad5980d4819b74c59ae6f\nStatus: Downloaded newer image for node:latest\ndocker.io/library/node:latest\n(This sandbox can’t open an interactive shell. Try a single command, like: docker run alpine echo hello)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run alpine cat /etc/os-release",
+      "text": "NAME=\"Alpine Linux\"\nVERSION_ID=3.20.3",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run ubuntu cat /etc/os-release",
+      "text": "PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run alpine ls /",
+      "text": "bin   dev  etc  home  lib  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run alpine nosuch",
+      "text": "OCI runtime exec failed: exec: \"nosuch\": executable file not found in $PATH",
+      "cleared": false,
+      "code": 126,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo $?",
+      "text": "126",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run --rm alpine echo gone",
+      "text": "gone",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -d alpine echo background",
+      "text": "68da5b0acebf8208555351135a19b5382f67fa2209aa361c00cf355dd22321c6",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run nginx",
+      "text": "Unable to find image 'nginx:latest' locally\nlatest: Pulling from library/nginx\n8b0580870f84: Pull complete\n461f3345a423: Pull complete\nbfe73c9c9789: Pull complete\n0574602eedbe: Pull complete\nDigest: sha256:88b123b1ef2bcf0f55f903297551d0dec19edb12e908196982dfbd2447dfbbc0\nStatus: Downloaded newer image for nginx:latest\ndocker.io/library/nginx:latest\n/docker-entrypoint.sh: Configuration complete; ready for start up\n2026/11/24 09:00:00 [notice] 1#1: nginx/1.27.2\n2026/11/24 09:00:00 [notice] 1#1: start worker processes\n^C\n(You pressed Ctrl+C and the container stopped. Add -d to keep it running in the background.)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -d -p 8080:80 nginx",
+      "text": "e50817704eee060946d7d40b774ad1a0c471236e149a01084f16a01ff8023b87",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -d -p 8080:80 nginx",
+      "text": "docker: Error response from daemon: Bind for 0.0.0.0:8080 failed: port is already allocated.",
+      "cleared": false,
+      "code": 125,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -dit --name box -e A=1 -v data:/data -w /x -u 0 --restart always alpine",
+      "text": "6004db759cefb39b12468221466b2120e6ce417e1856cf76eb2492dacb245956",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run --env=B=2 --name=n2 --network=bridge alpine env",
+      "text": "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nHOSTNAME=45b879b50bc3\nHOME=/root\nB=2",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run --detach --publish 8082:80 --env C=3 --volume vol2:/v --net bridge busybox",
+      "text": "Unable to find image 'busybox:latest' locally\nlatest: Pulling from library/busybox\n4b7b67277521: Pull complete\n5c98c8608773: Pull complete\n2671c32e938d: Pull complete\nDigest: sha256:0c89290994db13b4506e56efc50b1a1b74a01a231c2e08c091f49fda4b4d1468\nStatus: Downloaded newer image for busybox:latest\ndocker.io/library/busybox:latest\nc006ea976d742a9ca5058eaab7fd0e0478a83cec845d6309ff5d8032fbb9b564",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run postgres",
+      "text": "Unable to find image 'postgres:latest' locally\nlatest: Pulling from library/postgres\n8341a3384e74: Pull complete\n87a49a88f03c: Pull complete\na1d5ba776b94: Pull complete\nd8b47eec7193: Pull complete\nDigest: sha256:84043751dc762fe8314f2668e5f4aa4daa2c2def64d1d280c22710f68463b767\nStatus: Downloaded newer image for postgres:latest\ndocker.io/library/postgres:latest\nError: Database is uninitialized and superuser password is not specified.\n       You must specify POSTGRES_PASSWORD to a non-empty value for the\n       superuser. For example, \"-e POSTGRES_PASSWORD=password\" on \"docker run\".",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "echo $?",
+      "text": "1",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -e POSTGRES_PASSWORD=x -d --name pg postgres",
+      "text": "64121f0581933c10c35f684ad216ddc4d1b9db5690350d3fa580c8a2d1e6d3bd",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec pg psql",
+      "text": "psql (16.4)\n(This sandbox can’t open an interactive database shell, but the server is up.)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -d --name pg2 -e POSTGRES_HOST_AUTH_METHOD=trust postgres",
+      "text": "08dec55c19d1e0e6df12763e1b7f982106344d78e78f682dac32d4e97d861647",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -d --name r redis",
+      "text": "Unable to find image 'redis:latest' locally\nlatest: Pulling from library/redis\n5f74e2fe7839: Pull complete\n99e94e56502a: Pull complete\n87b344552fc6: Pull complete\nDigest: sha256:4a02e7457b3729954608450ef2171d87f155f0e38c2bfcf5de1015ccfe4da5d8\nStatus: Downloaded newer image for redis:latest\ndocker.io/library/redis:latest\n2bc2bf41d9bbc101e1aaeef248f38eb2b7c96d0233b0066cb10c39ac1006c3af",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec r redis-cli ping",
+      "text": "PONG",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec r redis-cli set a b",
+      "text": "OK",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec r ls /data",
+      "text": "ls: cannot access '/data': No such file or directory",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -d --name r2 -v cache:/data redis",
+      "text": "8a419fc5e28664e487f334599fbad22b256569c1351d2d3cadaf81c01526b2cc",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec r2 ls /data",
+      "text": "dump.rdb",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker volume ls",
+      "text": "DRIVER   VOLUME NAME\nlocal    data\nlocal    vol2\nlocal    cache",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker ps -a",
+      "text": "CONTAINER ID   IMAGE      COMMAND                  CREATED                  STATUS                                PORTS                  NAMES\n45152efb280e   alpine     \"echo hi\"                Less than a second ago   Exited (0) Less than a second ago                            a\n506f01414060   alpine     \"/bin/sh\"                Less than a second ago   Exited (0) Less than a second ago                            breezy_lighthouse\n6f3b0cd08cd4   ubuntu     \"/bin/sh\"                Less than a second ago   Exited (0) Less than a second ago                            rusty_harbor\nc75bf4451422   python     \"/bin/sh\"                Less than a second ago   Exited (0) Less than a second ago                            breezy_gull\na0f7a7921463   node       \"/bin/sh\"                Less than a second ago   Exited (0) Less than a second ago                            plucky_anchor\n900c3c9c3568   alpine     \"cat /etc/os-release\"    Less than a second ago   Exited (0) Less than a second ago                            breezy_tugboat\n0ca62a2524ac   ubuntu     \"cat /etc/os-release\"    Less than a second ago   Exited (0) Less than a second ago                            breezy_captain\nee97dd209cac   alpine     \"ls /\"                   Less than a second ago   Exited (0) Less than a second ago                            sleepy_gull\na54c36656b6d   alpine     \"nosuch\"                 Less than a second ago   Exited (126) Less than a second ago                          salty_captain\n68da5b0acebf   alpine     \"echo background\"        Less than a second ago   Exited (0) Less than a second ago                            sleepy_anchor\n6cc3e27e4120   nginx      \"/docker-entrypoint.…\"   Less than a second ago   Exited (0) Less than a second ago                            salty_gull\ne50817704eee   nginx      \"/docker-entrypoint.…\"   Less than a second ago   Up Less than a second                 0.0.0.0:8080->80/tcp   quirky_anchor\n6004db759cef   alpine     \"/bin/sh\"                Less than a second ago   Exited (0) Less than a second ago                            box\n45b879b50bc3   alpine     \"env\"                    Less than a second ago   Exited (0) Less than a second ago                            n2\nc006ea976d74   busybox    \"/bin/sh\"                Less than a second ago   Exited (0) Less than a second ago                            jolly_puffin\n9f2a30aabf0b   postgres   \"docker-entrypoint.s…\"   Less than a second ago   Exited (1) Less than a second ago                            gallant_otter\n64121f058193   postgres   \"docker-entrypoint.s…\"   Less than a second ago   Up Less than a second                 5432/tcp               pg\n08dec55c19d1   postgres   \"docker-entrypoint.s…\"   Less than a second ago   Up Less than a second                 5432/tcp               pg2\n2bc2bf41d9bb   redis      \"docker-entrypoint.s…\"   Less than a second ago   Up Less than a second                 6379/tcp               r\n8a419fc5e286   redis      \"docker-entrypoint.s…\"   Less than a second ago   Up Less than a second                 6379/tcp               r2",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker container prune",
+      "text": "WARNING! This will remove all stopped containers.\n(This sandbox can’t answer yes/no prompts. Add -f to confirm.)",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker container prune -f",
+      "text": "Deleted Containers:\n45152efb280e\n506f01414060\n6f3b0cd08cd4\nc75bf4451422\na0f7a7921463\n900c3c9c3568\n0ca62a2524ac\nee97dd209cac\na54c36656b6d\n68da5b0acebf\n6cc3e27e4120\n6004db759cef\n45b879b50bc3\nc006ea976d74\n9f2a30aabf0b\n\nTotal reclaimed space: 0B",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker image prune",
+      "text": "WARNING! This will remove all dangling images.\n(This sandbox can’t answer yes/no prompts. Add -f to confirm.)",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker image prune --force",
+      "text": "Total reclaimed space: 0B",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker system prune",
+      "text": "WARNING! This will remove all stopped containers, unused networks and dangling images.\n(This sandbox can’t answer yes/no prompts. Add -f to confirm.)",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker system prune -f",
+      "text": "Deleted Containers:\n\nTotal reclaimed space: 0B",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker system df",
+      "text": "TYPE            TOTAL   ACTIVE   SIZE    RECLAIMABLE\nImages          8       3        1.4GB   0B\nContainers      5       5        0B      0B\nLocal Volumes   3       1        12MB    0B\nBuild Cache     0       0        0B      0B",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker system",
+      "text": "Usage: docker system df | docker system prune -f",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker image pull alpine",
+      "text": "latest: Pulling from library/alpine\nDigest: sha256:715d92be82b624247cb7e1ed81d80a6a7d09437ed3475363bb61bbd0c000f6f4\nStatus: Image is up to date for alpine:latest\ndocker.io/library/alpine:latest",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker ps -a",
+      "text": "CONTAINER ID   IMAGE      COMMAND                  CREATED                  STATUS                  PORTS                  NAMES\ne50817704eee   nginx      \"/docker-entrypoint.…\"   Less than a second ago   Up Less than a second   0.0.0.0:8080->80/tcp   quirky_anchor\n64121f058193   postgres   \"docker-entrypoint.s…\"   Less than a second ago   Up Less than a second   5432/tcp               pg\n08dec55c19d1   postgres   \"docker-entrypoint.s…\"   Less than a second ago   Up Less than a second   5432/tcp               pg2\n2bc2bf41d9bb   redis      \"docker-entrypoint.s…\"   Less than a second ago   Up Less than a second   6379/tcp               r\n8a419fc5e286   redis      \"docker-entrypoint.s…\"   Less than a second ago   Up Less than a second   6379/tcp               r2",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    }
+  ],
+  "save": "{\"fs\":{\"t\":\"d\",\"c\":{\"home\":{\"t\":\"d\",\"c\":{\"cadet\":{\"t\":\"d\",\"c\":{\"welcome.txt\":{\"t\":\"f\",\"x\":\"Welcome to Port Penguin, dockhand! 🐧\\n\\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\\nso experiment freely.\\n\\nYour logbook lists one task at a time. Finish it and the next one appears.\\nThere are 70 tasks, and they get harder as you go.\\n\\nHandy keys\\n  Tab        finish a file or command name for you\\n  ↑ and ↓    bring back commands you typed before\\n  help       list every command this terminal knows\\n  man NAME   explain one command, like: man grep\\n\",\"m\":\"rw-r--r--\"},\".secret\":{\"t\":\"f\",\"x\":\"Psst. You found the hidden file.\\n\\nCaptain’s code word: BARNACLE\\n\\nFiles whose names start with a dot are hidden from a plain ls.\\nSettings files often hide this way, like .bashrc.\\n\",\"m\":\"rw-r--r--\"},\".bashrc\":{\"t\":\"f\",\"x\":\"alias ll='ls -l'\\n\",\"m\":\"rw-r--r--\"},\"notes.txt\":{\"t\":\"f\",\"x\":\"Shipment schedule\\nMonday     40 containers of bananas\\nWednesday  12 containers of rubber ducks\\nFriday     1 very suspicious crate\\n\",\"m\":\"rw-r--r--\"},\"crew.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nGus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nGus\\n\",\"m\":\"rw-r--r--\"},\"logs\":{\"t\":\"d\",\"c\":{\"system.log\":{\"t\":\"f\",\"x\":\"2026-11-24 06:00:01 INFO  Harbor systems online\\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\\n2026-11-24 06:21:52 INFO  Unloading started\\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\\n2026-11-24 06:30:00 INFO  Coffee machine refilled\\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\\n2026-11-24 06:52:26 INFO  Unloading complete\\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\\n2026-11-24 07:10:00 INFO  Shift change\\n\",\"m\":\"rw-r--r--\"},\"crane.log\":{\"t\":\"f\",\"x\":\"crane-1 lift ok 18t\\ncrane-2 lift ok 22t\\ncrane-2 pressure low\\ncrane-1 idle\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"projects\":{\"t\":\"d\",\"c\":{\"webapp\":{\"t\":\"d\",\"c\":{\"index.html\":{\"t\":\"f\",\"x\":\"<!DOCTYPE html>\\n<html>\\n  <head><title>Port Penguin</title></head>\\n  <body><h1>Welcome to Port Penguin</h1></body>\\n</html>\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Hello from the harbor! 🚢\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"},\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Start from a small official Python image\\nFROM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"deploy.sh\":{\"t\":\"f\",\"x\":\"#!/bin/bash\\n# Deploy script for the harbor website\\necho \\\"Loading cargo...\\\"\\necho \\\"Securing containers...\\\"\\necho \\\"🚢 Website deployed. Nice work, dockhand!\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"legacy\":{\"t\":\"d\",\"c\":{\"old\":{\"t\":\"d\",\"c\":{\"crate-manifest.txt\":{\"t\":\"f\",\"x\":\"CRATE MANIFEST (1998)\\nCrate 0001  Cargo: 300 tins of sardines\\nCrate 0002  Cargo: one (1) grand piano\\nCrate 0003  Cargo: classified\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"README\":{\"t\":\"f\",\"x\":\"Nobody remembers what this folder is for.\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"stack\":{\"t\":\"d\",\"c\":{\"docker-compose.yml\":{\"t\":\"f\",\"x\":\"# The harbor stack: a web server and a cache\\nservices:\\n  web:\\n    image: nginx\\n    ports:\\n      - \\\"8081:80\\\"\\n    depends_on:\\n      - cache\\n  cache:\\n    image: redis\\n    volumes:\\n      - cache-data:/data\\n\\nvolumes:\\n  cache-data:\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"broken\":{\"t\":\"d\",\"c\":{\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Harbor status page\\nFORM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Status: all piers operational ⚓\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"etc\":{\"t\":\"d\",\"c\":{\"hostname\":{\"t\":\"f\",\"x\":\"port-penguin\\n\",\"m\":\"rw-r--r--\"},\"os-release\":{\"t\":\"f\",\"x\":\"NAME=\\\"Penguin Linux\\\"\\nVERSION=\\\"26.04 (Harbor)\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"tmp\":{\"t\":\"d\",\"c\":{\"old-cargo.log\":{\"t\":\"f\",\"x\":\"2026-11-01 crate 7781 lost at sea\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"usr\":{\"t\":\"d\",\"c\":{\"bin\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"},\"share\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"var\":{\"t\":\"d\",\"c\":{\"log\":{\"t\":\"d\",\"c\":{\"syslog\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\\n\",\"m\":\"rw-r-----\",\"sz\":48000000},\"auth.log\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:03 sshd: session opened for cadet\\n\",\"m\":\"rw-r-----\",\"sz\":2100000},\"dpkg.log\":{\"t\":\"f\",\"x\":\"2026-11-20 status installed docker-ce\\n\",\"m\":\"rw-r--r--\",\"sz\":900000}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"cwd\":\"/home/cadet\",\"oldpwd\":\"/home/cadet\",\"env\":{},\"procs\":[{\"pid\":1,\"user\":\"root\",\"cpu\":0,\"mem\":0.3,\"cmd\":\"/sbin/init\"},{\"pid\":214,\"user\":\"root\",\"cpu\":0,\"mem\":0.2,\"cmd\":\"/usr/sbin/sshd -D\"},{\"pid\":388,\"user\":\"root\",\"cpu\":0.4,\"mem\":1.9,\"cmd\":\"/usr/bin/dockerd\"},{\"pid\":1021,\"user\":\"cadet\",\"cpu\":0.2,\"mem\":0.8,\"cmd\":\"harbor-radio --station 16\"},{\"pid\":4242,\"user\":\"cadet\",\"cpu\":99.1,\"mem\":2.3,\"cmd\":\"crane-sim --loop\"},{\"pid\":5150,\"user\":\"cadet\",\"cpu\":0,\"mem\":0.1,\"cmd\":\"-bash\"}],\"lastCode\":0,\"dk\":{\"images\":[{\"repo\":\"alpine\",\"tag\":\"latest\",\"id\":\"bd1c3dfef959\",\"size\":\"8.83MB\",\"created\":0,\"official\":true},{\"repo\":\"ubuntu\",\"tag\":\"latest\",\"id\":\"61016f2a92bf\",\"size\":\"78.1MB\",\"created\":0,\"official\":true},{\"repo\":\"python\",\"tag\":\"latest\",\"id\":\"008d3a39a946\",\"size\":\"1.02GB\",\"created\":0,\"official\":true},{\"repo\":\"node\",\"tag\":\"latest\",\"id\":\"fbf9f9dd1d29\",\"size\":\"1.12GB\",\"created\":0,\"official\":true},{\"repo\":\"nginx\",\"tag\":\"latest\",\"id\":\"17694186b8ab\",\"size\":\"192MB\",\"created\":0,\"official\":true},{\"repo\":\"busybox\",\"tag\":\"latest\",\"id\":\"9fe9969f69b2\",\"size\":\"4.28MB\",\"created\":0,\"official\":true},{\"repo\":\"postgres\",\"tag\":\"latest\",\"id\":\"e3eaf43d66f9\",\"size\":\"438MB\",\"created\":0,\"official\":true},{\"repo\":\"redis\",\"tag\":\"latest\",\"id\":\"aac6b53af418\",\"size\":\"117MB\",\"created\":0,\"official\":true}],\"containers\":[{\"id\":\"e50817704eee\",\"name\":\"quirky_anchor\",\"image\":\"nginx\",\"repo\":\"nginx\",\"cmd\":\"\\\"/docker-entrypoint.…\\\"\",\"ports\":[\"8080:80\"],\"env\":[],\"mounts\":[],\"networks\":{\"bridge\":\"172.17.0.14\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795510800000,\"status\":\"running\",\"exit\":0,\"logs\":[\"/docker-entrypoint.sh: Configuration complete; ready for start up\",\"2026/11/24 09:00:00 [notice] 1#1: nginx/1.27.2\",\"2026/11/24 09:00:00 [notice] 1#1: start worker processes\"]},{\"id\":\"64121f058193\",\"name\":\"pg\",\"image\":\"postgres\",\"repo\":\"postgres\",\"cmd\":\"\\\"docker-entrypoint.s…\\\"\",\"ports\":[],\"env\":[\"POSTGRES_PASSWORD=x\"],\"mounts\":[],\"networks\":{\"bridge\":\"172.17.0.19\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795510800000,\"status\":\"running\",\"exit\":0,\"logs\":[\"PostgreSQL init process complete; ready for start up.\",\"LOG:  database system is ready to accept connections\"]},{\"id\":\"08dec55c19d1\",\"name\":\"pg2\",\"image\":\"postgres\",\"repo\":\"postgres\",\"cmd\":\"\\\"docker-entrypoint.s…\\\"\",\"ports\":[],\"env\":[\"POSTGRES_HOST_AUTH_METHOD=trust\"],\"mounts\":[],\"networks\":{\"bridge\":\"172.17.0.20\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795510800000,\"status\":\"running\",\"exit\":0,\"logs\":[\"PostgreSQL init process complete; ready for start up.\",\"LOG:  database system is ready to accept connections\"]},{\"id\":\"2bc2bf41d9bb\",\"name\":\"r\",\"image\":\"redis\",\"repo\":\"redis\",\"cmd\":\"\\\"docker-entrypoint.s…\\\"\",\"ports\":[],\"env\":[],\"mounts\":[],\"networks\":{\"bridge\":\"172.17.0.21\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795510800000,\"status\":\"running\",\"exit\":0,\"logs\":[\"1:C Redis version=7.4.1, bits=64, just started\",\"1:M Server initialized\",\"1:M Ready to accept connections tcp\"]},{\"id\":\"8a419fc5e286\",\"name\":\"r2\",\"image\":\"redis\",\"repo\":\"redis\",\"cmd\":\"\\\"docker-entrypoint.s…\\\"\",\"ports\":[],\"env\":[],\"mounts\":[{\"type\":\"volume\",\"name\":\"cache\",\"dst\":\"/data\"}],\"networks\":{\"bridge\":\"172.17.0.22\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795510800000,\"status\":\"running\",\"exit\":0,\"logs\":[\"1:C Redis version=7.4.1, bits=64, just started\",\"1:M Server initialized\",\"1:M Ready to accept connections tcp\"]}],\"volumes\":[{\"name\":\"data\",\"created\":1795510800000},{\"name\":\"vol2\",\"created\":1795510800000},{\"name\":\"cache\",\"created\":1795510800000}],\"networks\":[{\"name\":\"bridge\",\"id\":\"b4f16a5485f7\",\"driver\":\"bridge\",\"subnet\":\"172.17\",\"next\":22},{\"name\":\"host\",\"id\":\"a648dc235504\",\"driver\":\"host\"},{\"name\":\"none\",\"id\":\"0584f0b1beb9\",\"driver\":\"null\"}]},\"done\":[],\"cur\":0,\"hist\":[\"docker run\",\"docker run nosuchimage\",\"docker run --name a alpine echo hi\",\"docker run --name a alpine echo again\",\"docker run -p bad alpine\",\"docker run -p 80:80 -e BAD alpine\",\"docker run -v bad alpine\",\"docker run --network nonet alpine\",\"docker run alpine\",\"docker run -it ubuntu\",\"docker run python\",\"docker run node\",\"docker run alpine cat /etc/os-release\",\"docker run ubuntu cat /etc/os-release\",\"docker run alpine ls /\",\"docker run alpine nosuch\",\"echo $?\",\"docker run --rm alpine echo gone\",\"docker run -d alpine echo background\",\"docker run nginx\",\"docker run -d -p 8080:80 nginx\",\"docker run -d -p 8080:80 nginx\",\"docker run -dit --name box -e A=1 -v data:/data -w /x -u 0 --restart always alpine\",\"docker run --env=B=2 --name=n2 --network=bridge alpine env\",\"docker run --detach --publish 8082:80 --env C=3 --volume vol2:/v --net bridge busybox\",\"docker run postgres\",\"echo $?\",\"docker run -e POSTGRES_PASSWORD=x -d --name pg postgres\",\"docker exec pg psql\",\"docker run -d --name pg2 -e POSTGRES_HOST_AUTH_METHOD=trust postgres\",\"docker run -d --name r redis\",\"docker exec r redis-cli ping\",\"docker exec r redis-cli set a b\",\"docker exec r ls /data\",\"docker run -d --name r2 -v cache:/data redis\",\"docker exec r2 ls /data\",\"docker volume ls\",\"docker ps -a\",\"docker container prune\",\"docker container prune -f\",\"docker image prune\",\"docker image prune --force\",\"docker system prune\",\"docker system prune -f\",\"docker system df\",\"docker system\",\"docker image pull alpine\",\"docker ps -a\"],\"setup\":{},\"unlocked\":false}"
+}

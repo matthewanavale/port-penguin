@@ -1,0 +1,604 @@
+{
+  "script": "docker-basics",
+  "steps": [
+    {
+      "input": "docker",
+      "text": "Usage:  docker COMMAND\n\nCommon commands:\n  run       Create and start a container from an image\n  ps        List containers (add -a for stopped ones too)\n  images    List images on this machine\n  pull      Download an image from Docker Hub\n  build     Build an image from a Dockerfile\n  tag       Give an image another name\n  stop / start / restart / rm      Manage containers\n  rmi       Remove an image\n  logs      Show a container’s output\n  exec      Run a command inside a running container\n  inspect   Show details about a container, image, volume or network\n  stats     Show CPU and memory use\n\nManagement commands:\n  volume    create / ls / rm / inspect\n  network   create / ls / rm / inspect / connect / disconnect\n  system    df / prune\n  compose   up / ps / logs / down",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker help",
+      "text": "Usage:  docker COMMAND\n\nCommon commands:\n  run       Create and start a container from an image\n  ps        List containers (add -a for stopped ones too)\n  images    List images on this machine\n  pull      Download an image from Docker Hub\n  build     Build an image from a Dockerfile\n  tag       Give an image another name\n  stop / start / restart / rm      Manage containers\n  rmi       Remove an image\n  logs      Show a container’s output\n  exec      Run a command inside a running container\n  inspect   Show details about a container, image, volume or network\n  stats     Show CPU and memory use\n\nManagement commands:\n  volume    create / ls / rm / inspect\n  network   create / ls / rm / inspect / connect / disconnect\n  system    df / prune\n  compose   up / ps / logs / down",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker --help",
+      "text": "Usage:  docker COMMAND\n\nCommon commands:\n  run       Create and start a container from an image\n  ps        List containers (add -a for stopped ones too)\n  images    List images on this machine\n  pull      Download an image from Docker Hub\n  build     Build an image from a Dockerfile\n  tag       Give an image another name\n  stop / start / restart / rm      Manage containers\n  rmi       Remove an image\n  logs      Show a container’s output\n  exec      Run a command inside a running container\n  inspect   Show details about a container, image, volume or network\n  stats     Show CPU and memory use\n\nManagement commands:\n  volume    create / ls / rm / inspect\n  network   create / ls / rm / inspect / connect / disconnect\n  system    df / prune\n  compose   up / ps / logs / down",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker --version",
+      "text": "Docker version 27.3.1, build ce12230",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker version",
+      "text": "Docker version 27.3.1, build ce12230",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker -v",
+      "text": "Docker version 27.3.1, build ce12230",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker bogus",
+      "text": "docker: 'bogus' is not a docker command.\nSee 'docker --help'",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker pull",
+      "text": "\"docker pull\" requires exactly 1 argument. Try: docker pull nginx",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker pull nosuchimg",
+      "text": "Error response from daemon: pull access denied for nosuchimg, repository does not exist or may require 'docker login'\n(In this sandbox you can pull: nginx, redis, alpine, ubuntu, python, hello-world, postgres, node, busybox)",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker pull nginx",
+      "text": "latest: Pulling from library/nginx\ndc21399a9bf1: Pull complete\n26fa1a614c75: Pull complete\nDigest: sha256:ec9a765bf48e4638095f4aa439e0653c7fb029382b15fe643caf4d84e3dd0d65\nStatus: Downloaded newer image for nginx:latest\ndocker.io/library/nginx:latest",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker pull nginx",
+      "text": "latest: Pulling from library/nginx\nDigest: sha256:45152efb280ec80f1a4b0919f454f1d8c766162d855b311ca0d6e4eccdfc795f\nStatus: Image is up to date for nginx:latest\ndocker.io/library/nginx:latest",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker pull redis:7",
+      "text": "7: Pulling from library/redis\n06f01414060c: Pull complete\nc2cd9d9d588a: Pull complete\n2c3e3415b8ff: Pull complete\nDigest: sha256:c5842e679b5d82515e1a7aa5e2f1cd92d712ba26bfbbaa822b1e82bbb159fd9f\nStatus: Downloaded newer image for redis:7\ndocker.io/library/redis:7",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker images",
+      "text": "REPOSITORY   TAG      IMAGE ID       CREATED       SIZE\nnginx        latest   bd1c3dfef959   2 weeks ago   192MB\nredis        7        96730fce49fe   2 weeks ago   117MB",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker image ls",
+      "text": "REPOSITORY   TAG      IMAGE ID       CREATED       SIZE\nnginx        latest   bd1c3dfef959   2 weeks ago   192MB\nredis        7        96730fce49fe   2 weeks ago   117MB",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker image list",
+      "text": "REPOSITORY   TAG      IMAGE ID       CREATED       SIZE\nnginx        latest   bd1c3dfef959   2 weeks ago   192MB\nredis        7        96730fce49fe   2 weeks ago   117MB",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run hello-world",
+      "text": "Unable to find image 'hello-world:latest' locally\nlatest: Pulling from library/hello-world\n193a14abbe82: Pull complete\nc27a7d4e4c3f: Pull complete\nDigest: sha256:2d5f08a497cbd444cedb7f25427fa35e0ad7bb7a261016f2a92bf6f3b0cd08cd\nStatus: Downloaded newer image for hello-world:latest\ndocker.io/library/hello-world:latest\n\nHello from Docker!\nThis message shows that your installation appears to be working correctly.\n\nTo generate this message, Docker took the following steps:\n 1. The Docker client contacted the Docker daemon.\n 2. The Docker daemon pulled the \"hello-world\" image from the Docker Hub.\n 3. The Docker daemon created a new container from that image which runs the\n    executable that produces the output you are currently reading.\n 4. The Docker daemon streamed that output to the Docker client, which sent it\n    to your terminal.",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker run -d --name web -p 8080:80 nginx",
+      "text": "0227d982c512ce6f352a62946e208b8558e35d47454a62ee277153307e3661bf",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker ps",
+      "text": "CONTAINER ID   IMAGE   COMMAND                  CREATED                  STATUS                  PORTS                  NAMES\n0227d982c512   nginx   \"/docker-entrypoint.…\"   Less than a second ago   Up Less than a second   0.0.0.0:8080->80/tcp   web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "advanceMs": 125000
+    },
+    {
+      "input": "docker ps",
+      "text": "CONTAINER ID   IMAGE   COMMAND                  CREATED         STATUS         PORTS                  NAMES\n0227d982c512   nginx   \"/docker-entrypoint.…\"   2 minutes ago   Up 2 minutes   0.0.0.0:8080->80/tcp   web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker ps -a",
+      "text": "CONTAINER ID   IMAGE         COMMAND                  CREATED         STATUS                     PORTS                  NAMES\n8f1cd8e4dce9   hello-world   \"/hello\"                 2 minutes ago   Exited (0) 2 minutes ago                          salty_anchor\n0227d982c512   nginx         \"/docker-entrypoint.…\"   2 minutes ago   Up 2 minutes               0.0.0.0:8080->80/tcp   web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker ps -q",
+      "text": "0227d982c512",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker container ls",
+      "text": "CONTAINER ID   IMAGE   COMMAND                  CREATED         STATUS         PORTS                  NAMES\n0227d982c512   nginx   \"/docker-entrypoint.…\"   2 minutes ago   Up 2 minutes   0.0.0.0:8080->80/tcp   web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker container list -a",
+      "text": "CONTAINER ID   IMAGE         COMMAND                  CREATED         STATUS                     PORTS                  NAMES\n8f1cd8e4dce9   hello-world   \"/hello\"                 2 minutes ago   Exited (0) 2 minutes ago                          salty_anchor\n0227d982c512   nginx         \"/docker-entrypoint.…\"   2 minutes ago   Up 2 minutes               0.0.0.0:8080->80/tcp   web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker container ps --all",
+      "text": "CONTAINER ID   IMAGE         COMMAND                  CREATED         STATUS                     PORTS                  NAMES\n8f1cd8e4dce9   hello-world   \"/hello\"                 2 minutes ago   Exited (0) 2 minutes ago                          salty_anchor\n0227d982c512   nginx         \"/docker-entrypoint.…\"   2 minutes ago   Up 2 minutes               0.0.0.0:8080->80/tcp   web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "curl localhost:8080",
+      "text": "<!DOCTYPE html>\n<html>\n<head><title>Welcome to nginx!</title></head>\n<body>\n<h1>Welcome to nginx!</h1>\n<p>If you see this page, the nginx web server is successfully installed and working.</p>\n</body>\n</html>",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker logs web",
+      "text": "/docker-entrypoint.sh: Configuration complete; ready for start up\n2026/11/24 09:00:00 [notice] 1#1: nginx/1.27.2\n2026/11/24 09:00:00 [notice] 1#1: start worker processes\n172.17.0.1 - - [24/Nov/2026:09:02:05 +0000] \"GET / HTTP/1.1\" 200 615 \"-\" \"curl/8.5.0\" \"-\"",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker logs -f web",
+      "text": "/docker-entrypoint.sh: Configuration complete; ready for start up\n2026/11/24 09:00:00 [notice] 1#1: nginx/1.27.2\n2026/11/24 09:00:00 [notice] 1#1: start worker processes\n172.17.0.1 - - [24/Nov/2026:09:02:05 +0000] \"GET / HTTP/1.1\" 200 615 \"-\" \"curl/8.5.0\" \"-\"\n(-f keeps following new lines live on a real machine. Here you see everything so far.)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker logs",
+      "text": "\"docker logs\" requires exactly 1 argument. Try: docker logs web",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker logs nosuch",
+      "text": "Error response from daemon: No such container: nosuch",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker stats",
+      "text": "CONTAINER ID   NAME   CPU %   MEM USAGE / LIMIT   MEM %   NET I/O\n0227d982c512   web    0.31%   7.2MiB / 3.84GiB    0.18%   1.2kB / 0B\n\n(stats normally updates live. Here you get one snapshot.)",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker stats --no-stream",
+      "text": "CONTAINER ID   NAME   CPU %   MEM USAGE / LIMIT   MEM %   NET I/O\n0227d982c512   web    0.31%   7.2MiB / 3.84GiB    0.18%   1.2kB / 0B",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web ls /usr/share/nginx/html",
+      "text": "50x.html  index.html",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web ls /etc/nginx",
+      "text": "conf.d  mime.types  nginx.conf",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web ls",
+      "text": "bin   boot  dev  docker-entrypoint.d  etc  home  lib  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web ls /nope",
+      "text": "ls: cannot access '/nope': No such file or directory",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web cat /usr/share/nginx/html/index.html",
+      "text": "<!DOCTYPE html>\n<html>\n<head><title>Welcome to nginx!</title></head>\n<body>\n<h1>Welcome to nginx!</h1>\n<p>If you see this page, the nginx web server is successfully installed and working.</p>\n</body>\n</html>",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web cat /etc/os-release",
+      "text": "PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web cat /nope",
+      "text": "cat: /nope: No such file or directory",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web ps",
+      "text": "PID   USER     COMMAND\n    1 root     nginx: master process nginx -g daemon off;\n   29 nginx    nginx: worker process",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web whoami",
+      "text": "root",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web hostname",
+      "text": "0227d982c512",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web env",
+      "text": "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nHOSTNAME=0227d982c512\nHOME=/root",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web pwd",
+      "text": "/",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec -it web echo hi there",
+      "text": "hi there",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec -e A=1 web uname",
+      "text": "Linux",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web sleep 1",
+      "text": "",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web bash",
+      "text": "This sandbox can’t open an interactive shell inside a container.\nOn a real machine, docker exec -it web sh would drop you inside.\nHere, run one command at a time, like: docker exec web ls /",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web nosuchbin",
+      "text": "OCI runtime exec failed: exec: \"nosuchbin\": executable file not found in $PATH",
+      "cleared": false,
+      "code": 126,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web redis-cli ping",
+      "text": "sh: redis-cli: not found",
+      "cleared": false,
+      "code": 127,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web psql",
+      "text": "sh: psql: not found",
+      "cleared": false,
+      "code": 127,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web ping -c 1 web",
+      "text": "ping: bad address 'web'",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec",
+      "text": "\"docker exec\" needs a container and a command. Try: docker exec web ls /",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web",
+      "text": "\"docker exec\" needs a container and a command. Try: docker exec web ls /",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec nosuch ls",
+      "text": "Error response from daemon: No such container: nosuch",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker stop web",
+      "text": "web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "advanceMs": 3600000
+    },
+    {
+      "input": "docker ps -a",
+      "text": "CONTAINER ID   IMAGE         COMMAND                  CREATED             STATUS                         PORTS   NAMES\n8f1cd8e4dce9   hello-world   \"/hello\"                 About an hour ago   Exited (0) About an hour ago           salty_anchor\n0227d982c512   nginx         \"/docker-entrypoint.…\"   About an hour ago   Exited (0) About an hour ago           web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker exec web ls",
+      "text": "Error response from daemon: container 0227d982c512 is not running",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker start web",
+      "text": "web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker restart web",
+      "text": "web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker kill web",
+      "text": "web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker ps -a",
+      "text": "CONTAINER ID   IMAGE         COMMAND                  CREATED             STATUS                                PORTS   NAMES\n8f1cd8e4dce9   hello-world   \"/hello\"                 About an hour ago   Exited (0) About an hour ago                  salty_anchor\n0227d982c512   nginx         \"/docker-entrypoint.…\"   About an hour ago   Exited (137) Less than a second ago           web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker stop",
+      "text": "\"docker stop\" requires at least 1 argument. Try: docker stop web",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker stop nosuch",
+      "text": "Error response from daemon: No such container: nosuch",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker start web nosuch",
+      "text": "web\nError response from daemon: No such container: nosuch",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker rm web",
+      "text": "Error response from daemon: cannot remove container \"/web\": container is running: stop the container before removing or force remove (docker rm -f)",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker rm",
+      "text": "\"docker rm\" requires at least 1 argument. Try: docker rm web",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker rm nosuch",
+      "text": "Error response from daemon: No such container: nosuch",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker rmi",
+      "text": "\"docker rmi\" requires at least 1 argument",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker rmi nosuch",
+      "text": "Error response from daemon: No such image: nosuch",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker rmi hello-world",
+      "text": "Error response from daemon: conflict: unable to remove repository reference \"hello-world\" (must force) - container 8f1cd8e4dce9 is using its referenced image 4cf722bac5ae",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker rmi -f hello-world",
+      "text": "Untagged: hello-world\nDeleted: sha256:4cf722bac5aeb111fb836ba771008d3a39a946c75bf4451422d26f11bc59a866",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker rmi nginx redis:7",
+      "text": "Untagged: redis:7\nDeleted: sha256:96730fce49fe4567140e044b2b759ccc1b85f58c14802ceb200a79041c93d829\nError response from daemon: conflict: unable to remove repository reference \"nginx\" (must force) - container 0227d982c512 is using its referenced image bd1c3dfef959",
+      "cleared": false,
+      "code": 1,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker images",
+      "text": "REPOSITORY   TAG      IMAGE ID       CREATED       SIZE\nnginx        latest   bd1c3dfef959   2 weeks ago   192MB",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    },
+    {
+      "input": "docker ps -a",
+      "text": "CONTAINER ID   IMAGE         COMMAND                  CREATED             STATUS                         PORTS                  NAMES\n8f1cd8e4dce9   hello-world   \"/hello\"                 About an hour ago   Exited (0) About an hour ago                          salty_anchor\n0227d982c512   nginx         \"/docker-entrypoint.…\"   About an hour ago   Up Less than a second          0.0.0.0:8080->80/tcp   web",
+      "cleared": false,
+      "code": 0,
+      "cwd": "/home/cadet",
+      "cur": 0
+    }
+  ],
+  "save": "{\"fs\":{\"t\":\"d\",\"c\":{\"home\":{\"t\":\"d\",\"c\":{\"cadet\":{\"t\":\"d\",\"c\":{\"welcome.txt\":{\"t\":\"f\",\"x\":\"Welcome to Port Penguin, dockhand! 🐧\\n\\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\\nso experiment freely.\\n\\nYour logbook lists one task at a time. Finish it and the next one appears.\\nThere are 70 tasks, and they get harder as you go.\\n\\nHandy keys\\n  Tab        finish a file or command name for you\\n  ↑ and ↓    bring back commands you typed before\\n  help       list every command this terminal knows\\n  man NAME   explain one command, like: man grep\\n\",\"m\":\"rw-r--r--\"},\".secret\":{\"t\":\"f\",\"x\":\"Psst. You found the hidden file.\\n\\nCaptain’s code word: BARNACLE\\n\\nFiles whose names start with a dot are hidden from a plain ls.\\nSettings files often hide this way, like .bashrc.\\n\",\"m\":\"rw-r--r--\"},\".bashrc\":{\"t\":\"f\",\"x\":\"alias ll='ls -l'\\n\",\"m\":\"rw-r--r--\"},\"notes.txt\":{\"t\":\"f\",\"x\":\"Shipment schedule\\nMonday     40 containers of bananas\\nWednesday  12 containers of rubber ducks\\nFriday     1 very suspicious crate\\n\",\"m\":\"rw-r--r--\"},\"crew.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nGus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nGus\\n\",\"m\":\"rw-r--r--\"},\"logs\":{\"t\":\"d\",\"c\":{\"system.log\":{\"t\":\"f\",\"x\":\"2026-11-24 06:00:01 INFO  Harbor systems online\\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\\n2026-11-24 06:21:52 INFO  Unloading started\\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\\n2026-11-24 06:30:00 INFO  Coffee machine refilled\\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\\n2026-11-24 06:52:26 INFO  Unloading complete\\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\\n2026-11-24 07:10:00 INFO  Shift change\\n\",\"m\":\"rw-r--r--\"},\"crane.log\":{\"t\":\"f\",\"x\":\"crane-1 lift ok 18t\\ncrane-2 lift ok 22t\\ncrane-2 pressure low\\ncrane-1 idle\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"projects\":{\"t\":\"d\",\"c\":{\"webapp\":{\"t\":\"d\",\"c\":{\"index.html\":{\"t\":\"f\",\"x\":\"<!DOCTYPE html>\\n<html>\\n  <head><title>Port Penguin</title></head>\\n  <body><h1>Welcome to Port Penguin</h1></body>\\n</html>\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Hello from the harbor! 🚢\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"},\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Start from a small official Python image\\nFROM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"deploy.sh\":{\"t\":\"f\",\"x\":\"#!/bin/bash\\n# Deploy script for the harbor website\\necho \\\"Loading cargo...\\\"\\necho \\\"Securing containers...\\\"\\necho \\\"🚢 Website deployed. Nice work, dockhand!\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"legacy\":{\"t\":\"d\",\"c\":{\"old\":{\"t\":\"d\",\"c\":{\"crate-manifest.txt\":{\"t\":\"f\",\"x\":\"CRATE MANIFEST (1998)\\nCrate 0001  Cargo: 300 tins of sardines\\nCrate 0002  Cargo: one (1) grand piano\\nCrate 0003  Cargo: classified\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"README\":{\"t\":\"f\",\"x\":\"Nobody remembers what this folder is for.\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"stack\":{\"t\":\"d\",\"c\":{\"docker-compose.yml\":{\"t\":\"f\",\"x\":\"# The harbor stack: a web server and a cache\\nservices:\\n  web:\\n    image: nginx\\n    ports:\\n      - \\\"8081:80\\\"\\n    depends_on:\\n      - cache\\n  cache:\\n    image: redis\\n    volumes:\\n      - cache-data:/data\\n\\nvolumes:\\n  cache-data:\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"broken\":{\"t\":\"d\",\"c\":{\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Harbor status page\\nFORM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Status: all piers operational ⚓\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"etc\":{\"t\":\"d\",\"c\":{\"hostname\":{\"t\":\"f\",\"x\":\"port-penguin\\n\",\"m\":\"rw-r--r--\"},\"os-release\":{\"t\":\"f\",\"x\":\"NAME=\\\"Penguin Linux\\\"\\nVERSION=\\\"26.04 (Harbor)\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"tmp\":{\"t\":\"d\",\"c\":{\"old-cargo.log\":{\"t\":\"f\",\"x\":\"2026-11-01 crate 7781 lost at sea\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"usr\":{\"t\":\"d\",\"c\":{\"bin\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"},\"share\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"var\":{\"t\":\"d\",\"c\":{\"log\":{\"t\":\"d\",\"c\":{\"syslog\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\\n\",\"m\":\"rw-r-----\",\"sz\":48000000},\"auth.log\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:03 sshd: session opened for cadet\\n\",\"m\":\"rw-r-----\",\"sz\":2100000},\"dpkg.log\":{\"t\":\"f\",\"x\":\"2026-11-20 status installed docker-ce\\n\",\"m\":\"rw-r--r--\",\"sz\":900000}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"cwd\":\"/home/cadet\",\"oldpwd\":\"/home/cadet\",\"env\":{},\"procs\":[{\"pid\":1,\"user\":\"root\",\"cpu\":0,\"mem\":0.3,\"cmd\":\"/sbin/init\"},{\"pid\":214,\"user\":\"root\",\"cpu\":0,\"mem\":0.2,\"cmd\":\"/usr/sbin/sshd -D\"},{\"pid\":388,\"user\":\"root\",\"cpu\":0.4,\"mem\":1.9,\"cmd\":\"/usr/bin/dockerd\"},{\"pid\":1021,\"user\":\"cadet\",\"cpu\":0.2,\"mem\":0.8,\"cmd\":\"harbor-radio --station 16\"},{\"pid\":4242,\"user\":\"cadet\",\"cpu\":99.1,\"mem\":2.3,\"cmd\":\"crane-sim --loop\"},{\"pid\":5150,\"user\":\"cadet\",\"cpu\":0,\"mem\":0.1,\"cmd\":\"-bash\"}],\"lastCode\":0,\"dk\":{\"images\":[{\"repo\":\"nginx\",\"tag\":\"latest\",\"id\":\"bd1c3dfef959\",\"size\":\"192MB\",\"created\":0,\"official\":true}],\"containers\":[{\"id\":\"8f1cd8e4dce9\",\"name\":\"salty_anchor\",\"image\":\"hello-world\",\"repo\":\"hello-world\",\"cmd\":\"/hello\",\"ports\":[],\"env\":[],\"mounts\":[],\"networks\":{\"bridge\":\"172.17.0.2\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795510800000,\"status\":\"exited\",\"exit\":0,\"logs\":[\"\",\"Hello from Docker!\",\"This message shows that your installation appears to be working correctly.\",\"\",\"To generate this message, Docker took the following steps:\",\" 1. The Docker client contacted the Docker daemon.\",\" 2. The Docker daemon pulled the \\\"hello-world\\\" image from the Docker Hub.\",\" 3. The Docker daemon created a new container from that image which runs the\",\"    executable that produces the output you are currently reading.\",\" 4. The Docker daemon streamed that output to the Docker client, which sent it\",\"    to your terminal.\"],\"stopped\":1795510800000},{\"id\":\"0227d982c512\",\"name\":\"web\",\"image\":\"nginx\",\"repo\":\"nginx\",\"cmd\":\"\\\"/docker-entrypoint.…\\\"\",\"ports\":[\"8080:80\"],\"env\":[],\"mounts\":[],\"networks\":{\"bridge\":\"172.17.0.6\"},\"aliases\":[],\"project\":null,\"service\":null,\"created\":1795510800000,\"started\":1795514525000,\"status\":\"running\",\"exit\":137,\"logs\":[\"/docker-entrypoint.sh: Configuration complete; ready for start up\",\"2026/11/24 09:00:00 [notice] 1#1: nginx/1.27.2\",\"2026/11/24 09:00:00 [notice] 1#1: start worker processes\",\"172.17.0.1 - - [24/Nov/2026:09:02:05 +0000] \\\"GET / HTTP/1.1\\\" 200 615 \\\"-\\\" \\\"curl/8.5.0\\\" \\\"-\\\"\",\"/docker-entrypoint.sh: Configuration complete; ready for start up\",\"2026/11/24 10:02:05 [notice] 1#1: nginx/1.27.2\",\"2026/11/24 10:02:05 [notice] 1#1: start worker processes\",\"/docker-entrypoint.sh: Configuration complete; ready for start up\",\"2026/11/24 10:02:05 [notice] 1#1: nginx/1.27.2\",\"2026/11/24 10:02:05 [notice] 1#1: start worker processes\",\"/docker-entrypoint.sh: Configuration complete; ready for start up\",\"2026/11/24 10:02:05 [notice] 1#1: nginx/1.27.2\",\"2026/11/24 10:02:05 [notice] 1#1: start worker processes\"],\"stopped\":1795514525000}],\"volumes\":[],\"networks\":[{\"name\":\"bridge\",\"id\":\"b4f16a5485f7\",\"driver\":\"bridge\",\"subnet\":\"172.17\",\"next\":6},{\"name\":\"host\",\"id\":\"a648dc235504\",\"driver\":\"host\"},{\"name\":\"none\",\"id\":\"0584f0b1beb9\",\"driver\":\"null\"}]},\"done\":[],\"cur\":0,\"hist\":[\"docker\",\"docker help\",\"docker --help\",\"docker --version\",\"docker version\",\"docker -v\",\"docker bogus\",\"docker pull\",\"docker pull nosuchimg\",\"docker pull nginx\",\"docker pull nginx\",\"docker pull redis:7\",\"docker images\",\"docker image ls\",\"docker image list\",\"docker run hello-world\",\"docker run -d --name web -p 8080:80 nginx\",\"docker ps\",\"docker ps\",\"docker ps -a\",\"docker ps -q\",\"docker container ls\",\"docker container list -a\",\"docker container ps --all\",\"curl localhost:8080\",\"docker logs web\",\"docker logs -f web\",\"docker logs\",\"docker logs nosuch\",\"docker stats\",\"docker stats --no-stream\",\"docker exec web ls /usr/share/nginx/html\",\"docker exec web ls /etc/nginx\",\"docker exec web ls\",\"docker exec web ls /nope\",\"docker exec web cat /usr/share/nginx/html/index.html\",\"docker exec web cat /etc/os-release\",\"docker exec web cat /nope\",\"docker exec web ps\",\"docker exec web whoami\",\"docker exec web hostname\",\"docker exec web env\",\"docker exec web pwd\",\"docker exec -it web echo hi there\",\"docker exec -e A=1 web uname\",\"docker exec web sleep 1\",\"docker exec web bash\",\"docker exec web nosuchbin\",\"docker exec web redis-cli ping\",\"docker exec web psql\",\"docker exec web ping -c 1 web\",\"docker exec\",\"docker exec web\",\"docker exec nosuch ls\",\"docker stop web\",\"docker ps -a\",\"docker exec web ls\",\"docker start web\",\"docker restart web\",\"docker kill web\",\"docker ps -a\",\"docker stop\",\"docker stop nosuch\",\"docker start web nosuch\",\"docker rm web\",\"docker rm\",\"docker rm nosuch\",\"docker rmi\",\"docker rmi nosuch\",\"docker rmi hello-world\",\"docker rmi -f hello-world\",\"docker rmi nginx redis:7\",\"docker images\",\"docker ps -a\"],\"setup\":{},\"unlocked\":false}"
+}
