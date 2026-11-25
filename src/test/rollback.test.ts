@@ -140,7 +140,7 @@ describe("new optional fields (D11, AC8)", () => {
       functions: { f: "echo fn" },
       aliases: { zz: "echo zz" },
       options: { pipefail: true },
-      crontab: ["* * * * * echo hi"],
+      crontab: "* * * * * echo hi\n",
     };
     expect(run1Load(JSON.stringify(withNew))).not.toBeNull();
     const again = openShell({ saved: JSON.stringify(withNew) });

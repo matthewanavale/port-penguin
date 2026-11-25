@@ -1,5 +1,6 @@
 // D13, D14: a shell context. The prompt shell is backed by the saved state;
 // copies (subshells, $( ), pipeline stages, scripts) are plain objects.
+import { nul } from "../nullmap";
 import { LimitStop, LIM } from "./limits";
 import type { IO } from "./io";
 
@@ -54,16 +55,16 @@ export interface Frame {
 }
 
 export class Context {
-  env: Record<string, string> = {};
-  vars: Record<string, VarMeta> = {};
+  env: Record<string, string> = nul();
+  vars: Record<string, VarMeta> = nul();
   exported = new Set<string>();
-  functions: Record<string, string> = {};
-  aliases: Record<string, string> = {};
-  options: Record<string, boolean> = {};
+  functions: Record<string, string> = nul();
+  aliases: Record<string, string> = nul();
+  options: Record<string, boolean> = nul();
   params: string[] = [];
   arg0 = "bash";
   frames: Frame[] = [];
-  traps: Record<string, string> = {};
+  traps: Record<string, string> = nul();
   src: SrcInfo = { kind: "prompt" };
   line = 0;
   lastArg = "";
@@ -104,19 +105,19 @@ export class Context {
   /** A copy for a subshell, a command substitution, or a pipeline stage. */
   copy(): Context {
     const c = new Context();
-    c.env = { ...this.env };
+    c.env = nul(this.env);
     c.vars = cloneVars(this.vars);
     c.exported = new Set(this.exported);
-    c.functions = { ...this.functions };
-    c.aliases = { ...this.aliases };
-    c.options = { ...this.options };
+    c.functions = nul(this.functions);
+    c.aliases = nul(this.aliases);
+    c.options = nul(this.options);
     c.params = this.params.slice();
     c.arg0 = this.arg0;
     c.frames = this.frames.map((f) => ({
       name: f.name,
       saved: new Map(f.saved),
     }));
-    c.traps = { ...this.traps };
+    c.traps = nul(this.traps);
     c.src = this.src;
     c.line = this.line;
     c.lastArg = this.lastArg;
@@ -361,7 +362,7 @@ export class Context {
     if (kind === "assoc") {
       m = {
         type: "assoc",
-        value: append && old?.type === "assoc" ? old.value : {},
+        value: append && old?.type === "assoc" ? old.value : nul(),
         attrs: old?.attrs ?? this.vars[name]?.attrs,
       };
       let n = 0;
@@ -396,7 +397,7 @@ export class Context {
     const v = this.get(name);
     const m: VarMeta = {
       type: kind,
-      value: kind === "array" ? [] : {},
+      value: kind === "array" ? [] : nul(),
       attrs: old?.attrs,
     };
     if (v !== undefined) {
@@ -489,7 +490,7 @@ export class Context {
 }
 
 export function cloneVars(v: Record<string, VarMeta>): Record<string, VarMeta> {
-  const out: Record<string, VarMeta> = {};
+  const out: Record<string, VarMeta> = nul<VarMeta>();
   for (const [k, m] of Object.entries(v)) {
     out[k] = {
       type: m.type,
@@ -499,7 +500,7 @@ export function cloneVars(v: Record<string, VarMeta>): Record<string, VarMeta> {
           ? undefined
           : Array.isArray(m.value)
             ? m.value.slice()
-            : { ...m.value },
+            : nul(m.value as Record<string, string>),
     };
     if (out[k].value === undefined) delete out[k].value;
     if (out[k].attrs === undefined) delete out[k].attrs;
@@ -511,7 +512,7 @@ export function cloneVars(v: Record<string, VarMeta>): Record<string, VarMeta> {
 export function reviveVars(
   v: Record<string, unknown>,
 ): Record<string, VarMeta> {
-  const out: Record<string, VarMeta> = {};
+  const out: Record<string, VarMeta> = nul<VarMeta>();
   for (const [k, raw] of Object.entries(v)) {
     const m = raw as { type?: string; value?: unknown; attrs?: string } | null;
     if (!m || typeof m !== "object") continue;
@@ -534,7 +535,7 @@ export function reviveVars(
           if (typeof x === "string" && Number.isInteger(i)) arr[i] = x;
       meta.value = arr;
     } else if (type === "assoc") {
-      const o: Record<string, string> = {};
+      const o: Record<string, string> = nul();
       for (const [i, x] of Object.entries(
         (m.value as Record<string, unknown>) ?? {},
       ))

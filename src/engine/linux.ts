@@ -14,7 +14,8 @@ import { MAN } from "./man";
 import { M } from "./missions";
 import { cwd as pathCwd, get, withCwd } from "./paths";
 import { sha256 } from "./sha256";
-import { d, f, HOME, HOST, S } from "./state";
+import { nul } from "./nullmap";
+import { d, f, HOME, HOST, S, nulTree } from "./state";
 import type { DirNode, FileNode, FsNode, Image } from "./state";
 import { BUILTINS } from "./shell/builtins";
 import type { Context } from "./shell/context";
@@ -1711,7 +1712,7 @@ const fgrep = grepCmd("F", "fgrep");
 /* ---------- files and folders ---------- */
 
 const cloneNode = (n: FsNode): FsNode =>
-  JSON.parse(JSON.stringify(n)) as FsNode;
+  nulTree(JSON.parse(JSON.stringify(n)) as FsNode);
 
 /** Checks that `abs` may get a new or removed entry: its folder is writable. */
 const folderWritable = (abs: string): boolean =>
@@ -2709,9 +2710,9 @@ const env: CmdFn = (argv, sh, io) => {
     ...unset,
   ]);
   if (clean) {
-    c.env = {};
+    c.env = nul();
     c.exported = new Set();
-    c.vars = {};
+    c.vars = nul();
   }
   for (const u of unset) {
     delete c.env[u];
@@ -2741,7 +2742,9 @@ const env: CmdFn = (argv, sh, io) => {
     return 0;
   }
   const name = rest[0];
-  const fn = sh.host.commands[name];
+  const fn = Object.hasOwn(sh.host.commands, name)
+    ? sh.host.commands[name]
+    : undefined;
   if (!fn && !name.includes("/")) {
     errOut(io, "env", `${qc(name)}: No such file or directory`);
     return 127;

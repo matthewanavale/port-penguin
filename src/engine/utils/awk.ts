@@ -1695,6 +1695,7 @@ class Runtime {
       this.flushOut(k.startsWith("|") ? k.slice(1) : k);
   }
   exec(s: Stmt): void {
+    this.sh.tick();
     switch (s.t) {
       case "expr":
         this.eval(s.e);

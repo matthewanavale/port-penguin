@@ -144,3 +144,25 @@ describe("arithmetic", () => {
     expect(r.code).toBe(1);
   });
 });
+
+describe("pattern replacement (G-COR-5, G-COR-6)", () => {
+  it("turns an unquoted & into the matched text, as bash 5.2 does", () => {
+    expect(out("v=abc; echo ${v/b/[&]}")).toBe("a[b]c" + "\n");
+    expect(out("v=abc; echo ${v/b*/<&>}")).toBe("a<bc>" + "\n");
+    expect(out("v=aXbX; echo ${v//X/&&}")).toBe("aXXbXX" + "\n");
+    expect(out("v=abc; echo ${v/#a/&-}")).toBe("a-bc" + "\n");
+    expect(out("v=abc; echo ${v/%c/-&}")).toBe("ab-c" + "\n");
+  });
+
+  it("keeps a quoted or escaped & literal", () => {
+    expect(out("v=abc; echo ${v/b/'[&]'}")).toBe("a[&]c" + "\n");
+    expect(out('v=abc; echo ${v/b/"[&]"}')).toBe("a[&]c" + "\n");
+    expect(out("v=abc; echo ${v/b/[\\&]}")).toBe("a[&]c" + "\n");
+  });
+
+  it("stops a glob replace over a huge string at the step limit", () => {
+    const r = sh.run("x=$(printf '%0*d' 1000 0); y=${x//0*1/b}; echo done");
+    expect(r.text).toMatch(/port-penguin: stopped: .+ steps/);
+    expect(r.code).toBe(130);
+  });
+});

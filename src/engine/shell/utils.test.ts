@@ -121,6 +121,25 @@ describe("storage cap (D21)", () => {
     expect(sh.run("cat f").out).toBe("keep\n");
   });
 
+  it("keeps the old text of an existing file that a write cannot fit (G-COR-3)", () => {
+    sh.run("echo keep > f");
+    for (let i = 0; i < 5; i++)
+      sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
+    const r = sh.run("x=$(printf '%0*d' 1000000 0); echo " + '"$x"' + " > f");
+    expect(r.err).toBe("bash: f: No space left on device" + "\n");
+    expect(r.code).toBe(1);
+    expect(sh.run("cat f").out).toBe("keep" + "\n");
+  });
+
+  it("reports a write past the cap on an exec redirect (G-COR-4)", () => {
+    for (let i = 0; i < 5; i++)
+      sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
+    const r = sh.run(
+      "x=$(printf '%0*d' 1000000 0); exec > live; echo " + '"$x"; exec >&2',
+    );
+    expect(r.err).toContain("No space left on device");
+  });
+
   it("names the utility in the message when a utility writes", () => {
     for (let i = 0; i < 5; i++)
       sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);

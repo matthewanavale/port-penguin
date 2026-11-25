@@ -1,6 +1,7 @@
 // AC3, D13-D16: the shell builtins. Each one is `(sh, argv, io) => code`; the
 // interpreter has already expanded the words and applied the redirects.
 // Error lines go through `sh.fail`, which adds the `bash:` or script prefix.
+import { nul } from "../nullmap";
 import { get } from "../paths";
 import { ExpError } from "./expand";
 import type { Context } from "./context";
@@ -1065,7 +1066,7 @@ const setCmd: Builtin = (sh, argv, io) => {
   return 0;
 };
 
-const SHOPTS: Record<string, boolean> = {};
+const SHOPTS: Record<string, boolean> = nul<boolean>();
 for (const n of "assoc_expand_once autocd cdable_vars cdspell checkhash checkjobs compat31 compat32 compat40 compat41 compat42 compat43 compat44 direxpand dirspell dotglob execfail extdebug extglob failglob globstar gnu_errfmt histappend histreedit histverify huponexit inherit_errexit lastpipe lithist localvar_inherit localvar_unset login_shell mailwarn no_empty_cmd_completion nocaseglob nocasematch noexpand_translation nullglob progcomp_alias restricted_shell shift_verbose varredir_close xpg_echo".split(
   " ",
 ))
@@ -1244,7 +1245,6 @@ const source: Builtin = (sh, argv) => {
   if (argv.length > 2) ctx.params = argv.slice(2);
   ctx.src = { kind: "file", path };
   sh.depth++;
-  sh.depthName = "source";
   sh.nest++;
   ctx.sourceDepth++;
   let code: number;
@@ -1286,7 +1286,6 @@ const evalCmd: Builtin = (sh, argv) => {
     return 2;
   }
   sh.depth++;
-  sh.depthName = "eval";
   sh.nest++;
   try {
     return sh.runList(r.ast.items);
@@ -1309,7 +1308,7 @@ const execCmd: Builtin = (sh, argv, io) => {
 /** `bash` and `sh`: run a script file or `-c` text in a context of its own (D13). */
 const bash: Builtin = (sh, argv, io) => {
   const name = argv[0];
-  const opts: Record<string, boolean> = {};
+  const opts: Record<string, boolean> = nul<boolean>();
   let i = 1;
   let cText: string | null = null;
   for (; i < argv.length; i++) {
@@ -1658,7 +1657,7 @@ const aliasCmd: Builtin = (sh, argv, io) => {
 const unalias: Builtin = (sh, argv) => {
   const ctx = sh.ctx;
   if (argv[1] === "-a") {
-    ctx.aliases = {};
+    ctx.aliases = nul();
     return 0;
   }
   let code = 0;
@@ -1859,7 +1858,7 @@ const help: Builtin = (sh, argv, io) => {
   for (const n of names) {
     const t = HELP[n];
     if (t) out(io, t);
-    else if (BUILTINS[n] || KEYWORDS.has(n))
+    else if (Object.hasOwn(BUILTINS, n) || KEYWORDS.has(n))
       out(io, `${n}: ${n} [arguments]\n    Shell builtin command.\n`);
     else {
       sh.fail(

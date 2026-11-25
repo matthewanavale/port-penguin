@@ -1,6 +1,7 @@
 // Game state, the fresh state, and load and save through an injected
 // storage. Ported from index.html:188, :342-378 at 5e96ce5. The save key and
 // the saved JSON format do not change (D4).
+import { nul } from "./nullmap";
 import {
   APP,
   BROKEN_APP,
@@ -27,6 +28,8 @@ import type { VarMeta } from "./shell/context";
 export const HOME = "/home/cadet";
 export const HOST = "port-penguin";
 export const SAVE_KEY = "port-penguin-v2";
+/** G-SEC-1: set while `~/.bashrc` runs; a start that finds it set skips the file. */
+export const RC_KEY = "port-penguin-rc-running";
 
 export interface FileNode {
   t: "f";
@@ -148,6 +151,8 @@ export interface State {
 export interface SaveStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  /** Optional. Without it, the engine writes an empty string instead. */
+  removeItem?(key: string): void;
 }
 
 /**
@@ -169,12 +174,12 @@ export function hex(n: number): string {
 
 export const d = (c: Record<string, FsNode>): DirNode => ({
   t: "d",
-  c: c,
+  c: nul(c),
   m: "rwxr-xr-x",
 });
 const dm = (m: string, c: Record<string, FsNode>): DirNode => ({
   t: "d",
-  c: c,
+  c: nul(c),
   m: m,
 });
 export const f = (x: string, m?: string | null, sz?: number): FileNode => {
@@ -185,7 +190,7 @@ export const f = (x: string, m?: string | null, sz?: number): FileNode => {
 
 /** An executable stand-in for a simulated command, such as /usr/bin/ls (D15). */
 const usrBin = (): Record<string, FsNode> => {
-  const c: Record<string, FsNode> = {};
+  const c: Record<string, FsNode> = nul<FsNode>();
   for (const n of USR_BIN) c[n] = f("", "rwxr-xr-x");
   return c;
 };
@@ -306,13 +311,25 @@ export function save(storage: SaveStorage, s: State): string | null {
   }
 }
 
+/** Gives every directory of a tree (a saved one, a clone) a prototype-less `c` map. */
+export function nulTree(n: FsNode): FsNode {
+  if (n.t !== "d") return n;
+  const c = nul<FsNode>();
+  const src = (n.c ?? {}) as Record<string, FsNode>;
+  for (const k of Object.keys(src)) c[k] = nulTree(src[k]);
+  n.c = c;
+  return n;
+}
+
 export function load(storage: SaveStorage): State | null {
   try {
     const r = storage.getItem(SAVE_KEY);
     if (r) {
       const o = JSON.parse(r) as Partial<State> | null;
-      if (o && o.fs && o.dk && o.procs && Array.isArray(o.done))
+      if (o && o.fs && o.dk && o.procs && Array.isArray(o.done)) {
+        o.fs = nulTree(o.fs) as DirNode;
         return o as State;
+      }
     }
   } catch {
     // A broken save starts a fresh game, as before.

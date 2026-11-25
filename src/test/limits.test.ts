@@ -2,8 +2,9 @@
 // the terminal shows `^C` and one line, and `$?` is 130. The nesting limits
 // print one line and exit with 1 (the parser limit with 2). No JavaScript
 // error reaches the screen.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { SAVE_KEY } from "../engine/index";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Interp } from "../engine/shell/interp";
+import { RC_KEY, SAVE_KEY } from "../engine/index";
 import { openShell, restore } from "./engineHarness";
 import type { Shell } from "./engineHarness";
 
@@ -103,8 +104,21 @@ describe("D6 depth limits", () => {
   });
 
   it("shows a JavaScript stack overflow as the same message", () => {
-    const r = sh.run("f(){ local a=$1; f $((a+1)); }; f 1");
+    // Nested command substitutions overflow the JavaScript stack before the
+    // 1000-level function limit, and before the 500-level parser limit.
+    const r = sh.run(
+      "f(){ echo " + "$(".repeat(300) + "f" + ")".repeat(300) + "; }; f",
+    );
     expect(r.text).toMatch(NESTING);
+    expect(r.text).not.toMatch(/RangeError|Maximum call stack/);
+    expect(r.code).toBe(1);
+  });
+
+  it("names no stale function after a stack overflow outside functions", () => {
+    sh.run("old(){ :; }; old");
+    const src = "echo " + "$(echo ".repeat(300) + "x" + ")".repeat(300);
+    const r = sh.run(src);
+    expect(r.text).not.toContain("old");
     expect(r.text).not.toMatch(/RangeError|Maximum call stack/);
   });
 
@@ -135,6 +149,87 @@ describe(".bashrc guard (D19)", () => {
     );
     expect(again.startText.match(/\.bashrc failed/g)?.length).toBe(1);
     expect(again.run("echo ok").out).toBe("ok\n");
+  });
+});
+
+describe("utility loops and the rc marker (G-SEC-1)", () => {
+  it("stops an endless awk loop at the prompt", () => {
+    expectStopped("awk 'BEGIN{while(1);}'");
+  });
+
+  it("stops an endless awk do and for loop", () => {
+    expectStopped("awk 'BEGIN{do {} while(1)}'");
+    expectStopped("awk 'BEGIN{for(;;);}'");
+  });
+
+  it("stops an endless sed branch loop", () => {
+    expectStopped("echo x | sed ':a;ba'");
+  });
+
+  it("stops an endless sed t loop", () => {
+    expectStopped("echo x | sed ':a;s/x/x/;ta'");
+  });
+
+  it("still runs normal awk and sed", () => {
+    expect(sh.run("seq 1 100 | awk '{s+=$1} END{print s}'").out).toBe("5050\n");
+    expect(sh.run("echo abc | sed 's/b/X/'").out).toBe("aXc\n");
+  });
+
+  const reload = (rc: string) => {
+    sh.run(`printf '%s\n' ${JSON.stringify(rc)} > ~/.bashrc`);
+    const saved = sh.store.get(SAVE_KEY) as string;
+    return openShell({ saved });
+  };
+
+  it("stops an endless awk loop in .bashrc and starts a working prompt", () => {
+    const again = reload("awk 'BEGIN{while(1);}'");
+    expect(again.startText).toContain("~/.bashrc failed");
+    expect(again.run("echo ok").out).toBe("ok\n");
+  });
+
+  it("stops an endless sed loop in .bashrc and starts a working prompt", () => {
+    const again = reload("echo x | sed ':a;ba'");
+    expect(again.startText).toContain("~/.bashrc failed");
+    expect(again.run("echo ok").out).toBe("ok\n");
+  });
+
+  it("leaves no marker after a normal start", () => {
+    const again = reload("export RCVAR=1");
+    expect(again.store.get(RC_KEY) ?? "").toBe("");
+    expect(again.run("echo $RCVAR").out).toBe("1\n");
+  });
+
+  it("skips .bashrc when the marker is set, shows the reason, and clears it", () => {
+    sh.run("printf '%s\n' 'export RCVAR=1' > ~/.bashrc");
+    const saved = sh.store.get(SAVE_KEY) as string;
+    const again = openShell({ saved, keys: { [RC_KEY]: "1" } });
+    expect(again.startText).toContain("the last start did not finish");
+    expect(again.startText.match(/\.bashrc failed/g)?.length).toBe(1);
+    expect(again.run("echo [$RCVAR]").out).toBe("[]\n");
+    expect(again.store.get(RC_KEY) ?? "").toBe("");
+    const next = openShell({ saved: again.store.get(SAVE_KEY) as string });
+    expect(next.run("echo $RCVAR").out).toBe("1\n");
+  });
+});
+
+describe("a crash in the simulator (G-UX-3)", () => {
+  it("shows a plain message, not the internal error", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const orig = Interp.prototype.runLine;
+    Interp.prototype.runLine = () => {
+      throw new TypeError("internal detail xyz");
+    };
+    try {
+      const r = sh.run("echo hi");
+      expect(r.text).toContain(
+        "That command hit a problem in the simulator. Try it again, or type help.",
+      );
+      expect(r.text).not.toContain("internal detail xyz");
+      expect(r.text).not.toContain("Something went wrong running that");
+    } finally {
+      Interp.prototype.runLine = orig;
+      spy.mockRestore();
+    }
   });
 });
 

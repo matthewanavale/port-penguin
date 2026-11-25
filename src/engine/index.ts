@@ -23,13 +23,14 @@ import { Interp } from "./shell/interp";
 import type { Chunk, CmdFn, Ctx } from "./shell/io";
 import { parseFull } from "./shell/parser";
 import { readText } from "./shell/redirect";
-import { fresh, load, save, setState } from "./state";
+import { nul } from "./nullmap";
+import { RC_KEY, fresh, load, save, setState } from "./state";
 import type { SaveStorage, State } from "./state";
 
 export { CH, M, RANKS, rankFor } from "./missions";
 export type { Chapter, Mission } from "./missions";
 export { sha256 } from "./sha256";
-export { SAVE_KEY } from "./state";
+export { RC_KEY, SAVE_KEY } from "./state";
 export type { SaveStorage, State } from "./state";
 export type { Chunk } from "./shell/io";
 
@@ -233,41 +234,41 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
   const pctx = new PromptContext(() => s);
   const interp = new Interp(host, pctx);
   /** Variables that `~/.bashrc` set. They are not saved: it sets them again at start. */
-  let rcOwned: Record<string, string> = {};
+  let rcOwned: Record<string, string> = nul();
   let rcDone = false;
   let pending = false;
   let saveFailed = false;
 
   /** Fills the prompt context from the saved state (D13). */
   function hydrate(c: Context): void {
-    c.env = { ...s.env };
+    c.env = nul(s.env);
     c.exported = new Set(
       Array.isArray(s.exported) ? s.exported : Object.keys(s.env),
     );
     c.vars = reviveVars((s.vars ?? {}) as Record<string, unknown>);
-    c.functions = { ...(s.functions ?? {}) };
-    c.aliases = { ...(s.aliases ?? {}) };
-    c.options = { ...(s.options ?? {}) };
+    c.functions = nul(s.functions);
+    c.aliases = nul(s.aliases);
+    c.options = nul(s.options);
     c.interactive = true;
     c.src = { kind: "prompt" };
     c.arg0 = "bash";
     c.params = [];
     c.frames = [];
-    c.traps = {};
+    c.traps = nul();
   }
 
   /** Writes the shell variables back to the state, which task checks read. */
   function syncOut(): void {
     const c = interp.ctx;
-    const env: Record<string, string> = {};
+    const env: Record<string, string> = nul();
     for (const [k, v] of Object.entries(c.env))
       if (rcOwned[k] !== v) env[k] = v;
     s.env = env;
     s.exported = [...c.exported];
     s.vars = cloneVars(c.vars);
-    s.functions = { ...c.functions };
-    s.aliases = { ...c.aliases };
-    s.options = { ...c.options };
+    s.functions = nul(c.functions);
+    s.aliases = nul(c.aliases);
+    s.options = nul(c.options);
   }
 
   const blank = (): Ctx => ({ line: "", segs: [], ranExec: null, allOut: "" });
@@ -277,18 +278,39 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
     rcDone = true;
     interp.ctx = pctx;
     interp.begin(blank());
-    const before = { ...pctx.env };
+    const before = nul(pctx.env);
     const text = readText(HOME + "/.bashrc");
     let reason: string | null = null;
-    if ("text" in text) {
+    let marked: boolean;
+    try {
+      marked = !!storage.getItem(RC_KEY);
+    } catch {
+      marked = false;
+    }
+    const setMark = (on: boolean): void => {
+      try {
+        if (on) storage.setItem(RC_KEY, "1");
+        else if (storage.removeItem) storage.removeItem(RC_KEY);
+        else storage.setItem(RC_KEY, "");
+      } catch {
+        /* storage blocked: the guard cannot help, the game goes on */
+      }
+    };
+    if (marked) {
+      // The last start did not finish (a freeze that no limit could stop).
+      setMark(false);
+      reason = "the last start did not finish";
+    } else if ("text" in text) {
+      setMark(true);
       try {
         reason = interp.runRc(text.text);
       } catch (e) {
         reason = e instanceof Error ? e.message : "error";
       }
+      setMark(false);
     }
     interp.ctx = pctx;
-    rcOwned = {};
+    rcOwned = nul();
     for (const [k, v] of Object.entries(pctx.env))
       if (before[k] === undefined) rcOwned[k] = v;
     interp.begin(blank());
@@ -308,13 +330,13 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
     hydrate(pctx);
     if (keep) {
       // `exit`: only exported variables stay (D13).
-      pctx.env = {};
+      pctx.env = nul();
       for (const k of keep) if (old[k] !== undefined) pctx.env[k] = old[k];
       pctx.exported = new Set(keep);
-      pctx.vars = {};
-      pctx.functions = {};
-      pctx.aliases = {};
-      pctx.options = {};
+      pctx.vars = nul();
+      pctx.functions = nul();
+      pctx.aliases = nul();
+      pctx.options = nul();
       pctx.oldpwd = HOME;
       pctx.cwd = HOME;
     }
@@ -482,6 +504,8 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
         interp.runLine(lineText);
       } catch (e) {
         crashed = e instanceof Error ? e.message : "error";
+        // The detail goes to the browser console, not to the learner.
+        console.error("port-penguin: simulator error:", e);
         pctx.lastCode = 1;
       }
       interp.ctx = pctx;
@@ -493,7 +517,10 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
       );
       if (crashed !== null)
         lines.push(
-          textLine("Something went wrong running that: " + crashed, "err"),
+          textLine(
+            "That command hit a problem in the simulator. Try it again, or type help.",
+            "err",
+          ),
         );
       for (const n of interp.notes)
         lines.push(textLine(n.text, n.dim ? "dim" : undefined));

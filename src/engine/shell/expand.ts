@@ -35,6 +35,8 @@ export interface ExpEnv {
   procSubst(dir: "<" | ">", script: Script): string;
   /** Prints an error line with the script prefix. */
   fail(msg: string): void;
+  /** Counts one step against the D5 meter (long pattern work). */
+  tick?(): void;
 }
 
 interface Seg {
@@ -763,7 +765,18 @@ export class Expander {
       case "/#":
       case "/%": {
         const pat = this.pattern(arg);
-        const rep = p.arg2 ? this.partsText(p.arg2) : "";
+        const F = new Fields(true);
+        if (p.arg2) this.partsInto(p.arg2, false, F);
+        // bash 5.2 `patsub_replacement`: an unquoted `&` stands for the matched text.
+        const rep: (string | null)[] = [];
+        for (const g of F.list[0].segs) {
+          if (g.q) rep.push(g.t);
+          else
+            g.t.split("&").forEach((piece, i) => {
+              if (i > 0) rep.push(null);
+              if (piece) rep.push(piece);
+            });
+        }
         return this.replace(s, pat, rep, op, ext);
       }
       case "^":
@@ -813,32 +826,40 @@ export class Expander {
   private replace(
     s: string,
     pat: string,
-    rep: string,
+    repParts: (string | null)[],
     op: string,
     ext: boolean,
   ): string {
     if (pat === "") return s;
+    const fill = (m: string): string =>
+      repParts.map((x) => (x === null ? m : x)).join("");
     if (!hasGlob(pat, ext)) {
       const lit = pat.replace(/\\(.)/g, "$1");
-      if (op === "/#") return s.startsWith(lit) ? rep + s.slice(lit.length) : s;
+      const r = fill(lit);
+      if (op === "/#") return s.startsWith(lit) ? r + s.slice(lit.length) : s;
       if (op === "/%")
-        return s.endsWith(lit) ? s.slice(0, s.length - lit.length) + rep : s;
-      if (op === "//") return s.split(lit).join(rep);
+        return s.endsWith(lit) ? s.slice(0, s.length - lit.length) + r : s;
+      if (op === "//") return s.split(lit).join(r);
       const i = s.indexOf(lit);
-      return i < 0 ? s : s.slice(0, i) + rep + s.slice(i + lit.length);
+      return i < 0 ? s : s.slice(0, i) + r + s.slice(i + lit.length);
     }
     const longestAt = (i: number): number => {
-      for (let j = s.length; j > i; j--)
+      for (let j = s.length; j > i; j--) {
+        this.env.tick?.();
         if (matchPattern(s.slice(i, j), pat, ext)) return j;
+      }
       return -1;
     };
     if (op === "/#") {
       const j = longestAt(0);
-      return j < 0 ? s : rep + s.slice(j);
+      return j < 0 ? s : fill(s.slice(0, j)) + s.slice(j);
     }
     if (op === "/%") {
-      for (let i = 0; i < s.length; i++)
-        if (matchPattern(s.slice(i), pat, ext)) return s.slice(0, i) + rep;
+      for (let i = 0; i < s.length; i++) {
+        this.env.tick?.();
+        if (matchPattern(s.slice(i), pat, ext))
+          return s.slice(0, i) + fill(s.slice(i));
+      }
       return s;
     }
     let out = "";
@@ -846,7 +867,7 @@ export class Expander {
     while (i < s.length) {
       const j = longestAt(i);
       if (j > i) {
-        out += rep;
+        out += fill(s.slice(i, j));
         i = j;
         if (op === "/") return out + s.slice(i);
       } else out += s[i++];

@@ -3,6 +3,7 @@
 import { get } from "../paths";
 import { openForWrite, writeText } from "../shell/redirect";
 import type { CmdFn, IO } from "../shell/io";
+import type { Interp } from "../shell/interp";
 import { errOut, getopt, readOperand, splitLines } from "./text";
 
 class SedError extends Error {}
@@ -483,6 +484,7 @@ function runSed(
   startLine: number,
   io: IO,
   isLastFile: boolean,
+  sh: Interp,
 ): { out: string; exit: number | null; lines: number } {
   const nl = o.zero ? "\0" : "\n";
   const lines =
@@ -515,6 +517,7 @@ function runSed(
     let deleted = false;
     let quit = false;
     cycle: while (pc < cmds.length) {
+      sh.tick();
       const c = cmds[pc];
       const matches = (a: Addr): boolean =>
         a.k === "n"
@@ -822,7 +825,7 @@ const sed: CmdFn = (argv, sh, io) => {
           code = 2;
           continue;
         }
-        const r = runSed(cmds, n.x, o, 0, io, true);
+        const r = runSed(cmds, n.x, o, 0, io, true, sh);
         if (inPlace) {
           const slash = f.lastIndexOf("/");
           const b = inPlace.includes("*")
@@ -865,7 +868,7 @@ const sed: CmdFn = (argv, sh, io) => {
     }
     if (o.separate) {
       for (let k = 0; k < texts.length; k++) {
-        const r = runSed(cmds, texts[k], o, 0, io, true);
+        const r = runSed(cmds, texts[k], o, 0, io, true, sh);
         io.out.write(r.out);
         if (r.exit !== null) return r.exit;
       }
@@ -876,7 +879,7 @@ const sed: CmdFn = (argv, sh, io) => {
           k < texts.length - 1 && t !== "" && !t.endsWith("\n") ? t + "\n" : t,
         )
         .join("");
-      const r = runSed(cmds, joined, o, 0, io, true);
+      const r = runSed(cmds, joined, o, 0, io, true, sh);
       io.out.write(r.out);
       if (r.exit !== null) return r.exit;
     }

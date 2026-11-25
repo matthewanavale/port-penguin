@@ -38,6 +38,8 @@ export interface Shell {
 
 export interface ShellOptions {
   saved?: string;
+  /** Other storage keys that exist before the start (for example the rc marker). */
+  keys?: Record<string, string>;
   /** Replaces `setItem`, for the save-failure tests. */
   setItem?: (key: string, value: string) => void;
 }
@@ -49,6 +51,7 @@ export function openShell(opts: ShellOptions = {}): Shell {
   vi.spyOn(Math, "random").mockImplementation(seededRandom(SEED));
   const store = new Map<string, string>();
   if (opts.saved !== undefined) store.set(SAVE_KEY, opts.saved);
+  for (const [k, v] of Object.entries(opts.keys ?? {})) store.set(k, v);
   const engine = createEngine({
     storage: {
       getItem: (k: string) => store.get(k) ?? null,

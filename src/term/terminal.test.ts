@@ -493,6 +493,16 @@ describe("continuation input (AC1, AC10)", () => {
     expect(engine.state.lastCode).toBe(130);
   });
 
+  it("drops the kept lines when the game restarts (G-COR-7)", () => {
+    const { x, engine, execute, t } = setup();
+    x.dataHandler?.("if true; then" + "\r");
+    engine.reset();
+    t.restart([]);
+    x.dataHandler?.("echo fresh" + "\r");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith("echo fresh");
+  });
+
   it("passes the column count to the engine as COLUMNS", () => {
     const { x, engine } = setup();
     x.cols = 40;

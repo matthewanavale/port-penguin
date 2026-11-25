@@ -127,6 +127,8 @@ export class FileWriter implements Writer {
     readonly path: string,
     /** `exec` redirects: each write goes to the file at once. */
     private live = false,
+    /** `exec` redirects: reports a write that the storage cap refuses. */
+    private onFail?: (msg: string) => void,
   ) {
     this.old = node.x;
     if (!append) {
@@ -140,7 +142,8 @@ export class FileWriter implements Writer {
         this.node.x += text;
         delete this.node.sz;
         stamp(this.node);
-      }
+      } else
+        this.onFail?.(`${this.path}: write error: No space left on device`);
       return;
     }
     this.buf += text;
@@ -237,7 +240,13 @@ export function applyRedirs(
     if (dev === "stderr") return { w: fds.get(2) as Writer };
     const o = openForWrite(abs);
     if ("err" in o) return { err: `${path}: ${o.err}` };
-    const w = new FileWriter(o.node, append, path, live);
+    const w = new FileWriter(
+      o.node,
+      append,
+      path,
+      live,
+      live ? (m) => host.fail(m) : undefined,
+    );
     files.push(w);
     return { w };
   };

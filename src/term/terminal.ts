@@ -399,6 +399,8 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       term.write(CLEAR + draw(editor.line, editor.cursor));
     },
     restart(lines) {
+      // The engine forgot an unfinished input when it reset; so does the terminal.
+      kept = [];
       rowsAbove = 0;
       term.write(CLEAR + renderLines(lines) + draw(editor.line, editor.cursor));
     },

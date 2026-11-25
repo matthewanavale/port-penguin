@@ -2,6 +2,7 @@
 // expands words (expand.ts), applies redirects (redirect.ts), and runs
 // builtins (builtins.ts) or the commands of the host table. The engine stays
 // synchronous in 2a (D4).
+import { nul } from "../nullmap";
 import { get } from "../paths";
 import type {
   Assign,
@@ -85,7 +86,8 @@ export class Interp {
   /** Depth of functions, `eval`, and `source` (D6). */
   depth = 0;
   /** What the innermost counted level is, for the message of a stack overflow (D6). */
-  depthName = "function";
+  /** Name of the innermost function that a JavaScript stack overflow went through. */
+  overflowName: string | null = null;
   scripts = 0;
   /** Depth of things that make a command not "typed at the prompt" (D12). */
   nest = 0;
@@ -131,6 +133,7 @@ export class Interp {
     this.stepLimit = stepLimit;
     this.stepName = `${stepLimit} steps`;
     this.depth = 0;
+    this.overflowName = null;
     this.scripts = 0;
     this.nest = 0;
     this.exited = null;
@@ -233,7 +236,7 @@ export class Interp {
       return e.code;
     }
     if (e instanceof RangeError) {
-      this.note(nestMessage(this.depthName, LIM.depth), true);
+      this.note(nestMessage(this.overflowName ?? "function", LIM.depth), true);
       return 1;
     }
     if (e instanceof ExitSig) {
@@ -303,9 +306,9 @@ export class Interp {
     const path = `/dev/fd/${n}`;
     // The file lives in the game's file system until the command ends.
     const root = this.fsRoot();
-    const dev = (root.c.dev ??= { t: "d", c: {}, m: "rwxr-xr-x" });
+    const dev = (root.c.dev ??= { t: "d", c: nul(), m: "rwxr-xr-x" });
     if (dev.t === "d") {
-      const fd = (dev.c.fd ??= { t: "d", c: {}, m: "rwxr-xr-x" });
+      const fd = (dev.c.fd ??= { t: "d", c: nul(), m: "rwxr-xr-x" });
       if (fd.t === "d") fd.c[String(n)] = { t: "f", x: "", m: "rw-------" };
     }
     if (dir === "<") {
@@ -390,7 +393,8 @@ export class Interp {
     return code;
   }
 
-  private tick(): void {
+  /** Counts one step against the D5 meter (also used by awk and sed). */
+  tick(): void {
     if (++this.steps > this.stepLimit) throw new LimitStop(this.stepName);
   }
 
@@ -757,7 +761,6 @@ export class Interp {
   callFunction(name: string, args: string[], body: Node): number {
     if (this.depth >= LIM.depth) throw new NestStop(name, LIM.depth);
     this.depth++;
-    this.depthName = name;
     this.nest++;
     const ctx = this.ctx;
     const savedParams = ctx.params;
@@ -769,7 +772,11 @@ export class Interp {
       code = this.runNode(body);
     } catch (e) {
       if (e instanceof ReturnSig) code = e.code;
-      else throw e;
+      else {
+        if (e instanceof RangeError && this.overflowName === null)
+          this.overflowName = name;
+        throw e;
+      }
     } finally {
       ctx.popFrame();
       ctx.params = savedParams;
@@ -1047,9 +1054,9 @@ export class Interp {
     if (KEYWORDS.has(name)) return { kind: "keyword" };
     if (ctx.functions[name] !== undefined) return { kind: "function" };
     // `bash` and `sh` are programs in Ubuntu, though the table runs them as builtins.
-    if (BUILTINS[name] && name !== "bash" && name !== "sh")
+    if (Object.hasOwn(BUILTINS, name) && name !== "bash" && name !== "sh")
       return { kind: "builtin" };
-    if (this.host.commands[name])
+    if (Object.hasOwn(this.host.commands, name))
       return { kind: "file", path: "/usr/bin/" + name };
     return null;
   }
@@ -1070,13 +1077,15 @@ export class Interp {
       const body = this.functionBody(name);
       if (body) return this.callFunction(name, argv.slice(1), body);
     }
-    const b = BUILTINS[name];
+    const b = Object.hasOwn(BUILTINS, name) ? BUILTINS[name] : undefined;
     if (b && !o.noBuiltin) return b(this, argv, io);
     if (o.builtinOnly) {
       this.fail(`${name}: not a shell builtin`);
       return 1;
     }
-    const cmd = this.host.commands[name];
+    const cmd = Object.hasOwn(this.host.commands, name)
+      ? this.host.commands[name]
+      : undefined;
     if (cmd) return cmd(argv, this, io);
     if (name.includes("/")) return this.runPath(argv, io);
     this.fail(`${name}: command not found`);
