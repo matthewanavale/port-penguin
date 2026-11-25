@@ -1,8 +1,8 @@
-// D15b: the fake clock and the seeded random source that both engines use.
-// The legacy fixture gets `clock.Date` and `seededRandom(seed)` injected into
-// its JSDOM window. The ported engine gets the same clock through Vitest fake
-// timers (`vi.setSystemTime(clock.now())`) and the same random function
-// through a `Math.random` spy.
+// D15b: the fake clock and the seeded random source of the golden scripts, the
+// walkthrough, and the reference cases. The engine gets the clock through
+// Vitest fake timers (`vi.setSystemTime(clock.now())`) and the random function
+// through a `Math.random` spy. The run-1 recordings were made with the same
+// clock and seed (src/test/golden-run1/).
 
 /** Fixed start time for every golden script: 2026-11-24 09:00:00 UTC. */
 export const START_MS = Date.UTC(2026, 10, 24, 9, 0, 0);
