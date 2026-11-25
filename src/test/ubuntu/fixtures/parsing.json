@@ -1,0 +1,244 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "parse-error-script",
+      "kind": "script",
+      "feature": "parse error",
+      "input": [
+        "echo before",
+        "if true; then",
+        "  echo x",
+        "done",
+        "echo after"
+      ],
+      "stdout": "before\n",
+      "stderr": "/tmp/case.sh: line 4: syntax error near unexpected token `done'\n/tmp/case.sh: line 4: `done'\n",
+      "code": 2
+    },
+    {
+      "id": "parse-error-open",
+      "kind": "script",
+      "feature": "parse error",
+      "input": [
+        "echo a",
+        "if true; then echo b"
+      ],
+      "stdout": "a\n",
+      "stderr": "/tmp/case.sh: line 3: syntax error: unexpected end of file\n",
+      "code": 2
+    },
+    {
+      "id": "parse-error-paren",
+      "kind": "script",
+      "feature": "parse error",
+      "input": [
+        "echo a )",
+        "echo b"
+      ],
+      "stdout": "",
+      "stderr": "/tmp/case.sh: line 1: syntax error near unexpected token `)'\n/tmp/case.sh: line 1: `echo a )'\n",
+      "code": 2
+    },
+    {
+      "id": "parse-error-redirect",
+      "kind": "script",
+      "feature": "parse error",
+      "input": [
+        "echo a >",
+        "echo b"
+      ],
+      "stdout": "",
+      "stderr": "/tmp/case.sh: line 1: syntax error near unexpected token `newline'\n/tmp/case.sh: line 1: `echo a >'\n",
+      "code": 2
+    },
+    {
+      "id": "parse-error-quote",
+      "kind": "script",
+      "feature": "parse error",
+      "input": [
+        "echo 'unterminated",
+        "echo b"
+      ],
+      "stdout": "",
+      "stderr": "/tmp/case.sh: line 1: unexpected EOF while looking for matching `''\n",
+      "code": 2
+    },
+    {
+      "id": "parse-error-prompt",
+      "kind": "prompt",
+      "feature": "parse error",
+      "input": [
+        "echo a; fi",
+        "echo $?",
+        "echo (",
+        "echo $?",
+        "echo ok"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo a; fi\r\nbash: syntax error near unexpected token `fi'\r\ncadet@port-penguin:~$ echo $?\r\n2\r\ncadet@port-penguin:~$ echo (\r\nbash: syntax error near unexpected token `newline'\r\ncadet@port-penguin:~$ echo $?\r\n2\r\ncadet@port-penguin:~$ echo ok\r\nok\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-if",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "if true; then",
+        "echo a",
+        "fi"
+      ],
+      "transcript": "cadet@port-penguin:~$ if true; then\r\n> echo a\r\n> fi\r\na\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-quote",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "echo \"a",
+        "b\"",
+        "echo 'x",
+        "y'"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo \"a\r\n> b\"\r\na\r\nb\r\ncadet@port-penguin:~$ echo 'x\r\n> y'\r\nx\r\ny\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-pipe",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "echo hi |",
+        "cat"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo hi |\r\n> cat\r\nhi\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-and",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "true &&",
+        "echo yes",
+        "false ||",
+        "echo no"
+      ],
+      "transcript": "cadet@port-penguin:~$ true &&\r\n> echo yes\r\nyes\r\ncadet@port-penguin:~$ false ||\r\n> echo no\r\nno\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-backslash",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "echo a \\",
+        "b"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo a \\\r\n> b\r\na b\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-brace",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "{",
+        "echo x",
+        "}",
+        "(",
+        "echo y",
+        ")"
+      ],
+      "transcript": "cadet@port-penguin:~$ {\r\n> echo x\r\n> }\r\nx\r\ncadet@port-penguin:~$ (\r\n> echo y\r\n> )\r\ny\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-for",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "for i in 1 2; do",
+        "echo $i",
+        "done",
+        "while false; do",
+        ":",
+        "done",
+        "case a in",
+        "a) echo A;;",
+        "esac"
+      ],
+      "transcript": "cadet@port-penguin:~$ for i in 1 2; do\r\n> echo $i\r\n> done\r\n1\r\n2\r\ncadet@port-penguin:~$ while false; do\r\n> :\r\n> done\r\ncadet@port-penguin:~$ case a in\r\n> a) echo A;;\r\n> esac\r\nA\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-heredoc",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "cat <<EOF",
+        "hello $HOME",
+        "EOF"
+      ],
+      "transcript": "cadet@port-penguin:~$ cat <<EOF\r\n> hello $HOME\r\n> EOF\r\nhello /home/cadet\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "heredoc-dash-tabs",
+      "kind": "script",
+      "feature": "redirect: <<- quoted",
+      "input": [
+        "cat <<-'X'",
+        "\tquoted $HOME",
+        "\tX"
+      ],
+      "stdout": "quoted $HOME\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "cont-ctrl-c",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "if true; then",
+        "^C",
+        "echo $?"
+      ],
+      "transcript": "cadet@port-penguin:~$ if true; then\r\n> ^C\r\ncadet@port-penguin:~$ echo $?\r\n130\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "ctrl-c-main",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "^C",
+        "echo $?"
+      ],
+      "transcript": "cadet@port-penguin:~$ ^C\r\ncadet@port-penguin:~$ echo $?\r\n130\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cont-function",
+      "kind": "prompt",
+      "feature": "continuation",
+      "input": [
+        "f() {",
+        "echo in f",
+        "}",
+        "f",
+        "if true",
+        "then",
+        "echo multi",
+        "fi"
+      ],
+      "transcript": "cadet@port-penguin:~$ f() {\r\n> echo in f\r\n> }\r\ncadet@port-penguin:~$ f\r\nin f\r\ncadet@port-penguin:~$ if true\r\n> then\r\n> echo multi\r\n> fi\r\nmulti\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "history-cmdhist",
+      "kind": "prompt",
+      "feature": "builtin: history",
+      "input": [
+        "echo one",
+        " echo hidden",
+        "echo two",
+        "if true; then",
+        "echo x",
+        "fi",
+        "history",
+        "history 2"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo one\r\none\r\ncadet@port-penguin:~$  echo hidden\r\nhidden\r\ncadet@port-penguin:~$ echo two\r\ntwo\r\ncadet@port-penguin:~$ if true; then\r\n> echo x\r\n> fi\r\nx\r\ncadet@port-penguin:~$ history\r\n    1  echo one\r\n    2  echo two\r\n    3  if true; then echo x; fi\r\n    4  history\r\ncadet@port-penguin:~$ history 2\r\n    4  history\r\n    5  history 2\r\ncadet@port-penguin:~$ "
+    }
+  ]
+}

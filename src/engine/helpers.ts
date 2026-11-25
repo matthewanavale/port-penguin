@@ -12,19 +12,6 @@ export interface Res {
   clear?: boolean;
 }
 
-/** What one command line collects while it runs (mission checks read it). */
-export interface Ctx {
-  line: string;
-  segs: string[][];
-  ranExec: string | null;
-  depth: number;
-  allOut: string;
-}
-
-export interface Opt {
-  piped: boolean;
-}
-
 export const esc = (s: unknown): string =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 

@@ -1,0 +1,861 @@
+{
+  "stateKeys": [
+    "cur",
+    "cwd",
+    "dk",
+    "done",
+    "env",
+    "fs",
+    "hist",
+    "lastCode",
+    "oldpwd",
+    "procs",
+    "setup",
+    "unlocked"
+  ],
+  "tasks": [
+    {
+      "ch": 0,
+      "title": "Where am I?",
+      "text": "Welcome aboard, dockhand. Every terminal session starts inside some folder. Ask the computer which one with `pwd` (print working directory).",
+      "goal": "Print your current folder.",
+      "hint": "Type `pwd` and press Enter.",
+      "learn": [
+        "pwd",
+        "Print the folder you’re in"
+      ],
+      "after": "/home/cadet is your home folder. The ~ in your prompt is shorthand for it."
+    },
+    {
+      "ch": 0,
+      "title": "Look around",
+      "text": "Let’s see what’s in your home folder. `ls` lists everything here.",
+      "goal": "List the files in this folder.",
+      "hint": "Type `ls`.",
+      "learn": [
+        "ls",
+        "List files and folders"
+      ],
+      "after": "Blue names are folders. White names are files."
+    },
+    {
+      "ch": 0,
+      "title": "Read the welcome note",
+      "text": "There’s a note waiting for you. `cat` prints a file’s contents to the screen.",
+      "goal": "Read welcome.txt.",
+      "hint": "`cat welcome.txt` (try typing cat wel and pressing Tab).",
+      "learn": [
+        "cat FILE",
+        "Print a file’s contents"
+      ],
+      "after": "cat is short for “concatenate”, because it can join several files into one output."
+    },
+    {
+      "ch": 0,
+      "title": "Hidden things",
+      "text": "Rumor says the captain hid something here. Files that start with a dot are hidden from a plain `ls`. The `-a` flag shows all of them.",
+      "goal": "Find the hidden file and read it.",
+      "hint": "First `ls -a`, then `cat .secret`.",
+      "learn": [
+        "ls -a",
+        "Show hidden files too"
+      ],
+      "after": "Try ls -l as well: it shows permissions, sizes and dates for each file."
+    },
+    {
+      "ch": 0,
+      "title": "Change rooms",
+      "text": "The harbor website lives in projects/webapp. Move into that folder with `cd` (change directory).",
+      "goal": "Go into the projects/webapp folder.",
+      "hint": "`cd projects/webapp`",
+      "learn": [
+        "cd PATH",
+        "Move into a folder"
+      ],
+      "after": "Paths without a leading / start from where you are now. Paths that start with / start from the very top."
+    },
+    {
+      "ch": 0,
+      "title": "Home sweet home",
+      "text": "`..` means “the folder above this one”, and `~` always means home.",
+      "goal": "Get back to your home folder.",
+      "hint": "`cd ~` or `cd ../..` or just `cd`.",
+      "learn": [
+        "cd .. / cd ~",
+        "Go up one folder / go home"
+      ],
+      "after": "Plain cd with nothing after it also takes you home."
+    },
+    {
+      "ch": 1,
+      "title": "Make a folder",
+      "text": "The captain wants backups kept tidy. Create a new folder with `mkdir` (make directory).",
+      "goal": "Create a folder called backups in your home folder.",
+      "hint": "`mkdir backups`",
+      "learn": [
+        "mkdir NAME",
+        "Create a folder"
+      ],
+      "after": "Folders are just containers for files. You can nest them as deep as you like."
+    },
+    {
+      "ch": 1,
+      "title": "Write a file",
+      "text": "`echo` prints text. Add `>` and a file name, and the text goes into that file instead of the screen.",
+      "goal": "Create todo.txt in your home folder with some text inside.",
+      "hint": "`echo \"check the cargo\" > todo.txt`, then `cat todo.txt` to see it.",
+      "learn": [
+        "echo TEXT > FILE",
+        "Write text into a file"
+      ],
+      "after": "Careful: > replaces whatever was in the file before."
+    },
+    {
+      "ch": 1,
+      "title": "Add a line",
+      "text": "Using `>` again would wipe todo.txt. Two arrows, `>>`, add to the end instead.",
+      "goal": "Add a second line to todo.txt without losing the first.",
+      "hint": "`echo \"feed the seagulls\" >> todo.txt`, then `cat todo.txt`.",
+      "learn": [
+        "echo TEXT >> FILE",
+        "Add a line to the end of a file"
+      ],
+      "after": "Logs grow exactly like this: programs keep appending new lines to the end."
+    },
+    {
+      "ch": 1,
+      "title": "Make a copy",
+      "text": "Copy the shipment schedule into your backups folder with `cp SOURCE DESTINATION`.",
+      "goal": "Copy notes.txt into backups.",
+      "hint": "`cp notes.txt backups/`",
+      "learn": [
+        "cp SRC DEST",
+        "Copy a file"
+      ],
+      "after": "Ending the destination with / makes it clear you mean “into this folder”."
+    },
+    {
+      "ch": 1,
+      "title": "Rename it",
+      "text": "There’s no rename command in Linux. You “move” a file to a new name with `mv`.",
+      "goal": "Rename todo.txt to tasks.txt.",
+      "hint": "`mv todo.txt tasks.txt`",
+      "learn": [
+        "mv OLD NEW",
+        "Move or rename"
+      ],
+      "after": "mv into a folder moves the file there, like: mv tasks.txt backups/"
+    },
+    {
+      "ch": 1,
+      "title": "Clear the clutter",
+      "text": "An old log in /tmp is wasting space. Delete it with `rm`. The path starts with `/`, so it works from any folder.",
+      "goal": "Delete /tmp/old-cargo.log.",
+      "hint": "`rm /tmp/old-cargo.log`",
+      "learn": [
+        "rm FILE",
+        "Delete a file (no undo!)"
+      ],
+      "after": "rm deletes straight away. There’s no trash can in the terminal, so double-check before you press Enter."
+    },
+    {
+      "ch": 1,
+      "title": "Folders inside folders",
+      "text": "Plain `mkdir` fails if the parent folders don’t exist yet. One extra flag creates the whole chain at once.",
+      "goal": "Create archive/2026/november in your home folder, in one command.",
+      "hint": "`mkdir -p archive/2026/november`",
+      "learn": [
+        "mkdir -p A/B/C",
+        "Create nested folders"
+      ],
+      "after": "-p also stays quiet if the folder already exists, which makes it handy in scripts."
+    },
+    {
+      "ch": 1,
+      "title": "Copy a whole folder",
+      "text": "`cp` refuses to copy a folder unless you tell it to go recursive, which means copying everything inside too.",
+      "goal": "Copy the backups folder into archive/2026/november.",
+      "hint": "`cp -r backups archive/2026/november/`",
+      "learn": [
+        "cp -r SRC DEST",
+        "Copy a folder and everything in it"
+      ],
+      "after": "Use tree archive to see the whole structure you just built."
+    },
+    {
+      "ch": 2,
+      "title": "Just the top",
+      "text": "Log files can be huge. `head` shows only the first lines. Add `-n` and a number to choose how many.",
+      "goal": "Show only the first 3 lines of logs/system.log.",
+      "hint": "`head -n 3 logs/system.log`",
+      "learn": [
+        "head -n N FILE",
+        "Show the first N lines"
+      ],
+      "after": "Without -n, head shows 10 lines."
+    },
+    {
+      "ch": 2,
+      "title": "The latest news",
+      "text": "New log lines get added at the bottom, so the end is where the latest news is. `tail` is head’s twin.",
+      "goal": "Show the last 2 lines of logs/system.log.",
+      "hint": "`tail -n 2 logs/system.log`",
+      "learn": [
+        "tail -n N FILE",
+        "Show the last N lines"
+      ],
+      "after": "On real servers, tail -f follows a log live as new lines arrive."
+    },
+    {
+      "ch": 2,
+      "title": "Find the errors",
+      "text": "Something went wrong this morning. `grep` searches a file and shows only the lines that match.",
+      "goal": "Show every line containing ERROR in logs/system.log.",
+      "hint": "`grep ERROR logs/system.log`",
+      "learn": [
+        "grep TEXT FILE",
+        "Find matching lines"
+      ],
+      "after": "grep is case-sensitive by default: ERROR and error are different to it."
+    },
+    {
+      "ch": 2,
+      "title": "Count them",
+      "text": "The pipe `|` sends one command’s output into the next. `wc -l` counts lines. Put them together.",
+      "goal": "Count the ERROR lines using a pipe.",
+      "hint": "`grep ERROR logs/system.log | wc -l`",
+      "learn": [
+        "A | B",
+        "Send output of A into B"
+      ],
+      "after": "Four errors. Chaining small tools with | is the heart of Linux."
+    },
+    {
+      "ch": 2,
+      "title": "Case doesn’t matter",
+      "text": "The harbor master wants every mention of seagulls, but people type it as Seagull, seagull, SEAGULL… Search for the lowercase word `seagull` and make grep ignore case.",
+      "goal": "Find every line mentioning seagulls, in any capitalization.",
+      "hint": "`grep -i seagull logs/system.log`",
+      "learn": [
+        "grep -i",
+        "Search ignoring upper/lowercase"
+      ],
+      "after": "Two seagull incidents. The sandwich one is still under investigation."
+    },
+    {
+      "ch": 2,
+      "title": "Which line?",
+      "text": "To fix a problem you often need to know exactly where it is. grep can print line numbers with each match.",
+      "goal": "Find which line of logs/system.log mentions Gate B.",
+      "hint": "`grep -n \"Gate B\" logs/system.log` (quotes keep the two words together)",
+      "learn": [
+        "grep -n",
+        "Show line numbers"
+      ],
+      "after": "Quotes matter: without them, the shell would treat Gate and B as two separate words."
+    },
+    {
+      "ch": 2,
+      "title": "Lost and found",
+      "text": "Somewhere under your projects folder is an old file called crate-manifest.txt. Nobody remembers where. `find` searches through folders for you.",
+      "goal": "Find where crate-manifest.txt is hiding.",
+      "hint": "`find projects -name crate-manifest.txt`",
+      "learn": [
+        "find PATH -name NAME",
+        "Search folders for a file"
+      ],
+      "after": "Now that you know the path, cat it. Crate 0003 looks interesting."
+    },
+    {
+      "ch": 2,
+      "title": "Every log file",
+      "text": "`*` is a wildcard that matches anything. Combine it with find to list all files ending in .log under your home folder. Put the pattern in quotes so find gets it as-is.",
+      "goal": "List every .log file under your home folder.",
+      "hint": "`find ~ -name \"*.log\"`",
+      "learn": [
+        "find ~ -name \"*.log\"",
+        "Find files by pattern"
+      ],
+      "after": "Wildcards also work directly in the shell: ls logs/*.log"
+    },
+    {
+      "ch": 2,
+      "title": "Line up the crew",
+      "text": "crew.txt is a mess. `sort` puts lines in alphabetical order.",
+      "goal": "Show crew.txt sorted alphabetically.",
+      "hint": "`sort crew.txt`",
+      "learn": [
+        "sort FILE",
+        "Sort lines"
+      ],
+      "after": "sort -r reverses the order, and sort -n sorts numbers properly (so 10 comes after 9)."
+    },
+    {
+      "ch": 2,
+      "title": "No duplicates",
+      "text": "Some crew members signed up twice. `uniq` removes repeated lines, but only when they’re next to each other. So sort first, then pipe into uniq.",
+      "goal": "Show each crew member exactly once.",
+      "hint": "`sort crew.txt | uniq` (or `sort -u crew.txt`)",
+      "learn": [
+        "sort | uniq",
+        "Remove duplicate lines"
+      ],
+      "after": "uniq -c also counts how many times each line appeared. You’ll need that later."
+    },
+    {
+      "ch": 3,
+      "title": "Read the fine print",
+      "text": "Every file has permissions: who can read (r), write (w) and execute (x) it. A long listing shows them in the first column.",
+      "goal": "Show a long listing of projects/webapp.",
+      "hint": "`ls -l projects/webapp`",
+      "learn": [
+        "ls -l",
+        "Show permissions, owner, size, date"
+      ],
+      "after": "rw-r--r-- reads as three groups: you can read+write, your group can read, everyone else can read."
+    },
+    {
+      "ch": 3,
+      "title": "Permission to launch",
+      "text": "In projects/webapp, try running the deploy script with `./deploy.sh`. It will refuse, because it lacks the x (execute) permission. `chmod +x` adds it.",
+      "goal": "Make deploy.sh executable and run it.",
+      "hint": "`cd ~/projects/webapp`, then `chmod +x deploy.sh`, then `./deploy.sh`",
+      "learn": [
+        "chmod +x FILE",
+        "Allow a file to run"
+      ],
+      "after": "The ./ means “the file right here”. Linux doesn’t run files from the current folder unless you say so."
+    },
+    {
+      "ch": 3,
+      "title": "Top secret",
+      "text": "notes.txt holds shipment details. Right now anyone on the server can read it. Permissions can also be written as three digits: 4 = read, 2 = write, 1 = execute, added up for you, your group and everyone else.",
+      "goal": "Make ~/notes.txt readable and writable by you only (rw-------).",
+      "hint": "`chmod 600 ~/notes.txt` (6 = 4+2 for you, 0 for group, 0 for others)",
+      "learn": [
+        "chmod 600 FILE",
+        "Only you can read and write"
+      ],
+      "after": "SSH keys must be 600, or ssh refuses to use them. Now you know why."
+    },
+    {
+      "ch": 3,
+      "title": "Write your own script",
+      "text": "A script is just a text file full of commands. Create hello.sh in your home folder containing an echo that prints Ahoy, make it executable, and run it.",
+      "goal": "Create and run a script that prints Ahoy.",
+      "hint": "`cd ~`, `echo \"echo Ahoy\" > hello.sh`, `chmod +x hello.sh`, `./hello.sh`",
+      "learn": [
+        "./script.sh",
+        "Run your own script"
+      ],
+      "after": "Real scripts usually start with #!/bin/bash on the first line, telling the system which program runs them."
+    },
+    {
+      "ch": 3,
+      "title": "Remember this",
+      "text": "Variables store values for later. Set one with `NAME=value` (no spaces around =), and read it back with `$NAME`.",
+      "goal": "Store your name in a variable called CREW, then print it with echo.",
+      "hint": "`CREW=Marina` then `echo $CREW` (two separate commands)",
+      "learn": [
+        "NAME=value / $NAME",
+        "Set and use a variable"
+      ],
+      "after": "Try echo $HOME and echo $USER too. Docker uses variables like these to configure containers."
+    },
+    {
+      "ch": 3,
+      "title": "Pack it up",
+      "text": "A tar archive bundles many files into one, and the z flag compresses it. The flags read as: c create, z gzip, f file name next.",
+      "goal": "Pack the backups folder into backups.tar.gz in your home folder.",
+      "hint": "`cd ~` then `tar -czf backups.tar.gz backups`",
+      "learn": [
+        "tar -czf A.tar.gz DIR",
+        "Create a compressed archive"
+      ],
+      "after": "Archives are how you back up, download and ship bundles of files."
+    },
+    {
+      "ch": 3,
+      "title": "Peek inside",
+      "text": "You can list what’s in an archive without unpacking it. Swap c (create) for t (list).",
+      "goal": "List the contents of backups.tar.gz.",
+      "hint": "`tar -tzf backups.tar.gz`",
+      "learn": [
+        "tar -tzf A.tar.gz",
+        "List an archive’s contents"
+      ],
+      "after": "Always peek before you unpack something someone sent you."
+    },
+    {
+      "ch": 3,
+      "title": "Unpack somewhere else",
+      "text": "x extracts. Normally files land in the current folder, but -C picks a different destination.",
+      "goal": "Extract backups.tar.gz into /tmp.",
+      "hint": "`tar -xzf backups.tar.gz -C /tmp`",
+      "learn": [
+        "tar -xzf A.tar.gz -C DIR",
+        "Extract an archive"
+      ],
+      "after": "Memory trick: eXtract Ze Files, Create Ze File, Tell me what’s in Ze File."
+    },
+    {
+      "ch": 4,
+      "title": "Who’s running?",
+      "text": "Every running program is a process with a number, its PID. `ps` lists your processes. `ps aux` lists everyone’s.",
+      "goal": "List the running processes.",
+      "hint": "`ps` or `ps aux`",
+      "learn": [
+        "ps / ps aux",
+        "List processes"
+      ],
+      "after": "PID 1 is always the very first process, started when the machine boots."
+    },
+    {
+      "ch": 4,
+      "title": "The CPU hog",
+      "text": "The server feels sluggish. `top` lists processes sorted by how much CPU they use.",
+      "goal": "Find out which process is eating the CPU.",
+      "hint": "`top`",
+      "learn": [
+        "top",
+        "See which processes use the most CPU"
+      ],
+      "after": "crane-sim is stuck in a loop at 99% CPU. Note its PID."
+    },
+    {
+      "ch": 4,
+      "title": "Stop the loop",
+      "text": "`kill` followed by a PID asks a process to stop.",
+      "goal": "Stop crane-sim.",
+      "hint": "`kill 4242` (the PID you saw in top or ps)",
+      "learn": [
+        "kill PID",
+        "Ask a process to stop"
+      ],
+      "after": "Run top again: the load is back to normal."
+    },
+    {
+      "ch": 4,
+      "title": "The stubborn one",
+      "text": "BWAAAMP. A fog-horn process just started and it won’t stop blaring. A plain kill politely asks a process to quit, and this one ignores polite requests.",
+      "goal": "Force fog-horn to stop.",
+      "hint": "Find its PID with `ps`, then `kill -9 PID` (9 is SIGKILL, which can’t be ignored)",
+      "alert": "📯 BWAAAMP. Something called fog-horn just started on the server.",
+      "learn": [
+        "kill -9 PID",
+        "Force a process to stop"
+      ],
+      "after": "Use -9 as a last resort: the process gets no chance to save its work or clean up."
+    },
+    {
+      "ch": 4,
+      "title": "Disk check",
+      "text": "A full disk breaks almost everything. `df` shows how full each disk is, and `-h` makes the numbers human-readable (G for gigabytes).",
+      "goal": "Check how full the disks are.",
+      "hint": "`df -h`",
+      "learn": [
+        "df -h",
+        "Show disk usage"
+      ],
+      "after": "Use% is the number to watch. Anything over 90% needs attention."
+    },
+    {
+      "ch": 4,
+      "title": "What takes space?",
+      "text": "df tells you a disk is full. `du` tells you what’s filling it. `-s` gives one total, `-h` makes it readable.",
+      "goal": "Check how much space your home folder uses.",
+      "hint": "`du -sh ~`",
+      "learn": [
+        "du -sh PATH",
+        "Show how much space a folder uses"
+      ],
+      "after": "du -sh * shows the size of every item in the current folder, which is great for hunting down space hogs."
+    },
+    {
+      "ch": 5,
+      "title": "Your first container",
+      "text": "Time for Docker. A container is like a shipping container for software: an app plus everything it needs, packed in one box that runs the same anywhere. Run the classic test image.",
+      "goal": "Run the hello-world container.",
+      "hint": "`docker run hello-world`",
+      "learn": [
+        "docker run IMAGE",
+        "Start a container"
+      ],
+      "after": "Docker didn’t have the image yet, so it downloaded (pulled) it from Docker Hub first, then ran it."
+    },
+    {
+      "ch": 5,
+      "title": "Stock the yard",
+      "text": "Images are the packed recipes that containers start from. Download the nginx web server image ahead of time.",
+      "goal": "Pull the nginx image.",
+      "hint": "`docker pull nginx`",
+      "learn": [
+        "docker pull IMAGE",
+        "Download an image"
+      ],
+      "after": "An image is the recipe. A container is one running copy of it. You can run many containers from one image."
+    },
+    {
+      "ch": 5,
+      "title": "Check the inventory",
+      "text": "See which images are stored on this machine.",
+      "goal": "List your images.",
+      "hint": "`docker images`",
+      "learn": [
+        "docker images",
+        "List downloaded images"
+      ],
+      "after": "The IMAGE ID identifies an image even if it has several names."
+    },
+    {
+      "ch": 5,
+      "title": "Run it in the background",
+      "text": "Start nginx as a background web server. `-d` runs it detached, `--name` names it, and `-p 8080:80` connects port 8080 on your machine to port 80 inside the container.",
+      "goal": "Run nginx in the background, named web, on port 8080.",
+      "hint": "`docker run -d --name web -p 8080:80 nginx`",
+      "learn": [
+        "docker run -d -p H:C --name N",
+        "Background container with a port"
+      ],
+      "after": "Your web server is up and running."
+    },
+    {
+      "ch": 5,
+      "title": "What’s running?",
+      "text": "List the containers that are running right now.",
+      "goal": "Show running containers.",
+      "hint": "`docker ps`",
+      "learn": [
+        "docker ps",
+        "List running containers"
+      ],
+      "after": "Look at the PORTS column: 0.0.0.0:8080->80/tcp is the mapping you asked for."
+    },
+    {
+      "ch": 5,
+      "title": "Pay a visit",
+      "text": "Your web server is published on port 8080. `curl` fetches a web page right in the terminal.",
+      "goal": "Fetch the page served on port 8080.",
+      "hint": "`curl localhost:8080`",
+      "learn": [
+        "curl localhost:PORT",
+        "Fetch a web page from the terminal"
+      ],
+      "after": "localhost means “this machine”. The request went to port 8080, and Docker forwarded it to port 80 inside the container."
+    },
+    {
+      "ch": 5,
+      "title": "Read the logs",
+      "text": "When a container misbehaves, its logs are the first place to look.",
+      "goal": "Show the logs of the web container.",
+      "hint": "`docker logs web`",
+      "learn": [
+        "docker logs NAME",
+        "Show a container’s output"
+      ],
+      "after": "See the GET line at the bottom? That’s your curl visit."
+    },
+    {
+      "ch": 5,
+      "title": "Step inside",
+      "text": "`docker exec` runs a command inside a running container. Peek at the files nginx serves from /usr/share/nginx/html.",
+      "goal": "List /usr/share/nginx/html inside web.",
+      "hint": "`docker exec web ls /usr/share/nginx/html`",
+      "learn": [
+        "docker exec NAME CMD",
+        "Run a command inside a container"
+      ],
+      "after": "On a real machine, docker exec -it web sh opens a full shell inside the container."
+    },
+    {
+      "ch": 5,
+      "title": "Unload the ship",
+      "text": "Done with nginx. A container must be stopped before it can be removed.",
+      "goal": "Stop and remove the web container.",
+      "hint": "`docker stop web` then `docker rm web` (or both at once: `docker stop web && docker rm web`)",
+      "learn": [
+        "docker stop / rm NAME",
+        "Stop, then remove a container"
+      ],
+      "after": "docker rm -f web stops and removes in one step."
+    },
+    {
+      "ch": 5,
+      "title": "Build your own",
+      "text": "The webapp folder has a Dockerfile: step-by-step instructions for packing the app into an image. Read it, then build it. The `.` means “use this folder”.",
+      "goal": "Build an image called myapp from ~/projects/webapp.",
+      "hint": "`cd ~/projects/webapp`, `cat Dockerfile`, then `docker build -t myapp .`",
+      "learn": [
+        "docker build -t NAME .",
+        "Build an image from a Dockerfile"
+      ],
+      "after": "Each line of a Dockerfile is a step. Docker caches the steps, so rebuilds are fast when little has changed."
+    },
+    {
+      "ch": 5,
+      "title": "Launch day",
+      "text": "Your app listens on port 5000 inside the container. Run your very own image in the background and publish that port.",
+      "goal": "Run myapp in the background on port 5000, then visit it.",
+      "hint": "`docker run -d --name myapp -p 5000:5000 myapp`, then `curl localhost:5000`",
+      "learn": [
+        "docker run your image",
+        "Ship your own app"
+      ],
+      "after": "You built and shipped your own app. Try curl localhost:5000 if you haven’t yet."
+    },
+    {
+      "ch": 6,
+      "title": "The full picture",
+      "text": "Containers that finished or crashed don’t vanish. They stay around, stopped, until you remove them.",
+      "goal": "List every container, including stopped ones.",
+      "hint": "`docker ps -a`",
+      "learn": [
+        "docker ps -a",
+        "List all containers, stopped too"
+      ],
+      "after": "The hello-world container from earlier is still there, stopped."
+    },
+    {
+      "ch": 6,
+      "title": "Sweep the deck",
+      "text": "That old hello-world container is just taking up space. Remove it, using the name or ID from the list.",
+      "goal": "Remove the stopped hello-world container.",
+      "hint": "`docker ps -a` to find its name, then `docker rm NAME` (or `docker container prune -f` removes every stopped container)",
+      "learn": [
+        "docker rm NAME",
+        "Remove a stopped container"
+      ],
+      "after": "Docker gives unnamed containers random names like jolly_otter. Naming them yourself with --name keeps things tidy."
+    },
+    {
+      "ch": 6,
+      "title": "Clear the shelf",
+      "text": "You won’t need the hello-world image again either. Removing an image uses a different command from removing a container.",
+      "goal": "Delete the hello-world image.",
+      "hint": "`docker rmi hello-world`",
+      "learn": [
+        "docker rmi IMAGE",
+        "Remove an image"
+      ],
+      "after": "Docker refuses to delete an image while any container (even a stopped one) still uses it."
+    },
+    {
+      "ch": 6,
+      "title": "A database appears",
+      "text": "The harbor needs a database. Start a postgres container in the background, named db.",
+      "goal": "Start postgres in the background with the name db.",
+      "hint": "`docker run -d --name db postgres`",
+      "learn": [
+        "docker run -d --name db postgres",
+        "Start a database"
+      ],
+      "after": "Docker printed an ID, so it started… but is it still running? Check docker ps."
+    },
+    {
+      "ch": 6,
+      "title": "Why did it stop?",
+      "text": "db isn’t in docker ps anymore. A container that stops right away almost always explains why in its logs.",
+      "goal": "Read db’s logs to find out why it stopped.",
+      "hint": "`docker logs db`",
+      "learn": [
+        "docker ps -a + docker logs",
+        "Diagnose a crashed container"
+      ],
+      "after": "Postgres refuses to start without a password, passed in as an environment variable."
+    },
+    {
+      "ch": 6,
+      "title": "Fix the database",
+      "text": "Environment variables configure containers. Pass one with `-e NAME=value`. You can’t change a container’s settings after it’s created, so remove the broken db and start a new one.",
+      "goal": "Get a postgres container named db running, with a password.",
+      "hint": "`docker rm db` then `docker run -d --name db -e POSTGRES_PASSWORD=secret postgres`",
+      "learn": [
+        "docker run -e KEY=value",
+        "Pass settings into a container"
+      ],
+      "after": "Run docker logs db again: “ready to accept connections”."
+    },
+    {
+      "ch": 6,
+      "title": "Where’s the database?",
+      "text": "Every container gets its own IP address. `docker inspect` shows everything Docker knows about a container as JSON, including that.",
+      "goal": "Find db’s IP address.",
+      "hint": "`docker inspect db` and look for IPAddress, or the short way: `docker inspect -f \"{{.NetworkSettings.IPAddress}}\" db`",
+      "learn": [
+        "docker inspect NAME",
+        "See every detail of a container"
+      ],
+      "after": "IPs can change when containers restart, which is why you’ll connect containers by name instead in a moment."
+    },
+    {
+      "ch": 6,
+      "title": "Safe storage",
+      "text": "Containers are disposable: remove one and every file inside it is gone. Volumes store data outside the container, so it survives.",
+      "goal": "Create a volume called harbor-data.",
+      "hint": "`docker volume create harbor-data`, then `docker volume ls` to check",
+      "learn": [
+        "docker volume create NAME",
+        "Create persistent storage"
+      ],
+      "after": "Databases and anything else that saves data should always use a volume."
+    },
+    {
+      "ch": 6,
+      "title": "Mount the volume",
+      "text": "`-v VOLUME:/path` plugs a volume into a container at a folder. Redis saves its data in /data.",
+      "goal": "Run redis in the background, named cache, with harbor-data mounted at /data.",
+      "hint": "`docker run -d --name cache -v harbor-data:/data redis`",
+      "learn": [
+        "docker run -v VOL:/path",
+        "Mount a volume"
+      ],
+      "after": "Now you could delete cache and start a new one with the same volume, and the data would still be there. Try docker exec cache redis-cli ping too."
+    },
+    {
+      "ch": 6,
+      "title": "A private network",
+      "text": "On Docker’s default network, containers can’t find each other by name. Your own network fixes that.",
+      "goal": "Create a network called harbor-net.",
+      "hint": "`docker network create harbor-net`, then `docker network ls`",
+      "learn": [
+        "docker network create NAME",
+        "Create a network"
+      ],
+      "after": "Containers on the same user-made network can reach each other by container name, with no IPs needed."
+    },
+    {
+      "ch": 6,
+      "title": "Plug it in",
+      "text": "cache is already running. You can connect a running container to another network without restarting it.",
+      "goal": "Connect cache to harbor-net.",
+      "hint": "`docker network connect harbor-net cache`",
+      "learn": [
+        "docker network connect NET NAME",
+        "Add a container to a network"
+      ],
+      "after": "cache is now on two networks: the default bridge and harbor-net."
+    },
+    {
+      "ch": 6,
+      "title": "Can you hear me?",
+      "text": "Prove the network works. Start a throwaway alpine container on harbor-net that pings cache once. `--rm` removes it automatically when it’s done.",
+      "goal": "Ping cache by name from a temporary container on harbor-net.",
+      "hint": "`docker run --rm --network harbor-net alpine ping -c 1 cache`",
+      "learn": [
+        "docker run --rm --network NET",
+        "Throwaway container on a network"
+      ],
+      "after": "Try the same without --network harbor-net and you’ll get “bad address”. That’s why custom networks matter."
+    },
+    {
+      "ch": 7,
+      "title": "One file to rule them all",
+      "text": "Starting containers one by one gets tedious. Docker Compose describes a whole stack in a single YAML file. Go to ~/projects/stack and read docker-compose.yml.",
+      "goal": "Read the stack’s docker-compose.yml.",
+      "hint": "`cd ~/projects/stack` then `cat docker-compose.yml`",
+      "learn": [
+        "docker-compose.yml",
+        "Describe a whole stack in one file"
+      ],
+      "after": "Two services: web (nginx) and cache (redis), with a volume for the cache. depends_on makes cache start first."
+    },
+    {
+      "ch": 7,
+      "title": "Raise the stack",
+      "text": "One command creates the network, the volume and every container in the file. Remember the flag that keeps things running in the background.",
+      "goal": "Start the whole stack in the background.",
+      "hint": "`docker compose up -d` (from inside ~/projects/stack)",
+      "learn": [
+        "docker compose up -d",
+        "Start a whole stack"
+      ],
+      "after": "Compose named everything after the folder: stack-web-1, stack-cache-1, stack_default. Try curl localhost:8081."
+    },
+    {
+      "ch": 7,
+      "title": "Stack status",
+      "text": "docker ps shows every container on the machine. Compose has its own version that shows only this stack.",
+      "goal": "List only this stack’s containers.",
+      "hint": "`docker compose ps`",
+      "learn": [
+        "docker compose ps",
+        "List a stack’s containers"
+      ],
+      "after": "docker compose logs shows all services’ output together, labeled by service."
+    },
+    {
+      "ch": 7,
+      "title": "Strike the stack",
+      "text": "When you’re done, Compose can tear everything down as easily as it built it.",
+      "goal": "Stop and remove the stack’s containers and network in one command.",
+      "hint": "`docker compose down`",
+      "learn": [
+        "docker compose down",
+        "Remove a whole stack"
+      ],
+      "after": "The volume survives a down on purpose, so your data is safe. down -v deletes volumes too."
+    },
+    {
+      "ch": 7,
+      "title": "Challenge: squatter",
+      "text": "📟 Incident: the harbor site must go live on host port 8080, as a container named harbor running your myapp image (which listens on 5000 inside). Something is already sitting on that port. You’re on your own now.",
+      "goal": "Get harbor running myapp on host port 8080.",
+      "hint": "`docker ps` shows squatter on 8080. `docker rm -f squatter`, then `docker run -d --name harbor -p 8080:5000 myapp`",
+      "alert": "📟 Pager: “Port 8080 is serving the wrong site. Find out what’s on it.”",
+      "learn": [
+        "Bind … port is already allocated",
+        "Find and free a busy port"
+      ],
+      "after": "Two containers can never publish the same host port at once. docker ps is always the first place to look."
+    },
+    {
+      "ch": 7,
+      "title": "Challenge: broken build",
+      "text": "Build an image called fixed from ~/projects/broken. The build fails. Read the error carefully, fix the Dockerfile, and build again. There’s no text editor here, so you’ll need a command that edits files in place.",
+      "goal": "Build the fixed image successfully.",
+      "hint": "The error points at line 2: FORM should be FROM. `cd ~/projects/broken`, `sed -i 's/FORM/FROM/' Dockerfile`, `docker build -t fixed .`",
+      "learn": [
+        "sed -i 's/OLD/NEW/' FILE",
+        "Edit a file in place"
+      ],
+      "after": "Build errors always say which line broke. Reading the error closely solves most problems."
+    },
+    {
+      "ch": 7,
+      "title": "Challenge: disk full",
+      "text": "📟 The server’s disk is almost full and services are starting to fail. Find what’s eating the space under /var/log and get rid of it.",
+      "goal": "Free up the disk.",
+      "hint": "`df -h` confirms it, `du -sh /var/log/*` finds the culprit, `rm /var/log/crane-debug.log` fixes it",
+      "alert": "📟 Pager: “Disk usage at 95% on port-penguin.”",
+      "learn": [
+        "df -h → du -sh * → rm",
+        "Track down what fills a disk"
+      ],
+      "after": "Somebody left debug logging switched on. On real servers, log rotation stops this from happening."
+    },
+    {
+      "ch": 7,
+      "title": "Challenge: log detective",
+      "text": "Which log level (INFO, WARN or ERROR) appears most often in logs/system.log? Answer it with one pipeline that counts every level, most common first. Hint: the level is the third word on each line.",
+      "goal": "Count each log level in a single pipeline.",
+      "hint": "`awk '{print $3}' logs/system.log | sort | uniq -c | sort -rn` (from your home folder)",
+      "learn": [
+        "awk | sort | uniq -c | sort -rn",
+        "Count and rank anything"
+      ],
+      "after": "This exact pipeline is how people find the most common errors, IPs or URLs in real logs."
+    },
+    {
+      "ch": 7,
+      "title": "Final mission: ship 1.0",
+      "text": "Time to ship a proper release. Give myapp a version tag of 1.0, then run exactly that version in the background as app-prod, on harbor-net, reachable on host port 9000.",
+      "goal": "Run myapp:1.0 as app-prod on harbor-net, on port 9000.",
+      "hint": "`docker tag myapp myapp:1.0`, then `docker run -d --name app-prod --network harbor-net -p 9000:5000 myapp:1.0`",
+      "learn": [
+        "docker tag IMG IMG:1.0",
+        "Version your images"
+      ],
+      "after": "Tagged, networked, published. That’s a real deployment."
+    }
+  ]
+}

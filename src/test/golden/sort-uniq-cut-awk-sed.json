@@ -51,19 +51,21 @@
     },
     {
       "input": "sort",
-      "text": "sort: no input. Give a file name or pipe something in.",
+      "text": "port-penguin: keyboard input comes in a later update; use a pipe or < FILE",
       "cleared": false,
-      "code": 1,
+      "code": 0,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R5 the hint is on its own line; the exit code is now as in Ubuntu"
     },
     {
       "input": "sort nosuch",
-      "text": "sort: nosuch: No such file or directory",
+      "text": "sort: cannot read: nosuch: No such file or directory",
       "cleared": false,
-      "code": 1,
+      "code": 2,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu; exit code as in Ubuntu (R2)"
     },
     {
       "input": "echo 10 > nums.txt; echo 9 >> nums.txt; echo 100 >> nums.txt",
@@ -107,11 +109,12 @@
     },
     {
       "input": "uniq",
-      "text": "uniq: no input. Give a file name or pipe something in.",
+      "text": "port-penguin: keyboard input comes in a later update; use a pipe or < FILE",
       "cleared": false,
-      "code": 1,
+      "code": 0,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R5 the hint is on its own line; the exit code is now as in Ubuntu"
     },
     {
       "input": "cut -d\" \" -f1 logs/system.log",
@@ -163,11 +166,12 @@
     },
     {
       "input": "cut crew.txt",
-      "text": "cut: you must specify fields with -f or characters with -c. Try: cut -d\" \" -f3 file",
+      "text": "cut: you must specify a list of bytes, characters, or fields\nTry 'cut --help' for more information.",
       "cleared": false,
       "code": 1,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu"
     },
     {
       "input": "cut -f1 nosuch",
@@ -227,27 +231,30 @@
     },
     {
       "input": "awk",
-      "text": "awk: missing program. Try: awk '{print $1}' file",
+      "text": "usage: awk [-F value] [-v var=value] [--version] [-f program-file | 'program text'] [file ...]",
       "cleared": false,
-      "code": 1,
+      "code": 2,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu; exit code as in Ubuntu (R2)"
     },
     {
       "input": "awk 'BEGIN{x=1}' crew.txt",
-      "text": "awk: this sandbox understands simple programs like '{print $2}' or '{print $1, $3}'",
+      "text": "",
       "cleared": false,
-      "code": 1,
+      "code": 0,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R4 this input did not work in run 1; the exit code is now as in Ubuntu"
     },
     {
       "input": "awk '{print $1}' nosuch",
-      "text": "awk: nosuch: No such file or directory",
+      "text": "awk: cannot open nosuch (No such file or directory)",
       "cleared": false,
-      "code": 1,
+      "code": 2,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu; exit code as in Ubuntu (R2)"
     },
     {
       "input": "awk '{print $3}' logs/system.log | sort | uniq -c | sort -rn",
@@ -275,19 +282,21 @@
     },
     {
       "input": "sed -e 's/[0-9]+/N/' notes.txt",
-      "text": "Shipment schedule\nMonday     N containers of bananas\nWednesday  N containers of rubber ducks\nFriday     N very suspicious crate",
+      "text": "Shipment schedule\nMonday     40 containers of bananas\nWednesday  12 containers of rubber ducks\nFriday     1 very suspicious crate",
       "cleared": false,
       "code": 0,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu"
     },
     {
       "input": "sed 's/\\(Gus\\)/[\\1]/' crew.txt",
-      "text": "Marina\nOtto\nGus\nPearl\nOtto\nBarney\nMarina\nSkip\nCoral\nGus",
+      "text": "Marina\nOtto\n[Gus]\nPearl\nOtto\nBarney\nMarina\nSkip\nCoral\n[Gus]",
       "cleared": false,
       "code": 0,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R4 this input did not work in run 1"
     },
     {
       "input": "cat notes.txt | sed 's/containers/boxes/'",
@@ -323,35 +332,39 @@
     },
     {
       "input": "sed",
-      "text": "sed: missing script. Try: sed 's/old/new/' file",
+      "text": "Usage: sed [OPTION]... {script-only-if-no-other-script} [input-file]...\n\n  -n, --quiet, --silent\n                 suppress automatic printing of pattern space\n      --debug\n                 annotate program execution\n  -e script, --expression=script\n                 add the script to the commands to be executed\n  -f script-file, --file=script-file\n                 add the contents of script-file to the commands to be executed\n  --follow-symlinks\n                 follow symlinks when processing in place\n  -i[SUFFIX], --in-place[=SUFFIX]\n                 edit files in place (makes backup if SUFFIX supplied)\n  -l N, --line-length=N\n                 specify the desired line-wrap length for the `l' command\n  --posix\n                 disable all GNU extensions.\n  -E, -r, --regexp-extended\n                 use extended regular expressions in the script\n                 (for portability use POSIX -E).\n  -s, --separate\n                 consider files as separate rather than as a single\n                 continuous long stream.\n      --sandbox\n                 operate in sandbox mode (disable e/r/w commands).\n  -u, --unbuffered\n                 load minimal amounts of data from the input files and flush\n                 the output buffers more often\n  -z, --null-data\n                 separate lines by NUL characters\n      --help     display this help and exit\n      --version  output version information and exit\n\nIf no -e, --expression, -f, or --file option is given, then the first\nnon-option argument is taken as the sed script to interpret.  All\nremaining arguments are names of input files; if no input files are\nspecified, then the standard input is read.",
       "cleared": false,
       "code": 1,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu"
     },
     {
       "input": "sed 'y/a/b/' crew.txt",
-      "text": "sed: this sandbox understands substitutions like 's/old/new/' and 's/old/new/g'",
+      "text": "Mbrinb\nOtto\nGus\nPebrl\nOtto\nBbrney\nMbrinb\nSkip\nCorbl\nGus",
       "cleared": false,
-      "code": 1,
+      "code": 0,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R4 this input did not work in run 1; the exit code is now as in Ubuntu"
     },
     {
       "input": "sed 's/a/b' crew.txt",
-      "text": "sed: -e expression #1: unterminated `s' command",
+      "text": "sed: -e expression #1, char 5: unterminated `s' command",
       "cleared": false,
       "code": 1,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu"
     },
     {
       "input": "sed 's/(/x/' crew.txt",
-      "text": "sed: invalid pattern",
+      "text": "Marina\nOtto\nGus\nPearl\nOtto\nBarney\nMarina\nSkip\nCoral\nGus",
       "cleared": false,
-      "code": 1,
+      "code": 0,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu; exit code as in Ubuntu (R2)"
     },
     {
       "input": "sed -i 's/a/b/'",
@@ -365,18 +378,20 @@
       "input": "sed -i 's/a/b/' nosuch",
       "text": "sed: can't read nosuch: No such file or directory",
       "cleared": false,
-      "code": 1,
+      "code": 2,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R2 exit code as in Ubuntu"
     },
     {
       "input": "sed 's/a/b/' nosuch",
-      "text": "sed: nosuch: No such file or directory",
+      "text": "sed: can't read nosuch: No such file or directory",
       "cleared": false,
-      "code": 1,
+      "code": 2,
       "cwd": "/home/cadet",
-      "cur": 0
+      "cur": 0,
+      "reason": "R1 output as in Ubuntu; exit code as in Ubuntu (R2)"
     }
   ],
-  "save": "{\"fs\":{\"t\":\"d\",\"c\":{\"home\":{\"t\":\"d\",\"c\":{\"cadet\":{\"t\":\"d\",\"c\":{\"welcome.txt\":{\"t\":\"f\",\"x\":\"Welcome to Port Penguin, dockhand! 🐧\\n\\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\\nso experiment freely.\\n\\nYour logbook lists one task at a time. Finish it and the next one appears.\\nThere are 70 tasks, and they get harder as you go.\\n\\nHandy keys\\n  Tab        finish a file or command name for you\\n  ↑ and ↓    bring back commands you typed before\\n  help       list every command this terminal knows\\n  man NAME   explain one command, like: man grep\\n\",\"m\":\"rw-r--r--\"},\".secret\":{\"t\":\"f\",\"x\":\"Psst. You found the hidden file.\\n\\nCaptain’s code word: BARNACLE\\n\\nFiles whose names start with a dot are hidden from a plain ls.\\nSettings files often hide this way, like .bashrc.\\n\",\"m\":\"rw-r--r--\"},\".bashrc\":{\"t\":\"f\",\"x\":\"alias ll='ls -l'\\n\",\"m\":\"rw-r--r--\"},\"notes.txt\":{\"t\":\"f\",\"x\":\"Shipment schedule\\nMonday     40 containers of bananas\\nWednesday  12 containers of rubber ducks\\nFriday     1 very suspicious crate\\n\",\"m\":\"rw-r--r--\"},\"crew.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nGus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nGus\\n\",\"m\":\"rw-r--r--\"},\"logs\":{\"t\":\"d\",\"c\":{\"system.log\":{\"t\":\"f\",\"x\":\"2026-11-24 06:00:01 INFO  Harbor systems online\\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\\n2026-11-24 06:21:52 INFO  Unloading started\\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\\n2026-11-24 06:30:00 INFO  Coffee machine refilled\\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\\n2026-11-24 06:52:26 INFO  Unloading complete\\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\\n2026-11-24 07:10:00 INFO  Shift change\\n\",\"m\":\"rw-r--r--\"},\"crane.log\":{\"t\":\"f\",\"x\":\"crane-1 lift ok 18t\\ncrane-2 lift ok 22t\\ncrane-2 pressure low\\ncrane-1 idle\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"projects\":{\"t\":\"d\",\"c\":{\"webapp\":{\"t\":\"d\",\"c\":{\"index.html\":{\"t\":\"f\",\"x\":\"<!DOCTYPE html>\\n<html>\\n  <head><title>Port Penguin</title></head>\\n  <body><h1>Welcome to Port Penguin</h1></body>\\n</html>\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Hello from the harbor! 🚢\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"},\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Start from a small official Python image\\nFROM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"deploy.sh\":{\"t\":\"f\",\"x\":\"#!/bin/bash\\n# Deploy script for the harbor website\\necho \\\"Loading cargo...\\\"\\necho \\\"Securing containers...\\\"\\necho \\\"🚢 Website deployed. Nice work, dockhand!\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"legacy\":{\"t\":\"d\",\"c\":{\"old\":{\"t\":\"d\",\"c\":{\"crate-manifest.txt\":{\"t\":\"f\",\"x\":\"CRATE MANIFEST (1998)\\nCrate 0001  Cargo: 300 tins of sardines\\nCrate 0002  Cargo: one (1) grand piano\\nCrate 0003  Cargo: classified\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"README\":{\"t\":\"f\",\"x\":\"Nobody remembers what this folder is for.\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"stack\":{\"t\":\"d\",\"c\":{\"docker-compose.yml\":{\"t\":\"f\",\"x\":\"# The harbor stack: a web server and a cache\\nservices:\\n  web:\\n    image: nginx\\n    ports:\\n      - \\\"8081:80\\\"\\n    depends_on:\\n      - cache\\n  cache:\\n    image: redis\\n    volumes:\\n      - cache-data:/data\\n\\nvolumes:\\n  cache-data:\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"broken\":{\"t\":\"d\",\"c\":{\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Harbor status page\\nFORM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Status: all piers operational ⚓\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"nums.txt\":{\"t\":\"f\",\"x\":\"10\\n9\\n100\\n\",\"m\":\"rw-r--r--\"},\"crew2.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nAugustus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nAugustus\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"etc\":{\"t\":\"d\",\"c\":{\"hostname\":{\"t\":\"f\",\"x\":\"port-penguin\\n\",\"m\":\"rw-r--r--\"},\"os-release\":{\"t\":\"f\",\"x\":\"NAME=\\\"Penguin Linux\\\"\\nVERSION=\\\"26.04 (Harbor)\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"tmp\":{\"t\":\"d\",\"c\":{\"old-cargo.log\":{\"t\":\"f\",\"x\":\"2026-11-01 crate 7781 lost at sea\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"usr\":{\"t\":\"d\",\"c\":{\"bin\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"},\"share\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"var\":{\"t\":\"d\",\"c\":{\"log\":{\"t\":\"d\",\"c\":{\"syslog\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\\n\",\"m\":\"rw-r-----\",\"sz\":48000000},\"auth.log\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:03 sshd: session opened for cadet\\n\",\"m\":\"rw-r-----\",\"sz\":2100000},\"dpkg.log\":{\"t\":\"f\",\"x\":\"2026-11-20 status installed docker-ce\\n\",\"m\":\"rw-r--r--\",\"sz\":900000}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"cwd\":\"/home/cadet\",\"oldpwd\":\"/home/cadet\",\"env\":{},\"procs\":[{\"pid\":1,\"user\":\"root\",\"cpu\":0,\"mem\":0.3,\"cmd\":\"/sbin/init\"},{\"pid\":214,\"user\":\"root\",\"cpu\":0,\"mem\":0.2,\"cmd\":\"/usr/sbin/sshd -D\"},{\"pid\":388,\"user\":\"root\",\"cpu\":0.4,\"mem\":1.9,\"cmd\":\"/usr/bin/dockerd\"},{\"pid\":1021,\"user\":\"cadet\",\"cpu\":0.2,\"mem\":0.8,\"cmd\":\"harbor-radio --station 16\"},{\"pid\":4242,\"user\":\"cadet\",\"cpu\":99.1,\"mem\":2.3,\"cmd\":\"crane-sim --loop\"},{\"pid\":5150,\"user\":\"cadet\",\"cpu\":0,\"mem\":0.1,\"cmd\":\"-bash\"}],\"lastCode\":1,\"dk\":{\"images\":[],\"containers\":[],\"volumes\":[],\"networks\":[{\"name\":\"bridge\",\"id\":\"b4f16a5485f7\",\"driver\":\"bridge\",\"subnet\":\"172.17\",\"next\":1},{\"name\":\"host\",\"id\":\"a648dc235504\",\"driver\":\"host\"},{\"name\":\"none\",\"id\":\"0584f0b1beb9\",\"driver\":\"null\"}]},\"done\":[],\"cur\":0,\"hist\":[\"sort crew.txt\",\"sort -r crew.txt\",\"sort -u crew.txt\",\"sort crew.txt | uniq\",\"sort crew.txt | uniq -c\",\"sort crew.txt | uniq -d\",\"sort\",\"sort nosuch\",\"echo 10 > nums.txt; echo 9 >> nums.txt; echo 100 >> nums.txt\",\"sort nums.txt\",\"sort -n nums.txt\",\"sort -rn nums.txt\",\"uniq crew.txt\",\"uniq\",\"cut -d\\\" \\\" -f1 logs/system.log\",\"cut -d ' ' -f3 logs/system.log\",\"cut -c1-6 crew.txt\",\"cut -c 2 crew.txt\",\"cut -d' ' -f1,2 notes.txt\",\"cut -f1 crew.txt\",\"cut crew.txt\",\"cut -f1 nosuch\",\"awk '{print $3}' logs/system.log\",\"awk '{print $1, $3}' logs/system.log\",\"awk '{print NF}' notes.txt\",\"awk '{print}' crew.txt\",\"awk -F- '{print $2}' logs/crane.log\",\"awk -F : '{print $1}' logs/system.log\",\"awk\",\"awk 'BEGIN{x=1}' crew.txt\",\"awk '{print $1}' nosuch\",\"awk '{print $3}' logs/system.log | sort | uniq -c | sort -rn\",\"sed 's/Otto/Otis/' crew.txt\",\"sed 's/a/A/g' crew.txt\",\"sed -e 's/[0-9]+/N/' notes.txt\",\"sed 's/\\\\(Gus\\\\)/[\\\\1]/' crew.txt\",\"cat notes.txt | sed 's/containers/boxes/'\",\"cp crew.txt crew2.txt\",\"sed -i 's/Gus/Augustus/g' crew2.txt\",\"cat crew2.txt\",\"sed\",\"sed 'y/a/b/' crew.txt\",\"sed 's/a/b' crew.txt\",\"sed 's/(/x/' crew.txt\",\"sed -i 's/a/b/'\",\"sed -i 's/a/b/' nosuch\",\"sed 's/a/b/' nosuch\"],\"setup\":{},\"unlocked\":false}"
+  "save": "{\"fs\":{\"t\":\"d\",\"c\":{\"home\":{\"t\":\"d\",\"c\":{\"cadet\":{\"t\":\"d\",\"c\":{\"welcome.txt\":{\"t\":\"f\",\"x\":\"Welcome to Port Penguin, dockhand! 🐧\\n\\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\\nso experiment freely.\\n\\nYour logbook lists one task at a time. Finish it and the next one appears.\\nThere are 70 tasks, and they get harder as you go.\\n\\nHandy keys\\n  Tab        finish a file or command name for you\\n  ↑ and ↓    bring back commands you typed before\\n  help       list every command this terminal knows\\n  man NAME   explain one command, like: man grep\\n\",\"m\":\"rw-r--r--\"},\".secret\":{\"t\":\"f\",\"x\":\"Psst. You found the hidden file.\\n\\nCaptain’s code word: BARNACLE\\n\\nFiles whose names start with a dot are hidden from a plain ls.\\nSettings files often hide this way, like .bashrc.\\n\",\"m\":\"rw-r--r--\"},\".bashrc\":{\"t\":\"f\",\"x\":\"# ~/.bashrc: executed by bash(1) for non-login shells.\\n# see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)\\n# for examples\\n\\n# If not running interactively, don't do anything\\ncase $- in\\n    *i*) ;;\\n      *) return;;\\nesac\\n\\n# don't put duplicate lines or lines starting with space in the history.\\n# See bash(1) for more options\\nHISTCONTROL=ignoreboth\\n\\n# append to the history file, don't overwrite it\\nshopt -s histappend\\n\\n# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)\\nHISTSIZE=1000\\nHISTFILESIZE=2000\\n\\n# check the window size after each command and, if necessary,\\n# update the values of LINES and COLUMNS.\\nshopt -s checkwinsize\\n\\n# If set, the pattern \\\"**\\\" used in a pathname expansion context will\\n# match all files and zero or more directories and subdirectories.\\n#shopt -s globstar\\n\\n# make less more friendly for non-text input files, see lesspipe(1)\\n[ -x /usr/bin/lesspipe ] && eval \\\"$(SHELL=/bin/sh lesspipe)\\\"\\n\\n# set variable identifying the chroot you work in (used in the prompt below)\\nif [ -z \\\"${debian_chroot:-}\\\" ] && [ -r /etc/debian_chroot ]; then\\n    debian_chroot=$(cat /etc/debian_chroot)\\nfi\\n\\n# set a fancy prompt (non-color, unless we know we \\\"want\\\" color)\\ncase \\\"$TERM\\\" in\\n    xterm-color|*-256color) color_prompt=yes;;\\nesac\\n\\n# uncomment for a colored prompt, if the terminal has the capability; turned\\n# off by default to not distract the user: the focus in a terminal window\\n# should be on the output of commands, not on the prompt\\n#force_color_prompt=yes\\n\\nif [ -n \\\"$force_color_prompt\\\" ]; then\\n    if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then\\n\\t# We have color support; assume it's compliant with Ecma-48\\n\\t# (ISO/IEC-6429). (Lack of such support is extremely rare, and such\\n\\t# a case would tend to support setf rather than setaf.)\\n\\tcolor_prompt=yes\\n    else\\n\\tcolor_prompt=\\n    fi\\nfi\\n\\nif [ \\\"$color_prompt\\\" = yes ]; then\\n    PS1='${debian_chroot:+($debian_chroot)}\\\\[\\\\033[01;32m\\\\]\\\\u@\\\\h\\\\[\\\\033[00m\\\\]:\\\\[\\\\033[01;34m\\\\]\\\\w\\\\[\\\\033[00m\\\\]\\\\$ '\\nelse\\n    PS1='${debian_chroot:+($debian_chroot)}\\\\u@\\\\h:\\\\w\\\\$ '\\nfi\\nunset color_prompt force_color_prompt\\n\\n# If this is an xterm set the title to user@host:dir\\ncase \\\"$TERM\\\" in\\nxterm*|rxvt*)\\n    PS1=\\\"\\\\[\\\\e]0;${debian_chroot:+($debian_chroot)}\\\\u@\\\\h: \\\\w\\\\a\\\\]$PS1\\\"\\n    ;;\\n*)\\n    ;;\\nesac\\n\\n# enable color support of ls and also add handy aliases\\nif [ -x /usr/bin/dircolors ]; then\\n    test -r ~/.dircolors && eval \\\"$(dircolors -b ~/.dircolors)\\\" || eval \\\"$(dircolors -b)\\\"\\n    alias ls='ls --color=auto'\\n    #alias dir='dir --color=auto'\\n    #alias vdir='vdir --color=auto'\\n\\n    alias grep='grep --color=auto'\\n    alias fgrep='fgrep --color=auto'\\n    alias egrep='egrep --color=auto'\\nfi\\n\\n# colored GCC warnings and errors\\n#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'\\n\\n# some more ls aliases\\nalias ll='ls -alF'\\nalias la='ls -A'\\nalias l='ls -CF'\\n\\n# Add an \\\"alert\\\" alias for long running commands.  Use like so:\\n#   sleep 10; alert\\nalias alert='notify-send --urgency=low -i \\\"$([ $? = 0 ] && echo terminal || echo error)\\\" \\\"$(history|tail -n1|sed -e '\\\\''s/^\\\\s*[0-9]\\\\+\\\\s*//;s/[;&|]\\\\s*alert$//'\\\\'')\\\"'\\n\\n# Alias definitions.\\n# You may want to put all your additions into a separate file like\\n# ~/.bash_aliases, instead of adding them here directly.\\n# See /usr/share/doc/bash-doc/examples in the bash-doc package.\\n\\nif [ -f ~/.bash_aliases ]; then\\n    . ~/.bash_aliases\\nfi\\n\\n# enable programmable completion features (you don't need to enable\\n# this, if it's already enabled in /etc/bash.bashrc and /etc/profile\\n# sources /etc/bash.bashrc).\\nif ! shopt -oq posix; then\\n  if [ -f /usr/share/bash-completion/bash_completion ]; then\\n    . /usr/share/bash-completion/bash_completion\\n  elif [ -f /etc/bash_completion ]; then\\n    . /etc/bash_completion\\n  fi\\nfi\\n\",\"m\":\"rw-r--r--\"},\".profile\":{\"t\":\"f\",\"x\":\"# ~/.profile: executed by the command interpreter for login shells.\\n# This file is not read by bash(1), if ~/.bash_profile or ~/.bash_login\\n# exists.\\n# see /usr/share/doc/bash/examples/startup-files for examples.\\n# the files are located in the bash-doc package.\\n\\n# the default umask is set in /etc/profile; for setting the umask\\n# for ssh logins, install and configure the libpam-umask package.\\n#umask 022\\n\\n# if running bash\\nif [ -n \\\"$BASH_VERSION\\\" ]; then\\n    # include .bashrc if it exists\\n    if [ -f \\\"$HOME/.bashrc\\\" ]; then\\n\\t. \\\"$HOME/.bashrc\\\"\\n    fi\\nfi\\n\\n# set PATH so it includes user's private bin if it exists\\nif [ -d \\\"$HOME/bin\\\" ] ; then\\n    PATH=\\\"$HOME/bin:$PATH\\\"\\nfi\\n\\n# set PATH so it includes user's private bin if it exists\\nif [ -d \\\"$HOME/.local/bin\\\" ] ; then\\n    PATH=\\\"$HOME/.local/bin:$PATH\\\"\\nfi\\n\",\"m\":\"rw-r--r--\"},\".bash_logout\":{\"t\":\"f\",\"x\":\"# ~/.bash_logout: executed by bash(1) when login shell exits.\\n\\n# when leaving the console clear the screen to increase privacy\\n\\nif [ \\\"$SHLVL\\\" = 1 ]; then\\n    [ -x /usr/bin/clear_console ] && /usr/bin/clear_console -q\\nfi\\n\",\"m\":\"rw-r--r--\"},\"notes.txt\":{\"t\":\"f\",\"x\":\"Shipment schedule\\nMonday     40 containers of bananas\\nWednesday  12 containers of rubber ducks\\nFriday     1 very suspicious crate\\n\",\"m\":\"rw-r--r--\"},\"crew.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nGus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nGus\\n\",\"m\":\"rw-r--r--\"},\"logs\":{\"t\":\"d\",\"c\":{\"system.log\":{\"t\":\"f\",\"x\":\"2026-11-24 06:00:01 INFO  Harbor systems online\\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\\n2026-11-24 06:21:52 INFO  Unloading started\\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\\n2026-11-24 06:30:00 INFO  Coffee machine refilled\\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\\n2026-11-24 06:52:26 INFO  Unloading complete\\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\\n2026-11-24 07:10:00 INFO  Shift change\\n\",\"m\":\"rw-r--r--\"},\"crane.log\":{\"t\":\"f\",\"x\":\"crane-1 lift ok 18t\\ncrane-2 lift ok 22t\\ncrane-2 pressure low\\ncrane-1 idle\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"projects\":{\"t\":\"d\",\"c\":{\"webapp\":{\"t\":\"d\",\"c\":{\"index.html\":{\"t\":\"f\",\"x\":\"<!DOCTYPE html>\\n<html>\\n  <head><title>Port Penguin</title></head>\\n  <body><h1>Welcome to Port Penguin</h1></body>\\n</html>\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Hello from the harbor! 🚢\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"},\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Start from a small official Python image\\nFROM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"deploy.sh\":{\"t\":\"f\",\"x\":\"#!/bin/bash\\n# Deploy script for the harbor website\\necho \\\"Loading cargo...\\\"\\necho \\\"Securing containers...\\\"\\necho \\\"🚢 Website deployed. Nice work, dockhand!\\\"\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"legacy\":{\"t\":\"d\",\"c\":{\"old\":{\"t\":\"d\",\"c\":{\"crate-manifest.txt\":{\"t\":\"f\",\"x\":\"CRATE MANIFEST (1998)\\nCrate 0001  Cargo: 300 tins of sardines\\nCrate 0002  Cargo: one (1) grand piano\\nCrate 0003  Cargo: classified\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"README\":{\"t\":\"f\",\"x\":\"Nobody remembers what this folder is for.\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"stack\":{\"t\":\"d\",\"c\":{\"docker-compose.yml\":{\"t\":\"f\",\"x\":\"# The harbor stack: a web server and a cache\\nservices:\\n  web:\\n    image: nginx\\n    ports:\\n      - \\\"8081:80\\\"\\n    depends_on:\\n      - cache\\n  cache:\\n    image: redis\\n    volumes:\\n      - cache-data:/data\\n\\nvolumes:\\n  cache-data:\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"broken\":{\"t\":\"d\",\"c\":{\"Dockerfile\":{\"t\":\"f\",\"x\":\"# Harbor status page\\nFORM python:3.12-slim\\nWORKDIR /app\\nCOPY . .\\nRUN pip install flask\\nEXPOSE 5000\\nCMD [\\\"python\\\", \\\"app.py\\\"]\\n\",\"m\":\"rw-r--r--\"},\"app.py\":{\"t\":\"f\",\"x\":\"from flask import Flask\\n\\napp = Flask(__name__)\\n\\n@app.route(\\\"/\\\")\\ndef home():\\n    return \\\"Status: all piers operational ⚓\\\"\\n\\nif __name__ == \\\"__main__\\\":\\n    app.run(host=\\\"0.0.0.0\\\", port=5000)\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"nums.txt\":{\"t\":\"f\",\"x\":\"10\\n9\\n100\\n\",\"m\":\"rw-r--r--\",\"mtime\":1795510800000},\"crew2.txt\":{\"t\":\"f\",\"x\":\"Marina\\nOtto\\nAugustus\\nPearl\\nOtto\\nBarney\\nMarina\\nSkip\\nCoral\\nAugustus\\n\",\"m\":\"rw-r--r--\",\"mtime\":1795510800000}},\"m\":\"rwxr-x---\",\"mtime\":1795510800000}},\"m\":\"rwxr-xr-x\"},\"etc\":{\"t\":\"d\",\"c\":{\"hostname\":{\"t\":\"f\",\"x\":\"port-penguin\\n\",\"m\":\"rw-r--r--\"},\"os-release\":{\"t\":\"f\",\"x\":\"PRETTY_NAME=\\\"Ubuntu 24.04.1 LTS\\\"\\nNAME=\\\"Ubuntu\\\"\\nVERSION_ID=\\\"24.04\\\"\\nVERSION=\\\"24.04.1 LTS (Noble Numbat)\\\"\\nVERSION_CODENAME=noble\\nID=ubuntu\\nID_LIKE=debian\\nHOME_URL=\\\"https://www.ubuntu.com/\\\"\\nSUPPORT_URL=\\\"https://help.ubuntu.com/\\\"\\nBUG_REPORT_URL=\\\"https://bugs.launchpad.net/ubuntu/\\\"\\nPRIVACY_POLICY_URL=\\\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\\\"\\nUBUNTU_CODENAME=noble\\nLOGO=ubuntu-logo\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"tmp\":{\"t\":\"d\",\"c\":{\"old-cargo.log\":{\"t\":\"f\",\"x\":\"2026-11-01 crate 7781 lost at sea\\n\",\"m\":\"rw-r--r--\"}},\"m\":\"rwxr-xr-x\"},\"usr\":{\"t\":\"d\",\"c\":{\"bin\":{\"t\":\"d\",\"c\":{\"[\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"awk\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"basename\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"bash\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"cat\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"chmod\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"clear\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"cp\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"crontab\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"curl\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"cut\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"date\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"df\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"diff\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"dircolors\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"dirname\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"docker\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"docker-compose\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"du\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"echo\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"egrep\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"env\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"false\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"fgrep\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"file\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"find\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"free\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"grep\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"head\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"hostname\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"id\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"kill\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"killall\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"ls\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"man\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"md5sum\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"mkdir\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"mv\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"od\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"paste\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"pkill\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"printenv\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"printf\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"ps\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"pwd\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"rm\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"rmdir\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"sed\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"seq\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"sh\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"sha256sum\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"sleep\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"sort\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"stat\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"tail\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"tar\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"tee\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"test\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"top\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"touch\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"tr\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"tree\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"true\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"uname\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"uniq\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"uptime\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"wc\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"which\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"whoami\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"xargs\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"},\"yes\":{\"t\":\"f\",\"x\":\"\",\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"share\":{\"t\":\"d\",\"c\":{},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"var\":{\"t\":\"d\",\"c\":{\"log\":{\"t\":\"d\",\"c\":{\"syslog\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\\n\",\"m\":\"rw-r-----\",\"sz\":48000000},\"auth.log\":{\"t\":\"f\",\"x\":\"Nov 24 06:00:03 sshd: session opened for cadet\\n\",\"m\":\"rw-r-----\",\"sz\":2100000},\"dpkg.log\":{\"t\":\"f\",\"x\":\"2026-11-20 status installed docker-ce\\n\",\"m\":\"rw-r--r--\",\"sz\":900000}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"}},\"m\":\"rwxr-xr-x\"},\"cwd\":\"/home/cadet\",\"oldpwd\":\"/home/cadet\",\"env\":{},\"procs\":[{\"pid\":1,\"user\":\"root\",\"cpu\":0,\"mem\":0.3,\"cmd\":\"/sbin/init\"},{\"pid\":214,\"user\":\"root\",\"cpu\":0,\"mem\":0.2,\"cmd\":\"/usr/sbin/sshd -D\"},{\"pid\":388,\"user\":\"root\",\"cpu\":0.4,\"mem\":1.9,\"cmd\":\"/usr/bin/dockerd\"},{\"pid\":1021,\"user\":\"cadet\",\"cpu\":0.2,\"mem\":0.8,\"cmd\":\"harbor-radio --station 16\"},{\"pid\":4242,\"user\":\"cadet\",\"cpu\":99.1,\"mem\":2.3,\"cmd\":\"crane-sim --loop\"},{\"pid\":5150,\"user\":\"cadet\",\"cpu\":0,\"mem\":0.1,\"cmd\":\"-bash\"}],\"lastCode\":2,\"dk\":{\"images\":[],\"containers\":[],\"volumes\":[],\"networks\":[{\"name\":\"bridge\",\"id\":\"b4f16a5485f7\",\"driver\":\"bridge\",\"subnet\":\"172.17\",\"next\":1},{\"name\":\"host\",\"id\":\"a648dc235504\",\"driver\":\"host\"},{\"name\":\"none\",\"id\":\"0584f0b1beb9\",\"driver\":\"null\"}]},\"done\":[],\"cur\":0,\"hist\":[\"sort crew.txt\",\"sort -r crew.txt\",\"sort -u crew.txt\",\"sort crew.txt | uniq\",\"sort crew.txt | uniq -c\",\"sort crew.txt | uniq -d\",\"sort\",\"sort nosuch\",\"echo 10 > nums.txt; echo 9 >> nums.txt; echo 100 >> nums.txt\",\"sort nums.txt\",\"sort -n nums.txt\",\"sort -rn nums.txt\",\"uniq crew.txt\",\"uniq\",\"cut -d\\\" \\\" -f1 logs/system.log\",\"cut -d ' ' -f3 logs/system.log\",\"cut -c1-6 crew.txt\",\"cut -c 2 crew.txt\",\"cut -d' ' -f1,2 notes.txt\",\"cut -f1 crew.txt\",\"cut crew.txt\",\"cut -f1 nosuch\",\"awk '{print $3}' logs/system.log\",\"awk '{print $1, $3}' logs/system.log\",\"awk '{print NF}' notes.txt\",\"awk '{print}' crew.txt\",\"awk -F- '{print $2}' logs/crane.log\",\"awk -F : '{print $1}' logs/system.log\",\"awk\",\"awk 'BEGIN{x=1}' crew.txt\",\"awk '{print $1}' nosuch\",\"awk '{print $3}' logs/system.log | sort | uniq -c | sort -rn\",\"sed 's/Otto/Otis/' crew.txt\",\"sed 's/a/A/g' crew.txt\",\"sed -e 's/[0-9]+/N/' notes.txt\",\"sed 's/\\\\(Gus\\\\)/[\\\\1]/' crew.txt\",\"cat notes.txt | sed 's/containers/boxes/'\",\"cp crew.txt crew2.txt\",\"sed -i 's/Gus/Augustus/g' crew2.txt\",\"cat crew2.txt\",\"sed\",\"sed 'y/a/b/' crew.txt\",\"sed 's/a/b' crew.txt\",\"sed 's/(/x/' crew.txt\",\"sed -i 's/a/b/'\",\"sed -i 's/a/b/' nosuch\",\"sed 's/a/b/' nosuch\"],\"setup\":{},\"unlocked\":false,\"exported\":[\"LS_COLORS\"],\"vars\":{},\"functions\":{},\"aliases\":{\"ls\":\"ls --color=auto\",\"grep\":\"grep --color=auto\",\"fgrep\":\"fgrep --color=auto\",\"egrep\":\"egrep --color=auto\",\"ll\":\"ls -alF\",\"la\":\"ls -A\",\"l\":\"ls -CF\",\"alert\":\"notify-send --urgency=low -i \\\"$([ $? = 0 ] && echo terminal || echo error)\\\" \\\"$(history|tail -n1|sed -e 's/^\\\\s*[0-9]\\\\+\\\\s*//;s/[;&|]\\\\s*alert$//')\\\"\"},\"options\":{\"histappend\":true,\"checkwinsize\":true}}"
 }

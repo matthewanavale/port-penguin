@@ -1,0 +1,76 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "quote-single",
+      "kind": "script",
+      "feature": "quote: single",
+      "input": [
+        "echo 'a  b $HOME \\n \"q\"'"
+      ],
+      "stdout": "a  b $HOME \\n \"q\"\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "quote-double",
+      "kind": "script",
+      "feature": "quote: double",
+      "input": [
+        "x=1",
+        "echo \"a  b $x \\$x \\\" \\\\ \\n `echo bt`\""
+      ],
+      "stdout": "a  b 1 $x \" \\ \\n bt\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "quote-dollar-single",
+      "kind": "script",
+      "feature": "quote: $'...'",
+      "input": [
+        "echo $'tab:\\there\\nnl\\x41\\101\\u00e9\\\\ \\''"
+      ],
+      "stdout": "tab:\there\nnlAAé\\ '\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "quote-backslash",
+      "kind": "script",
+      "feature": "quote: backslash",
+      "input": [
+        "echo a\\ b \\$HOME \\\\ \\\"q\\\"",
+        "echo one \\",
+        "two"
+      ],
+      "stdout": "a b $HOME \\ \"q\"\none two\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "comment-line",
+      "kind": "script",
+      "feature": "comment",
+      "input": [
+        "# only a comment",
+        "echo after"
+      ],
+      "stdout": "after\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "comment-inline",
+      "kind": "script",
+      "feature": "comment: inline",
+      "input": [
+        "echo hi # a note",
+        "echo \"# not\" '# not' a#b"
+      ],
+      "stdout": "hi\n# not # not a#b\n",
+      "stderr": "",
+      "code": 0
+    }
+  ]
+}

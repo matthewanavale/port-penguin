@@ -1,25 +1,38 @@
-// The game engine: run a command line, check tasks, complete a word, and
-// the panel actions. No DOM access (D9). Ported from index.html:1405-1408,
-// :1448-1495, :1520-1547, :1563-1568 at 5e96ce5.
+// The game engine: run an input, check tasks, complete a word, and the panel
+// actions. No DOM access (D9). The shell is the bash interpreter of
+// src/engine/shell (D3); the prompt shell is backed by the saved state (D13).
 import { imgName, REG } from "./docker";
-import { E, esc } from "./helpers";
-import type { Ctx, Res } from "./helpers";
-import { CMDS } from "./linux";
+import { esc } from "./helpers";
+import { CMDS, createHost, screen } from "./linux";
 import { CH, M, rankFor } from "./missions";
 import { htmlLine, textLine } from "./output";
 import type { OutLine, Run } from "./output";
-import { get, disp } from "./paths";
-import { runPipeline } from "./pipeline";
+import { disp, get } from "./paths";
 import { sha256 } from "./sha256";
-import { fresh, HOST, load, save, setState } from "./state";
+import { BUILTINS } from "./shell/builtins";
+import { analyze, variableNames } from "./shell/complete";
+import {
+  cloneVars,
+  Context,
+  HOME,
+  HOST,
+  reviveVars,
+  termCols,
+} from "./shell/context";
+import { Interp } from "./shell/interp";
+import type { Chunk, CmdFn, Ctx } from "./shell/io";
+import { parseFull } from "./shell/parser";
+import { readText } from "./shell/redirect";
+import { nul } from "./nullmap";
+import { RC_KEY, fresh, load, save, setState } from "./state";
 import type { SaveStorage, State } from "./state";
-import { tokenize, tokenizeChains } from "./tokenizer";
 
 export { CH, M, RANKS, rankFor } from "./missions";
 export type { Chapter, Mission } from "./missions";
 export { sha256 } from "./sha256";
-export { SAVE_KEY } from "./state";
+export { RC_KEY, SAVE_KEY } from "./state";
 export type { SaveStorage, State } from "./state";
+export type { Chunk } from "./shell/io";
 
 /* ============================================================
    INSTRUCTOR PASSWORD for hints, skipping and jumping.
@@ -40,6 +53,11 @@ export type EngineEvent =
 export interface ExecResult {
   /** Output after the command, without the echoed prompt line. */
   lines: OutLine[];
+  /**
+   * What the input wrote, in order, each piece marked stdout or stderr
+   * (D24). The learner hints and the game notes (D12) are not in it.
+   */
+  chunks: Chunk[];
   /** True when the command cleared the screen; `lines` is then only what came after. */
   cleared: boolean;
   events: EngineEvent[];
@@ -59,9 +77,16 @@ export interface Engine {
   readonly resumed: boolean;
   /** Sets up the current task, then saves. Gives the setup alert, if any. */
   start(): OutLine[];
+  /** Runs one complete input. An incomplete input runs nothing and keeps the `> ` prompt. */
   execute(line: string): ExecResult;
+  /** True when `text` is a whole input; false when bash would show `> ` (AC1). */
+  isComplete(text: string): boolean;
+  /** Ctrl-C at the prompt or at `> `: drops the kept input and sets `$?` to 130. */
+  cancelInput(): void;
+  /** The terminal width in columns, for `COLUMNS` and `ls` (D23). */
+  setColumns(cols: number): void;
   complete(value: string, cursor: number): Completion;
-  /** The prompt, as runs. */
+  /** The prompt, as runs: `> ` while an input is incomplete. */
   prompt(): Run[];
   skip(): OutLine[];
   jump(index: number): OutLine[];
@@ -96,14 +121,235 @@ const DSUB = [
   "version",
 ];
 
+const KEYBOARD_HINT =
+  "port-penguin: keyboard input comes in a later update; use a pipe or < FILE";
+const NOT_FOUND_HINT = "Type help to see what this terminal knows.";
+
+/** The prompt shell: cwd, `oldpwd`, and `$?` live in the saved state (D13). */
+class PromptContext extends Context {
+  constructor(private readonly st: () => State) {
+    super();
+  }
+  override get cwd(): string {
+    return this.st().cwd;
+  }
+  override set cwd(v: string) {
+    this.st().cwd = v;
+  }
+  override get oldpwd(): string {
+    return this.st().oldpwd;
+  }
+  override set oldpwd(v: string) {
+    this.st().oldpwd = v;
+  }
+  override get lastCode(): number {
+    return this.st().lastCode;
+  }
+  override set lastCode(v: number) {
+    this.st().lastCode = v;
+  }
+}
+
+/** A word after which bash joins the next history line with a space, not `; `. */
+const OPENER = /(^|[\s;&|({])(then|do|else|elif|if|while|until|\{|\()$|[;&|]$/;
+
+/** Joins the lines of one input for the history, as bash `cmdhist` does. */
+function historyText(text: string): string {
+  const lines = text.split("\n");
+  let out = lines[0].trim();
+  for (let i = 1; i < lines.length; i++) {
+    const next = lines[i];
+    const slashes = /\\*$/.exec(out)?.[0].length ?? 0;
+    if (slashes % 2 === 1) {
+      out = out.slice(0, -1) + next;
+      continue;
+    }
+    const r = parseFull(out);
+    const open = r.status === "incomplete" && r.kind === "quote";
+    const heredoc =
+      r.status === "incomplete" && r.kind === "eof" && /<<-?\s*\S/.test(out);
+    if (open || heredoc) out += "\n" + next;
+    else if (OPENER.test(out)) out += " " + next.trim();
+    else out += "; " + next.trim();
+  }
+  return out;
+}
+
+/** Output lines: one for each run of same-stream text (D24); engine HTML stays styled. */
+function chunkLines(chunks: Chunk[]): OutLine[] {
+  const out: OutLine[] = [];
+  let buf = "";
+  let stream: Chunk["stream"] | null = null;
+  const flush = () => {
+    if (stream !== null)
+      out.push(textLine(buf, stream === "stderr" ? "err" : undefined));
+    buf = "";
+    stream = null;
+  };
+  for (const c of chunks) {
+    if (c.html !== undefined) {
+      flush();
+      out.push(
+        htmlLine(
+          c.html.replace(/\n$/, ""),
+          c.stream === "stderr" ? "err" : undefined,
+        ),
+      );
+      continue;
+    }
+    if (stream !== c.stream) {
+      flush();
+      stream = c.stream;
+    }
+    buf += c.text;
+  }
+  flush();
+  return out;
+}
+
 export function createEngine(opts: { storage: SaveStorage }): Engine {
   const storage = opts.storage;
   const loaded = load(storage);
   let s: State = loaded || fresh();
   const use = () => setState(s);
   use();
+  termCols.cols = 80;
 
-  const persist = () => save(storage, s);
+  /** Where the last `clear` stood in the chunk list of the input. */
+  let clearAt = 0;
+  const host = createHost({
+    history: () => s.hist,
+    clearHistory: () => {
+      s.hist.length = 0;
+    },
+  });
+  const clearCmd: CmdFn = (argv, sh, io) => {
+    const code = CMDS.clear(argv, sh, io);
+    clearAt = sh.chunks.length;
+    return code;
+  };
+  for (const k of ["clear", "/usr/bin/clear", "/bin/clear"])
+    host.commands[k] = clearCmd;
+
+  const pctx = new PromptContext(() => s);
+  const interp = new Interp(host, pctx);
+  /** Variables that `~/.bashrc` set. They are not saved: it sets them again at start. */
+  let rcOwned: Record<string, string> = nul();
+  let rcDone = false;
+  let pending = false;
+  let saveFailed = false;
+
+  /** Fills the prompt context from the saved state (D13). */
+  function hydrate(c: Context): void {
+    c.env = nul(s.env);
+    c.exported = new Set(
+      Array.isArray(s.exported) ? s.exported : Object.keys(s.env),
+    );
+    c.vars = reviveVars((s.vars ?? {}) as Record<string, unknown>);
+    c.functions = nul(s.functions);
+    c.aliases = nul(s.aliases);
+    c.options = nul(s.options);
+    c.interactive = true;
+    c.src = { kind: "prompt" };
+    c.arg0 = "bash";
+    c.params = [];
+    c.frames = [];
+    c.traps = nul();
+  }
+
+  /** Writes the shell variables back to the state, which task checks read. */
+  function syncOut(): void {
+    const c = interp.ctx;
+    const env: Record<string, string> = nul();
+    for (const [k, v] of Object.entries(c.env))
+      if (rcOwned[k] !== v) env[k] = v;
+    s.env = env;
+    s.exported = [...c.exported];
+    s.vars = cloneVars(c.vars);
+    s.functions = nul(c.functions);
+    s.aliases = nul(c.aliases);
+    s.options = nul(c.options);
+  }
+
+  const blank = (): Ctx => ({ line: "", segs: [], ranExec: null, allOut: "" });
+
+  /** Runs `~/.bashrc` silently under the D19 guard. Gives the dim line, if any. */
+  function runRc(): OutLine[] {
+    rcDone = true;
+    interp.ctx = pctx;
+    interp.begin(blank());
+    const before = nul(pctx.env);
+    const text = readText(HOME + "/.bashrc");
+    let reason: string | null = null;
+    let marked: boolean;
+    try {
+      marked = !!storage.getItem(RC_KEY);
+    } catch {
+      marked = false;
+    }
+    const setMark = (on: boolean): void => {
+      try {
+        if (on) storage.setItem(RC_KEY, "1");
+        else if (storage.removeItem) storage.removeItem(RC_KEY);
+        else storage.setItem(RC_KEY, "");
+      } catch {
+        /* storage blocked: the guard cannot help, the game goes on */
+      }
+    };
+    if (marked) {
+      // The last start did not finish (a freeze that no limit could stop).
+      setMark(false);
+      reason = "the last start did not finish";
+    } else if ("text" in text) {
+      setMark(true);
+      try {
+        reason = interp.runRc(text.text);
+      } catch (e) {
+        reason = e instanceof Error ? e.message : "error";
+      }
+      setMark(false);
+    }
+    interp.ctx = pctx;
+    rcOwned = nul();
+    for (const [k, v] of Object.entries(pctx.env))
+      if (before[k] === undefined) rcOwned[k] = v;
+    interp.begin(blank());
+    return reason === null
+      ? []
+      : [
+          textLine(
+            `port-penguin: ~/.bashrc failed (${reason}); the shell started without it`,
+            "dim",
+          ),
+        ];
+  }
+
+  /** Builds the prompt shell again from the state, then runs `~/.bashrc`. */
+  function newShell(keep?: Set<string>): OutLine[] {
+    const old = pctx.env;
+    hydrate(pctx);
+    if (keep) {
+      // `exit`: only exported variables stay (D13).
+      pctx.env = nul();
+      for (const k of keep) if (old[k] !== undefined) pctx.env[k] = old[k];
+      pctx.exported = new Set(keep);
+      pctx.vars = nul();
+      pctx.functions = nul();
+      pctx.aliases = nul();
+      pctx.options = nul();
+      pctx.oldpwd = HOME;
+      pctx.cwd = HOME;
+    }
+    pending = false;
+    return runRc();
+  }
+
+  const persist = (): string | null => {
+    syncOut();
+    return save(storage, s);
+  };
+
+  hydrate(pctx);
 
   function activate(out: OutLine[]): void {
     const m = M[s.cur];
@@ -175,6 +421,23 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
     }
   }
 
+  /** Names a command word can complete to: the table, builtins, aliases, functions. */
+  const commandNames = (): string[] => {
+    const names = new Set<string>();
+    for (const k of Object.keys(host.commands))
+      if (!k.includes("/")) names.add(k);
+    for (const k of Object.keys(BUILTINS)) if (/^[a-z]/.test(k)) names.add(k);
+    for (const k of Object.keys(pctx.aliases)) names.add(k);
+    for (const k of Object.keys(pctx.functions)) names.add(k);
+    return [...names];
+  };
+
+  const isComplete = (text: string): boolean => {
+    const r = parseFull(text, { extglob: !!pctx.options.extglob });
+    pending = r.status === "incomplete";
+    return !pending;
+  };
+
   return {
     get state() {
       return s;
@@ -185,151 +448,121 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
       use();
       const out: OutLine[] = [];
       activate(out);
+      if (!rcDone) out.push(...runRc());
+      // A failed save is reported by the first command, not here.
       persist();
       return out;
     },
 
+    isComplete,
+
+    cancelInput() {
+      use();
+      pending = false;
+      pctx.lastCode = 130;
+    },
+
+    setColumns(cols: number) {
+      termCols.cols = Math.max(1, Math.floor(cols) || 80);
+    },
+
     execute(lineText: string): ExecResult {
       use();
-      let out: OutLine[] = [];
-      let cleared = false;
       const events: EngineEvent[] = [];
-      const print = (t: string | undefined, cls?: string) => {
-        if (t === undefined || t === null || t === "") return;
-        out.push(textLine(String(t), cls));
-      };
-      const t = lineText.trim();
-      if (!t) return { lines: out, cleared, events };
-      s.hist.push(t);
-      if (s.hist.length > 300) s.hist.shift();
-      const ctx: Ctx = {
-        line: t,
+      let lines: OutLine[] = [];
+      if (!rcDone) lines.push(...runRc());
+      if (!lineText.trim()) {
+        pending = false;
+        return { lines, chunks: [], cleared: false, events };
+      }
+      if (!isComplete(lineText)) {
+        // Nothing runs; the terminal draws `> ` and waits for more.
+        return { lines, chunks: [], cleared: false, events };
+      }
+      const control = String(pctx.get("HISTCONTROL") ?? "");
+      const entry = historyText(lineText);
+      const skip =
+        (/ignorespace|ignoreboth/.test(control) && /^[ \t]/.test(lineText)) ||
+        (/ignoredups|ignoreboth/.test(control) &&
+          s.hist[s.hist.length - 1] === entry);
+      if (!skip) {
+        s.hist.push(entry);
+        if (s.hist.length > 300) s.hist.shift();
+      }
+      const task: Ctx = {
+        line: lineText,
         segs: [],
         ranExec: null,
-        depth: 0,
         allOut: "",
       };
-      const toks = tokenizeChains(t);
-      if (toks.err !== undefined) {
-        print("syntax error: " + toks.err, "err");
-        s.lastCode = 2;
-      } else {
-        for (const ch of toks.chains) {
-          if (ch.cond && s.lastCode !== 0) break;
-          const tk = tokenize(ch.text);
-          if (!Array.isArray(tk)) {
-            print("syntax error: " + tk.err, "err");
-            s.lastCode = 2;
-            break;
-          }
-          if (!tk.length) continue;
-          let res: Res;
-          try {
-            res = runPipeline(tk, ctx);
-          } catch (e) {
-            res = E(
-              "Something went wrong running that: " + (e as Error).message,
-            );
-          }
-          if (res.clear) {
-            out = [];
-            cleared = true;
-          }
-          if (res.html !== undefined && res.html !== "")
-            out.push(htmlLine(res.html));
-          else print(res.out);
-          print(res.err, "err");
-          ctx.allOut += (res.out || "") + "\n";
-          s.lastCode = res.code || 0;
-        }
+      interp.ctx = pctx;
+      interp.begin(task);
+      screen.cleared = false;
+      clearAt = 0;
+      let crashed: string | null = null;
+      try {
+        interp.runLine(lineText);
+      } catch (e) {
+        crashed = e instanceof Error ? e.message : "error";
+        // The detail goes to the browser console, not to the learner.
+        console.error("port-penguin: simulator error:", e);
+        pctx.lastCode = 1;
       }
-      checkMissions(ctx, out, events);
-      persist();
-      return { lines: out, cleared, events };
+      interp.ctx = pctx;
+      const chunks = interp.chunks.slice();
+      const cleared = screen.cleared;
+      screen.cleared = false;
+      lines = chunkLines(cleared ? chunks.slice(clearAt) : chunks).concat(
+        lines,
+      );
+      if (crashed !== null)
+        lines.push(
+          textLine(
+            "That command hit a problem in the simulator. Try it again, or type help.",
+            "err",
+          ),
+        );
+      for (const n of interp.notes)
+        lines.push(textLine(n.text, n.dim ? "dim" : undefined));
+      const seen = interp.events;
+      if (seen.some((e) => e.kind === "notfound"))
+        lines.push(textLine(NOT_FOUND_HINT, "dim"));
+      if (seen.some((e) => e.kind === "stdin"))
+        lines.push(textLine(KEYBOARD_HINT, "dim"));
+      if (interp.exited !== null) {
+        const code = interp.exited;
+        syncOut();
+        lines.push(...newShell(new Set(pctx.exported)));
+        pctx.lastCode = code;
+      }
+      syncOut();
+      checkMissions(task, lines, events);
+      const failure = persist();
+      if (failure === null) saveFailed = false;
+      else if (!saveFailed) {
+        saveFailed = true;
+        lines.push(
+          textLine(
+            `port-penguin: progress could not be saved (${failure})`,
+            "dim",
+          ),
+        );
+      }
+      return { lines, chunks, cleared, events };
     },
 
     complete(v: string, pos: number): Completion {
       use();
       const before = v.slice(0, pos);
-      const word = (before.match(/(\S*)$/) || ["", ""])[1];
-      const start = pos - word.length;
-      const prev = before.slice(0, start).trim().split(/\s+/).filter(Boolean);
-      let lastSep = -1;
-      prev.forEach((w, i) => {
-        if (w === "|" || w === "&&" || w === ";") lastSep = i;
-      });
-      const words = prev.slice(lastSep + 1);
-      let cands: string[] = [],
-        dirPart = "";
-      const pick = (list: string[]) =>
-        list.filter((c) => c.startsWith(word)).map((c) => c + " ");
-      if (words.length === 0)
-        cands = Object.keys(CMDS)
-          .filter((c) => c.startsWith(word))
-          .sort()
-          .map((c) => c + " ");
-      else if (words[0] === "docker" && words.length === 1) cands = pick(DSUB);
-      else if (
-        words[0] === "docker" &&
-        words[1] === "compose" &&
-        words.length === 2
-      )
-        cands = pick(["up", "ps", "logs", "down", "stop", "start"]);
-      else if (
-        words[0] === "docker" &&
-        words[1] === "volume" &&
-        words.length === 2
-      )
-        cands = pick(["create", "ls", "rm", "inspect"]);
-      else if (
-        words[0] === "docker" &&
-        words[1] === "network" &&
-        words.length === 2
-      )
-        cands = pick([
-          "create",
-          "ls",
-          "rm",
-          "inspect",
-          "connect",
-          "disconnect",
-        ]);
-      else if (
-        words[0] === "docker" &&
-        [
-          "stop",
-          "start",
-          "restart",
-          "rm",
-          "logs",
-          "exec",
-          "inspect",
-          "kill",
-        ].includes(words[1]) &&
-        !word.includes("/")
-      )
-        cands = pick(s.dk.containers.map((c) => c.name));
-      else if (
-        words[0] === "docker" &&
-        ["rmi", "run", "tag"].includes(words[1]) &&
-        !word.includes("/") &&
-        word[0] !== "-"
-      )
-        cands = pick(
-          Array.from(
-            new Set(
-              s.dk.images
-                .map(imgName)
-                .concat(words[1] === "run" ? Object.keys(REG) : []),
-            ),
-          ),
-        );
-      else if (words[0] === "kill")
-        cands = pick(s.procs.map((p) => String(p.pid)));
-      else {
-        const sl = word.lastIndexOf("/");
-        dirPart = sl >= 0 ? word.slice(0, sl + 1) : "";
-        const pre = word.slice(sl + 1);
+      const spot = analyze(before);
+      let cands: string[] = [];
+      let dirPart = "";
+      let word: string;
+      let start: number;
+      const files = (w: string) => {
+        const sl = w.lastIndexOf("/");
+        dirPart = sl >= 0 ? w.slice(0, sl + 1) : "";
+        const pre = w.slice(sl + 1);
         const dn = get(dirPart || ".");
         if (dn && dn.t === "d")
           cands = Object.keys(dn.c)
@@ -338,6 +571,87 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
             )
             .sort()
             .map((n) => dirPart + n + (dn.c[n].t === "d" ? "/" : " "));
+      };
+      if (spot.kind === "var") {
+        word = spot.prefix;
+        start = spot.start;
+        const braced = before.slice(0, start).endsWith("{");
+        const quoted = (before.match(/(?<!\\)"/g) ?? []).length % 2 === 1;
+        const tail = braced ? "}" : quoted ? "" : " ";
+        cands = variableNames(pctx, word).map((n) => n + tail);
+      } else {
+        word = spot.word;
+        start = spot.start;
+        const words = spot.kind === "command" ? [] : spot.words;
+        const pick = (list: string[]) =>
+          list.filter((c) => c.startsWith(word)).map((c) => c + " ");
+        if (words.length === 0) {
+          if (word.includes("/")) files(word);
+          else
+            cands = commandNames()
+              .filter((c) => c.startsWith(word))
+              .sort()
+              .map((c) => c + " ");
+        } else if (words[0] === "docker" && words.length === 1)
+          cands = pick(DSUB);
+        else if (
+          words[0] === "docker" &&
+          words[1] === "compose" &&
+          words.length === 2
+        )
+          cands = pick(["up", "ps", "logs", "down", "stop", "start"]);
+        else if (
+          words[0] === "docker" &&
+          words[1] === "volume" &&
+          words.length === 2
+        )
+          cands = pick(["create", "ls", "rm", "inspect"]);
+        else if (
+          words[0] === "docker" &&
+          words[1] === "network" &&
+          words.length === 2
+        )
+          cands = pick([
+            "create",
+            "ls",
+            "rm",
+            "inspect",
+            "connect",
+            "disconnect",
+          ]);
+        else if (
+          words[0] === "docker" &&
+          [
+            "stop",
+            "start",
+            "restart",
+            "rm",
+            "logs",
+            "exec",
+            "inspect",
+            "kill",
+          ].includes(words[1]) &&
+          !word.includes("/")
+        )
+          cands = pick(s.dk.containers.map((c) => c.name));
+        else if (
+          words[0] === "docker" &&
+          ["rmi", "run", "tag"].includes(words[1]) &&
+          !word.includes("/") &&
+          word[0] !== "-"
+        )
+          cands = pick(
+            Array.from(
+              new Set(
+                s.dk.images
+                  .map(imgName)
+                  .concat(words[1] === "run" ? Object.keys(REG) : []),
+              ),
+            ),
+          );
+        else if (words[0] === "kill")
+          cands = pick(s.procs.map((p) => String(p.pid)));
+        else files(word);
       }
       const none: Completion = { value: v, cursor: pos, listing: [] };
       if (!cands.length) return none;
@@ -357,6 +671,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
     },
 
     prompt(): Run[] {
+      if (pending) return [{ text: "> " }];
       return [
         { text: `cadet@${HOST}`, style: "pu" },
         { text: ":" },
@@ -415,6 +730,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
     reset() {
       s = fresh();
       use();
+      newShell();
       persist();
     },
   };

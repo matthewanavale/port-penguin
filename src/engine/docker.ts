@@ -3,7 +3,7 @@
 import { HELLO, NGINX_HTML, PG_ERR } from "./content";
 import { compose } from "./compose";
 import { ago, clone, E, pf, R, table } from "./helpers";
-import type { Ctx, Res } from "./helpers";
+import type { Res } from "./helpers";
 import { get, norm } from "./paths";
 import { hex, S } from "./state";
 import type { Container, Image, Mount, Network, Volume } from "./state";
@@ -527,7 +527,7 @@ function applyFormat(obj: unknown, fmt: string): string {
   return s;
 }
 
-export function docker(args: string[], ctx: Ctx): Res {
+export function docker(args: string[]): Res {
   const sub = args[0],
     a = args.slice(1);
   if (!sub || sub === "help" || sub === "--help")
@@ -556,14 +556,14 @@ Management commands:
     return R("Docker version 27.3.1, build ce12230");
   if (sub === "container") {
     if (a[0] === "ls" || a[0] === "list")
-      return docker(["ps"].concat(a.slice(1)), ctx);
+      return docker(["ps"].concat(a.slice(1)));
     if (a[0] === "prune") return prune("container", a.slice(1));
-    return docker(a, ctx);
+    return docker(a);
   }
   if (sub === "image") {
-    if (a[0] === "ls" || a[0] === "list") return docker(["images"], ctx);
+    if (a[0] === "ls" || a[0] === "list") return docker(["images"]);
     if (a[0] === "prune") return prune("image", a.slice(1));
-    return docker(a, ctx);
+    return docker(a);
   }
   switch (sub) {
     case "pull":

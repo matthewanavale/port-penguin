@@ -1,0 +1,139 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "list-semicolon",
+      "kind": "script",
+      "feature": "list: ;",
+      "input": [
+        "echo a; echo b;echo c"
+      ],
+      "stdout": "a\nb\nc\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "list-and",
+      "kind": "script",
+      "feature": "list: &&",
+      "input": [
+        "true && echo yes",
+        "false && echo no",
+        "echo $?"
+      ],
+      "stdout": "yes\n1\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "list-or",
+      "kind": "script",
+      "feature": "list: ||",
+      "input": [
+        "false || echo fallback",
+        "true || echo no"
+      ],
+      "stdout": "fallback\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "list-not",
+      "kind": "script",
+      "feature": "list: !",
+      "input": [
+        "! false; echo $?",
+        "! true; echo $?"
+      ],
+      "stdout": "0\n1\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "list-newlines",
+      "kind": "script",
+      "feature": "list: newlines",
+      "input": [
+        "echo one",
+        "",
+        "",
+        "echo two",
+        "   ",
+        "echo three"
+      ],
+      "stdout": "one\ntwo\nthree\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "list-group",
+      "kind": "script",
+      "feature": "list: { ...; }",
+      "input": [
+        "{ echo a; echo b; } | tr a-z A-Z",
+        "{ echo x; } > /dev/null",
+        "x=1; { x=2; }; echo $x"
+      ],
+      "stdout": "A\nB\n2\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "list-subshell",
+      "kind": "script",
+      "feature": "list: ( ... )",
+      "input": [
+        "x=1",
+        "(x=2; echo $x; cd /tmp; pwd)",
+        "echo $x",
+        "pwd",
+        "(exit 3); echo $?"
+      ],
+      "stdout": "2\n/tmp\n1\n/home/cadet\n3\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipeline-basic",
+      "kind": "script",
+      "feature": "pipeline",
+      "input": [
+        "printf 'b\\na\\nc\\n' | sort | head -2",
+        "echo hi | cat | cat"
+      ],
+      "stdout": "a\nb\nhi\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipeline-pipefail",
+      "kind": "script",
+      "feature": "set -o pipefail",
+      "input": [
+        "false | true; echo $?",
+        "set -o pipefail",
+        "false | true; echo $?",
+        "true | false | true; echo $?",
+        "set +o pipefail",
+        "false | true; echo $?"
+      ],
+      "stdout": "0\n1\n1\n0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipeline-pipestatus",
+      "kind": "script",
+      "feature": "PIPESTATUS",
+      "input": [
+        "true | false | true",
+        "echo ${PIPESTATUS[@]}",
+        "ls /nonexistent 2>/dev/null | cat",
+        "echo ${PIPESTATUS[0]} ${PIPESTATUS[1]}"
+      ],
+      "stdout": "0 1 0\n2 0\n",
+      "stderr": "",
+      "code": 0
+    }
+  ]
+}

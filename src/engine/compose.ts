@@ -15,7 +15,7 @@ import {
 } from "./docker";
 import { ago, E, R, table } from "./helpers";
 import type { Res } from "./helpers";
-import { base, get } from "./paths";
+import { base, cwd, get } from "./paths";
 import { S } from "./state";
 import type { Container, Image, Mount } from "./state";
 
@@ -117,7 +117,7 @@ export function compose(a: string[]): Res {
     return E("validating docker-compose.yml: services must be a mapping");
   const conf = cfg;
   const proj =
-    base(S.cwd)
+    base(cwd())
       .toLowerCase()
       .replace(/[^a-z0-9_-]/g, "") || "default";
   const svcs = conf.services as YamlMap;

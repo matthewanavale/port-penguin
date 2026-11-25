@@ -1,0 +1,255 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "redir-out",
+      "kind": "script",
+      "feature": "redirect: >",
+      "input": [
+        "echo hi > f",
+        "cat f",
+        "echo bye > f",
+        "cat f",
+        "echo none > nodir/f",
+        "echo $?"
+      ],
+      "stdout": "hi\nbye\n1\n",
+      "stderr": "/tmp/case.sh: line 5: nodir/f: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "redir-append",
+      "kind": "script",
+      "feature": "redirect: >>",
+      "input": [
+        "echo a >> f",
+        "echo b >> f",
+        "cat f"
+      ],
+      "stdout": "a\nb\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "redir-in",
+      "kind": "script",
+      "feature": "redirect: <",
+      "input": [
+        "printf 'x\\ny\\n' > f",
+        "wc -l < f",
+        "sort -r < f",
+        "cat < nofile",
+        "echo $?"
+      ],
+      "stdout": "2\ny\nx\n1\n",
+      "stderr": "/tmp/case.sh: line 4: nofile: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "redir-err",
+      "kind": "script",
+      "feature": "redirect: 2>",
+      "input": [
+        "ls /nonexistent 2> err",
+        "echo \"code=$?\"",
+        "cat err"
+      ],
+      "stdout": "code=2\nls: cannot access '/nonexistent': No such file or directory\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "redir-err-append",
+      "kind": "script",
+      "feature": "redirect: 2>>",
+      "input": [
+        "ls /nonexistent1 2>> err",
+        "ls /nonexistent2 2>> err",
+        "cat err"
+      ],
+      "stdout": "ls: cannot access '/nonexistent1': No such file or directory\nls: cannot access '/nonexistent2': No such file or directory\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "redir-dup",
+      "kind": "script",
+      "feature": "redirect: 2>&1",
+      "input": [
+        "{ echo out; echo err >&2; } 2>&1 | cat",
+        "ls /nonexistent 2>&1 | wc -l",
+        "ls /nonexistent > f 2>&1; cat f"
+      ],
+      "stdout": "out\nerr\n1\nls: cannot access '/nonexistent': No such file or directory\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "redir-both",
+      "kind": "script",
+      "feature": "redirect: &>",
+      "input": [
+        "{ echo out; echo err >&2; } &> f",
+        "cat f",
+        "echo replaced &> f",
+        "cat f"
+      ],
+      "stdout": "out\nerr\nreplaced\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "redir-both-append",
+      "kind": "script",
+      "feature": "redirect: &>>",
+      "input": [
+        "echo one &>> f",
+        "{ echo two; echo three >&2; } &>> f",
+        "cat f"
+      ],
+      "stdout": "one\ntwo\nthree\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "redir-to-stderr",
+      "kind": "script",
+      "feature": "redirect: >&2",
+      "input": [
+        "echo to-stderr >&2",
+        "echo to-stdout",
+        "echo again 1>&2"
+      ],
+      "stdout": "to-stdout\n",
+      "stderr": "to-stderr\nagain\n",
+      "code": 0
+    },
+    {
+      "id": "heredoc-unquoted",
+      "kind": "script",
+      "feature": "redirect: << unquoted",
+      "input": [
+        "x=5",
+        "cat <<EOF",
+        "value $x $(echo sub) \\$x `echo bt`",
+        "  indented",
+        "EOF",
+        "cat <<END | tr a-z A-Z",
+        "piped",
+        "END"
+      ],
+      "stdout": "value 5 sub $x bt\n  indented\nPIPED\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "heredoc-quoted",
+      "kind": "script",
+      "feature": "redirect: << quoted",
+      "input": [
+        "x=5",
+        "cat <<'EOF'",
+        "value $x $(echo sub) \\$x",
+        "EOF",
+        "cat <<\"EOF\"",
+        "dq $x",
+        "EOF"
+      ],
+      "stdout": "value $x $(echo sub) \\$x\ndq $x\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "heredoc-dash-unquoted",
+      "kind": "script",
+      "feature": "redirect: <<- unquoted",
+      "input": [
+        "x=7",
+        "cat <<-EOF",
+        "\ttabbed $x",
+        "\t\ttwo tabs",
+        "\tEOF"
+      ],
+      "stdout": "tabbed 7\ntwo tabs\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "heredoc-dash-quoted",
+      "kind": "script",
+      "feature": "redirect: <<- quoted",
+      "input": [
+        "cat <<-'EOF'",
+        "\ttabbed $x",
+        "\tEOF"
+      ],
+      "stdout": "tabbed $x\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "here-string",
+      "kind": "script",
+      "feature": "redirect: <<<",
+      "input": [
+        "cat <<< \"hello $HOME\"",
+        "tr a-z A-Z <<< word",
+        "read a b <<< '1 2'",
+        "echo $b $a"
+      ],
+      "stdout": "hello /home/cadet\nWORD\n2 1\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "dev-null",
+      "kind": "script",
+      "feature": "redirect: /dev/null",
+      "input": [
+        "echo x > /dev/null",
+        "cat < /dev/null",
+        "ls /nonexistent 2> /dev/null",
+        "echo $?",
+        "echo y &> /dev/null"
+      ],
+      "stdout": "2\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "dev-stdin",
+      "kind": "script",
+      "feature": "redirect: /dev/stdin",
+      "input": [
+        "echo hi | cat /dev/stdin"
+      ],
+      "stdout": "hi\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "dev-stdout",
+      "kind": "script",
+      "feature": "redirect: /dev/stdout",
+      "input": [
+        "echo a > /dev/stdout",
+        "echo b | tee /dev/stdout > /dev/null"
+      ],
+      "stdout": "a\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "dev-stderr",
+      "kind": "script",
+      "feature": "redirect: /dev/stderr",
+      "input": [
+        "echo a > /dev/stderr",
+        "echo b"
+      ],
+      "stdout": "b\n",
+      "stderr": "a\n",
+      "code": 0
+    }
+  ]
+}

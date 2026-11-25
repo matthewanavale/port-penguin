@@ -1,9 +1,10 @@
-// AC3 and AC5b: every golden script runs through the ported engine. For each
-// command, the plain text (colors removed), the exit code, the current
-// directory, and the task index equal the transcript recorded from the
-// legacy fixture. For each Tab press, the new line, the cursor, and the
-// candidate list are the same. After each script, the JSON the engine saved
-// under port-penguin-v2 equals the JSON the legacy fixture saved, key for key.
+// AC3, AC9: every golden script runs through the engine. For each command,
+// the plain text (colors removed), the exit code, the current directory, and
+// the task index equal the recorded transcript. For each Tab press, the new
+// line, the cursor, and the candidate list are the same. After each script,
+// the JSON the engine saved under port-penguin-v2 equals the recorded save,
+// key for key. This file only compares; `npm run golden:record` (D9 (3))
+// records through ./golden.record, which this file imports.
 //
 // Engine contract used here (src/engine/index.ts):
 //   createEngine({ storage }) -> Engine
@@ -17,7 +18,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEngine, SAVE_KEY } from "../engine/index";
 import type { OutLine } from "../engine/output";
 import { makeFakeDate, seededRandom, SEED, START_MS } from "./determinism";
-import type { Golden, GoldenStep } from "./legacyHarness";
+import type { Golden, GoldenStep } from "./golden";
+import "./golden.record";
 import { SCRIPTS } from "./scripts";
 
 const goldens = import.meta.glob<Golden>("./golden/*.json", {
@@ -31,7 +33,7 @@ const goldenFor = (name: string): Golden | undefined =>
 const plain = (lines: OutLine[]): string =>
   lines.map((l) => l.runs.map((r) => r.text).join("")).join("\n");
 
-/** A fresh ported engine with the same clock and random source as the legacy run (D15b). */
+/** A fresh engine with the same clock and random source as the recording (D15b). */
 function openEngine(saved?: string) {
   const clock = makeFakeDate(START_MS);
   vi.useFakeTimers({ toFake: ["Date"], now: clock.now() });

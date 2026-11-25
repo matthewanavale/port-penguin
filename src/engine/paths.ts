@@ -2,10 +2,30 @@
 import { f, HOME, S } from "./state";
 import type { DirNode, FsNode } from "./state";
 
+/**
+ * The folder that relative paths start from. A command runs in a shell
+ * context (D13) whose cwd can differ from the saved one (a subshell, a
+ * script), so `withCwd` sets it for the call. Outside a call it is the
+ * saved cwd.
+ */
+let cwdNow: string | null = null;
+
+export const cwd = (): string => cwdNow ?? S.cwd;
+
+export function withCwd<T>(dir: string, run: () => T): T {
+  const saved = cwdNow;
+  cwdNow = dir;
+  try {
+    return run();
+  } finally {
+    cwdNow = saved;
+  }
+}
+
 export function norm(p?: string | null): string {
   if (p === undefined || p === null) p = ".";
   if (p === "~" || p.startsWith("~/")) p = HOME + p.slice(1);
-  if (!p.startsWith("/")) p = S.cwd + "/" + p;
+  if (!p.startsWith("/")) p = cwd() + "/" + p;
   const out: string[] = [];
   for (const s of p.split("/")) {
     if (!s || s === ".") continue;

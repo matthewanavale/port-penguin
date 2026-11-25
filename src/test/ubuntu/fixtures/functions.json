@@ -1,0 +1,73 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "func-paren",
+      "kind": "script",
+      "feature": "function: f() {}",
+      "input": [
+        "greet() { echo \"hi $1 ($#)\"; }",
+        "greet bob",
+        "greet",
+        "f() ( echo subshell body )",
+        "f",
+        "nosuchfn_xyz",
+        "echo $?"
+      ],
+      "stdout": "hi bob (1)\nhi  (0)\nsubshell body\n127\n",
+      "stderr": "/tmp/case.sh: line 6: nosuchfn_xyz: command not found\n",
+      "code": 0
+    },
+    {
+      "id": "func-keyword",
+      "kind": "script",
+      "feature": "function: function f {}",
+      "input": [
+        "function f { echo \"in f $#\"; }",
+        "f a b",
+        "function g() { echo g; }",
+        "g"
+      ],
+      "stdout": "in f 2\ng\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "func-local",
+      "kind": "script",
+      "feature": "function: local",
+      "input": [
+        "x=global",
+        "f() { local x=l; echo $x; x=changed; }",
+        "f",
+        "echo $x",
+        "g() { local y; echo \"[$y]\"; }",
+        "g",
+        "local z=1",
+        "echo $?"
+      ],
+      "stdout": "l\nglobal\n[]\n1\n",
+      "stderr": "/tmp/case.sh: line 7: local: can only be used in a function\n",
+      "code": 0
+    },
+    {
+      "id": "func-return",
+      "kind": "script",
+      "feature": "function: return",
+      "input": [
+        "f() { return 3; echo no; }",
+        "f",
+        "echo $?",
+        "g() { echo a; return; }",
+        "g; echo $?",
+        "h() { false; return; }",
+        "h; echo $?",
+        "return 4",
+        "echo after"
+      ],
+      "stdout": "3\na\n0\n1\nafter\n",
+      "stderr": "/tmp/case.sh: line 8: return: can only `return' from a function or sourced script\n",
+      "code": 0
+    }
+  ]
+}

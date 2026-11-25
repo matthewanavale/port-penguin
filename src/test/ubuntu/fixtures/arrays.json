@@ -1,0 +1,109 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "array-indexed",
+      "kind": "script",
+      "feature": "array: indexed",
+      "input": [
+        "a=(x y z)",
+        "a[5]=w",
+        "echo ${a[1]} ${#a[@]} ${a[5]}",
+        "declare -p a",
+        "echo ${a} ${a[-1]}",
+        "b=([2]=two [4]=four)",
+        "declare -p b"
+      ],
+      "stdout": "y 4 w\ndeclare -a a=([0]=\"x\" [1]=\"y\" [2]=\"z\" [5]=\"w\")\nx w\ndeclare -a b=([2]=\"two\" [4]=\"four\")\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "array-assoc",
+      "kind": "script",
+      "feature": "array: associative",
+      "input": [
+        "declare -A m",
+        "m[k]=v; m[j]=u; m[x y]=sp",
+        "echo ${m[k]} ${#m[@]}",
+        "for k in \"${!m[@]}\"; do echo \"$k=${m[$k]}\"; done | sort",
+        "declare -A n=([a]=1 [b]=2)",
+        "echo ${n[b]}",
+        "echo [${n[zz]}]"
+      ],
+      "stdout": "v 3\nj=u\nk=v\nx y=sp\n2\n[]\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "array-all",
+      "kind": "script",
+      "feature": "array: ${a[@]}",
+      "input": [
+        "a=(one \"t w\" three)",
+        "for x in \"${a[@]}\"; do echo \"[$x]\"; done",
+        "for x in \"${a[*]}\"; do echo \"[$x]\"; done",
+        "echo ${a[*]}"
+      ],
+      "stdout": "[one]\n[t w]\n[three]\n[one t w three]\none t w three\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "array-keys",
+      "kind": "script",
+      "feature": "array: ${!a[@]}",
+      "input": [
+        "a=(x y)",
+        "a[7]=z",
+        "echo ${!a[@]}"
+      ],
+      "stdout": "0 1 7\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "array-length",
+      "kind": "script",
+      "feature": "array: ${#a[@]}",
+      "input": [
+        "a=(1 22 333)",
+        "echo ${#a[@]} ${#a[1]} ${#a[*]}",
+        "unset a; echo ${#a[@]}"
+      ],
+      "stdout": "3 2 3\n0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "array-append",
+      "kind": "script",
+      "feature": "array: +=",
+      "input": [
+        "a=(1)",
+        "a+=(2 3)",
+        "echo ${a[@]}",
+        "s=ab; s+=cd; echo $s",
+        "n=1; n+=2; echo $n",
+        "declare -i i=1; i+=2; echo $i"
+      ],
+      "stdout": "1 2 3\nabcd\n12\n3\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "array-slice",
+      "kind": "script",
+      "feature": "array: slice",
+      "input": [
+        "a=(0 1 2 3 4)",
+        "echo ${a[@]:1:2} ${a[@]:3} ${a[@]: -2}",
+        "set -- p q r s",
+        "echo ${@:2} ${@:2:2}"
+      ],
+      "stdout": "1 2 3 4 3 4\nq r s q r\n",
+      "stderr": "",
+      "code": 0
+    }
+  ]
+}

@@ -1,0 +1,1063 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "date-format",
+      "kind": "script",
+      "feature": "date: +FORMAT",
+      "input": [
+        "date -d @1700000000 '+%Y-%m-%d|%H:%M:%S|%a|%A|%b|%B|%j|%u|%y|%e|%p|%I|%s|%%|%Z|%z'",
+        "date -d @0 +%F",
+        "date -d @86400 '+%d/%m/%Y %T'",
+        "date +%Y | wc -c",
+        "date '+%H:%M' | grep -c ':'",
+        "date -d @1700000000",
+        "date -d @1700000000 +%c",
+        "date -d @1700000000 '+%D|%T|%R|%r|%x|%X|%U|%V|%w|%n|%t|'"
+      ],
+      "stdout": "2023-11-14|22:13:20|Tue|Tuesday|Nov|November|318|2|23|14|PM|10|1700000000|%|UTC|+0000\n1970-01-01\n02/01/1970 00:00:00\n5\n1\nTue Nov 14 22:13:20 UTC 2023\nTue Nov 14 22:13:20 2023\n11/14/23|22:13:20|22:13|10:13:20 PM|11/14/23|22:13:20|46|46|2|\n|\t|\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "date-d",
+      "kind": "script",
+      "feature": "date: -d",
+      "input": [
+        "date -d '2024-02-29' +%A",
+        "date -d '2024-01-31 +1 day' +%F",
+        "date -d '2024-03-10 12:00 +2 hours' '+%H:%M'",
+        "date -d 'invalid' 2>&1",
+        "echo code=$?",
+        "date -d '2024-01-15 10:30:45' '+%H|%M|%S'",
+        "date -d '2024-01-15 next friday' +%F",
+        "date -d '2024-01-15 3 weeks ago' +%F",
+        "date -d 'Jan 5 2020' +%F",
+        "date -d @1700000000 -u '+%H'"
+      ],
+      "stdout": "Thursday\n2024-02-01\n11:00\ndate: invalid date ‘invalid’\ncode=1\n10|30|45\n2024-01-15\n2023-12-25\n2020-01-05\n22\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "find-name",
+      "kind": "script",
+      "feature": "find: -name",
+      "input": [
+        "mkdir -p d/sub",
+        "touch d/a.txt d/b.md d/sub/c.txt d/sub/A.TXT",
+        "find d -name '*.txt' | sort",
+        "find d -iname '*.txt' | sort",
+        "find d -name 'sub'",
+        "find d -name '*.nomatch'",
+        "find d/nodir -name x",
+        "echo code=$?",
+        "find d -name a.txt -o -name b.md | sort",
+        "find d ! -name '*.txt' | sort"
+      ],
+      "stdout": "d/a.txt\nd/sub/c.txt\nd/a.txt\nd/sub/A.TXT\nd/sub/c.txt\nd/sub\ncode=1\nd/a.txt\nd/b.md\nd\nd/b.md\nd/sub\nd/sub/A.TXT\n",
+      "stderr": "find: ‘d/nodir’: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "find-type",
+      "kind": "script",
+      "feature": "find: -type",
+      "input": [
+        "mkdir -p d/sub",
+        "touch d/a d/sub/b",
+        "find d -type f | sort",
+        "find d -type d | sort",
+        "find d | sort",
+        "find d -maxdepth 1 | sort",
+        "find d -mindepth 1 -maxdepth 1 -type d"
+      ],
+      "stdout": "d/a\nd/sub/b\nd\nd/sub\nd\nd/a\nd/sub\nd/sub/b\nd\nd/a\nd/sub\nd/sub\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "find-mtime",
+      "kind": "script",
+      "feature": "find: -mtime",
+      "input": [
+        "mkdir d",
+        "touch -d '10 days ago' d/old",
+        "touch -d '3 days ago' d/mid",
+        "touch d/new",
+        "find d -type f -mtime +5",
+        "find d -type f -mtime -1",
+        "find d -type f -mtime 3",
+        "find d -type f -mtime +1 | sort",
+        "find d -type f -mmin -5",
+        "find d -type f -newer d/mid"
+      ],
+      "stdout": "d/old\nd/new\nd/mid\nd/mid\nd/old\nd/new\nd/new\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "find-size",
+      "kind": "script",
+      "feature": "find: -size",
+      "input": [
+        "printf '%02048d' 0 > big",
+        "echo hi > small",
+        "find . -maxdepth 1 -type f -size +1k -name big",
+        "find . -maxdepth 1 -type f -size -1k -name small",
+        "find . -maxdepth 1 -type f -size 2k -name big",
+        "find . -maxdepth 1 -type f -size -3 -name small",
+        "find . -maxdepth 1 -type f -size +0 -name '*i*' | sort",
+        "find . -maxdepth 1 -empty -type f; : > empty; find . -maxdepth 1 -empty -type f"
+      ],
+      "stdout": "./big\n./big\n./small\n./.inputrc\n./.profile\n./big\n./empty\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "find-delete",
+      "kind": "script",
+      "feature": "find: -delete",
+      "input": [
+        "touch x1 x2 y",
+        "mkdir -p dd/sub; touch dd/sub/z",
+        "find . -maxdepth 1 -name 'x*' -delete",
+        "ls",
+        "find dd -delete",
+        "ls",
+        "find nosuch -delete",
+        "echo code=$?"
+      ],
+      "stdout": "dd\ny\ny\ncode=1\n",
+      "stderr": "find: ‘nosuch’: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "find-exec-semicolon",
+      "kind": "script",
+      "feature": "find: -exec ;",
+      "input": [
+        "touch a b c",
+        "find . -maxdepth 1 -type f -name '[ab]' -exec echo found {} \\; | sort",
+        "find . -maxdepth 1 -type f -name c -exec echo {} {} \\;",
+        "find . -maxdepth 1 -type f -name a -exec false \\;",
+        "echo code=$?",
+        "find . -maxdepth 1 -type f -name a -exec nosuchcmd_xyz {} \\;",
+        "echo code=$?",
+        "find . -maxdepth 1 -type f -name a -exec",
+        "echo code=$?"
+      ],
+      "stdout": "found ./a\nfound ./b\n./c ./c\ncode=0\ncode=0\ncode=1\n",
+      "stderr": "find: ‘nosuchcmd_xyz’: No such file or directory\nfind: missing argument to `-exec'\n",
+      "code": 0
+    },
+    {
+      "id": "find-exec-plus",
+      "kind": "script",
+      "feature": "find: -exec +",
+      "input": [
+        "touch a b c",
+        "find . -maxdepth 1 -type f -name '[abc]' -exec echo files: {} + | tr ' ' '\\n' | sort",
+        "find . -maxdepth 1 -type f -name '[abc]' -exec ls {} + | sort",
+        "find . -maxdepth 1 -type f -name '[ab]' -exec wc -l {} +"
+      ],
+      "stdout": "./a\n./b\n./c\nfiles:\n./a\n./b\n./c\n0 ./a\n0 ./b\n0 total\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "xargs-n",
+      "kind": "script",
+      "feature": "xargs: -n",
+      "input": [
+        "printf '1\\n2\\n3\\n4\\n5\\n' | xargs -n 2 echo",
+        "echo a b | xargs echo x",
+        "printf 'a b\\n' | xargs -n 1",
+        "printf '' | xargs echo none",
+        "printf 'a\\n' | xargs",
+        "printf 'q\"uote\\n' | xargs echo"
+      ],
+      "stdout": "1 2\n3 4\n5\nx a b\na\nb\nnone\na\n",
+      "stderr": "xargs: unmatched double quote; by default quotes are special to xargs unless you use the -0 option\n",
+      "code": 1
+    },
+    {
+      "id": "xargs-i",
+      "kind": "script",
+      "feature": "xargs: -I",
+      "input": [
+        "printf 'a\\nb\\n' | xargs -I {} echo item-{}",
+        "printf 'a b\\nc\\n' | xargs -I % echo '[%]'",
+        "printf 'x\\n' | xargs -I {} sh -c 'echo {}-sh'",
+        "printf 'x\\ny\\n' | xargs -I {} touch {}.t; ls"
+      ],
+      "stdout": "item-a\nitem-b\n[a b]\n[c]\nx-sh\nx.t\ny.t\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "ls-time",
+      "kind": "script",
+      "feature": "ls: -t",
+      "input": [
+        "touch -d '2024-01-03' c",
+        "touch -d '2024-01-01' a",
+        "touch -d '2024-01-02' b",
+        "ls -t",
+        "ls -t | head -1",
+        "ls -tr",
+        "ls -lt | tail -n +2 | awk '{print $NF}'"
+      ],
+      "stdout": "c\nb\na\nc\na\nb\nc\nc\nb\na\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "ls-reverse",
+      "kind": "script",
+      "feature": "ls: -r",
+      "input": [
+        "touch b a c",
+        "ls -r",
+        "ls -1r",
+        "ls -a",
+        "ls -A",
+        "ls -d */ . 2>&1"
+      ],
+      "stdout": "c\nb\na\nc\nb\na\n.\n..\n.bash_logout\n.bashrc\n.inputrc\n.profile\na\nb\nc\n.bash_logout\n.bashrc\n.inputrc\n.profile\na\nb\nc\nls: cannot access '*/': No such file or directory\n.\n",
+      "stderr": "",
+      "code": 2
+    },
+    {
+      "id": "ls-size",
+      "kind": "script",
+      "feature": "ls: -S",
+      "input": [
+        "printf 'aaaa' > big",
+        "printf 'a' > small",
+        "printf 'aa' > mid",
+        "ls -S",
+        "ls -Sr",
+        "ls -lS | tail -n +2 | awk '{print $5, $NF}'",
+        "ls -lh big",
+        "ls -la | tail -n +2 | awk '{print $1, $NF}'"
+      ],
+      "stdout": "big\nmid\nsmall\nsmall\nmid\nbig\n4 big\n2 mid\n1 small\n-rw-r--r-- 1 cadet cadet 4 Nov 25 02:49 big\ndrwxr-x--- .\ndrwxr-xr-x ..\n-rw-r--r-- .bash_logout\n-rw-r--r-- .bashrc\n-rw-r--r-- .inputrc\n-rw-r--r-- .profile\n-rw-r--r-- big\n-rw-r--r-- mid\n-rw-r--r-- small\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "tail-plus",
+      "kind": "script",
+      "feature": "tail: -n +N",
+      "input": [
+        "seq 1 5 > n",
+        "tail -n +3 n",
+        "tail -n 2 n",
+        "tail -2 n",
+        "tail -n +1 n | wc -l",
+        "tail -n 0 n",
+        "tail -n +9 n",
+        "tail nofile",
+        "echo code=$?",
+        "tail -c 4 n | od -c | head -1"
+      ],
+      "stdout": "3\n4\n5\n4\n5\n4\n5\n5\ncode=1\n0000000   4  \\n   5  \\n\n",
+      "stderr": "tail: cannot open 'nofile' for reading: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "head-minus",
+      "kind": "script",
+      "feature": "head: -n -N",
+      "input": [
+        "seq 1 5 > n",
+        "head -n -2 n",
+        "head -n 2 n",
+        "head -2 n",
+        "head -n -9 n",
+        "head -n 0 n",
+        "head -c 3 n | od -c | head -1",
+        "head nofile",
+        "echo code=$?"
+      ],
+      "stdout": "1\n2\n3\n1\n2\n1\n2\n0000000   1  \\n   2\ncode=1\n",
+      "stderr": "head: cannot open 'nofile' for reading: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "seq-cmd",
+      "kind": "script",
+      "feature": "seq",
+      "input": [
+        "seq 3",
+        "seq 2 4",
+        "seq 1 2 7",
+        "seq 5 -2 1",
+        "seq -s, 3",
+        "seq -w 8 11",
+        "seq 0.5 0.5 2",
+        "seq 0",
+        "seq",
+        "seq a",
+        "seq 1 0 3"
+      ],
+      "stdout": "1\n2\n3\n2\n3\n4\n1\n3\n5\n7\n5\n3\n1\n1,2,3\n08\n09\n10\n11\n0.5\n1.0\n1.5\n2.0\n",
+      "stderr": "seq: missing operand\nTry 'seq --help' for more information.\nseq: invalid floating point argument: ‘a’\nTry 'seq --help' for more information.\nseq: invalid Zero increment value: ‘0’\nTry 'seq --help' for more information.\n",
+      "code": 1
+    },
+    {
+      "id": "basename-cmd",
+      "kind": "script",
+      "feature": "basename",
+      "input": [
+        "basename /a/b/c.txt",
+        "basename /a/b/c.txt .txt",
+        "basename -s .txt /a/c.txt /b/d.txt",
+        "basename /",
+        "basename a/b/",
+        "basename -a x/y z/w",
+        "basename",
+        "basename a b c"
+      ],
+      "stdout": "c.txt\nc\nc\nd\n/\nb\ny\nw\n",
+      "stderr": "basename: missing operand\nTry 'basename --help' for more information.\nbasename: extra operand ‘c’\nTry 'basename --help' for more information.\n",
+      "code": 1
+    },
+    {
+      "id": "dirname-cmd",
+      "kind": "script",
+      "feature": "dirname",
+      "input": [
+        "dirname /a/b/c",
+        "dirname c",
+        "dirname /a/",
+        "dirname /",
+        "dirname a/b/ c/d",
+        "dirname"
+      ],
+      "stdout": "/a/b\n.\n/\n/\na\nc\n",
+      "stderr": "dirname: missing operand\nTry 'dirname --help' for more information.\n",
+      "code": 1
+    },
+    {
+      "id": "tr-cmd",
+      "kind": "script",
+      "feature": "tr",
+      "input": [
+        "echo hello | tr a-z A-Z",
+        "echo 'a  b' | tr -s ' '",
+        "echo hello | tr -d l",
+        "echo hello | tr -c 'a-h\\n' '_'",
+        "echo abc | tr abc x",
+        "echo 'a1b2' | tr -d '[:digit:]'",
+        "echo hello | tr 'a-y' 'b-z'",
+        "echo hi | tr",
+        "echo 'a b' | tr ' ' '\\n'"
+      ],
+      "stdout": "HELLO\na b\nheo\nhe___\nxxx\nab\nifmmp\na\nb\n",
+      "stderr": "tr: missing operand\nTry 'tr --help' for more information.\n",
+      "code": 0
+    },
+    {
+      "id": "cut-cmd",
+      "kind": "script",
+      "feature": "cut",
+      "input": [
+        "echo 'a:b:c' | cut -d: -f2",
+        "echo 'a:b:c' | cut -d: -f1,3",
+        "echo abcdef | cut -c2-4",
+        "echo 'a:b:c' | cut -d: -f2-",
+        "printf 'a b\\n' | cut -f1 -d' '",
+        "echo 'a:b:c' | cut -d: --complement -f2",
+        "echo abc | cut -c1,3",
+        "printf 'a\\tb\\n' | cut -f2",
+        "echo nodelim | cut -d: -f2",
+        "echo nodelim | cut -d: -s -f2",
+        "echo abc | cut"
+      ],
+      "stdout": "b\na:c\nbcd\nb:c\na\na:c\nac\nb\nnodelim\n",
+      "stderr": "cut: you must specify a list of bytes, characters, or fields\nTry 'cut --help' for more information.\n",
+      "code": 1
+    },
+    {
+      "id": "paste-cmd",
+      "kind": "script",
+      "feature": "paste",
+      "input": [
+        "printf '1\\n2\\n' > a",
+        "printf 'x\\ny\\nz\\n' > b",
+        "paste a b",
+        "paste -d, a b",
+        "paste -s a",
+        "paste -sd, b",
+        "paste a nofile",
+        "echo code=$?"
+      ],
+      "stdout": "1\tx\n2\ty\n\tz\n1,x\n2,y\n,z\n1\t2\nx,y,z\ncode=1\n",
+      "stderr": "paste: nofile: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "tee-cmd",
+      "kind": "script",
+      "feature": "tee",
+      "input": [
+        "echo hi | tee f",
+        "cat f",
+        "echo more | tee -a f > /dev/null",
+        "cat f",
+        "echo a | tee f1 f2 > /dev/null",
+        "cat f2",
+        "echo x | tee nodir/f",
+        "echo code=$?"
+      ],
+      "stdout": "hi\nhi\nhi\nmore\na\nx\ncode=1\n",
+      "stderr": "tee: nodir/f: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "awk-fields",
+      "kind": "script",
+      "feature": "awk: fields",
+      "input": [
+        "printf 'a b c\\n1 2 3\\n' | awk '{print $2}'",
+        "printf 'a b c\\n' | awk '{print $NF}'",
+        "printf 'a  b\\tc\\n' | awk '{print $3, $1}'",
+        "printf 'a b c\\n' | awk '{$2=\"X\"; print}'",
+        "printf 'a b c\\n' | awk '{print $(NF-1)}'",
+        "printf 'a b c\\n' | awk '{print $0; print $4 \"|\"}'"
+      ],
+      "stdout": "b\n2\nc\nc a\na X c\nb\na b c\n|\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "awk-fs",
+      "kind": "script",
+      "feature": "awk: -F",
+      "input": [
+        "echo 'a:b:c' | awk -F: '{print $2}'",
+        "echo 'a,b;c' | awk -F'[,;]' '{print $3}'",
+        "echo 'a:b' | awk -F: -v OFS=- '{print $1, $2}'",
+        "echo 'a b' | awk -F' ' '{print $2}'",
+        "echo 'aXXb' | awk -FXX '{print $2}'",
+        "printf 'a\\tb c\\n' | awk -F'\\t' '{print $2}'"
+      ],
+      "stdout": "b\nc\na-b\nb\nb\nb c\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "awk-pattern",
+      "kind": "script",
+      "feature": "awk: patterns",
+      "input": [
+        "printf '1\\n2\\n3\\n' | awk '$1>1'",
+        "printf 'a\\nb\\nab\\n' | awk '/b/'",
+        "printf 'a\\nb\\nc\\n' | awk 'NR==2'",
+        "printf 'a\\nb\\nc\\n' | awk 'NR>1 && NR<3'",
+        "printf 'a\\nb\\nc\\n' | awk '!/b/'",
+        "printf 'a 1\\nb 2\\n' | awk '$2==2 {print $1}'",
+        "printf 'a\\nb\\nc\\n' | awk '/a/,/b/'",
+        "printf 'x1\\ny2\\n' | awk '$0 ~ /^x/'"
+      ],
+      "stdout": "2\n3\nb\nab\nb\nb\na\nc\nb\na\nb\nx1\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "awk-print",
+      "kind": "script",
+      "feature": "awk: print",
+      "input": [
+        "echo 'a b' | awk '{print $2, $1; print $0}'",
+        "echo 'a b' | awk '{print $1 $2}'",
+        "echo 'a b' | awk '{print $1 \"-\" $2}'",
+        "echo 3 | awk '{print $1*2, $1/2, $1%2, $1^2}'",
+        "echo 'a b' | awk '{print length($0), toupper($1), substr($2,1,1)}'",
+        "echo 'a b' | awk '{print > \"/dev/stderr\"}'",
+        "echo 'ab' | awk '{n=split($0, arr, \"\"); print n, arr[1]}'"
+      ],
+      "stdout": "b a\na b\nab\na-b\n6 1.5 1 9\n3 A b\n2 a\n",
+      "stderr": "a b\n",
+      "code": 0
+    },
+    {
+      "id": "awk-printf",
+      "kind": "script",
+      "feature": "awk: printf",
+      "input": [
+        "echo 'x 3.14159' | awk '{printf \"%s=%.2f\\n\", $1, $2}'",
+        "echo '5' | awk '{printf \"%d|%5d|%-5d|%05d\\n\", $1, $1, $1, $1}'",
+        "echo 'a' | awk '{printf \"%s %s\\n\", $1, \"lit\"}'",
+        "echo 'a' | awk '{printf \"%c%c\\n\", 65, \"hello\"}'",
+        "echo '1' | awk '{printf \"no newline\"}'; echo",
+        "echo 255 | awk '{printf \"%x %o %e\\n\", $1, $1, $1}'"
+      ],
+      "stdout": "x=3.14\n5|    5|5    |00005\na lit\nAh\nno newline\nff 377 2.550000e+02\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "awk-nr",
+      "kind": "script",
+      "feature": "awk: NR",
+      "input": [
+        "printf 'a\\nb\\nc\\n' | awk '{print NR \": \" $0}'",
+        "printf 'a\\nb\\n' > f1; printf 'c\\n' > f2",
+        "awk '{print FILENAME, NR, FNR}' f1 f2",
+        "printf 'a\\nb\\n' | awk 'END{print NR}'"
+      ],
+      "stdout": "1: a\n2: b\n3: c\nf1 1 1\nf1 2 2\nf2 3 1\n2\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "awk-nf",
+      "kind": "script",
+      "feature": "awk: NF",
+      "input": [
+        "printf 'a b\\nc\\n\\nd e f\\n' | awk '{print NF}'",
+        "printf 'a b c\\n' | awk '{NF=2; print}'",
+        "printf 'a b c\\n' | awk 'NF>2'"
+      ],
+      "stdout": "2\n1\n0\n3\na b\na b c\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "awk-begin-end",
+      "kind": "script",
+      "feature": "awk: BEGIN/END",
+      "input": [
+        "printf '1\\n2\\n3\\n' | awk 'BEGIN{s=0} {s+=$1} END{print s, NR}'",
+        "awk 'BEGIN{print \"only begin\"}'",
+        "printf '1\\n2\\n' | awk 'BEGIN{print \"start\"} END{print \"end\"}'",
+        "printf 'a 1\\nb 2\\na 3\\n' | awk '{c[$1]+=$2} END{print c[\"a\"], c[\"b\"]}'",
+        "awk 'BEGIN{x=5; while(x>3){print x; x--}}'",
+        "awk 'BEGIN{printf \"%s\\n\", 1==1.0}'"
+      ],
+      "stdout": "6 3\nonly begin\nstart\nend\n4 2\n5\n4\n1\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "sed-sub",
+      "kind": "script",
+      "feature": "sed: s///",
+      "input": [
+        "echo aaa | sed 's/a/b/'",
+        "echo abc | sed 's|b|[&]|'",
+        "echo 'hello world' | sed 's/\\(hello\\) \\(world\\)/\\2 \\1/'",
+        "echo 'hello world' | sed -E 's/(hello) (world)/\\2 \\1/'",
+        "echo 'abc' | sed 's/B/x/I'",
+        "echo 'abc' | sed -e 's/a/1/' -e 's/b/2/'",
+        "echo 'a.b' | sed 's/\\./-/'",
+        "echo abc | sed 's/x/y/'",
+        "echo abc | sed 's/b/\\n/'"
+      ],
+      "stdout": "baa\na[b]c\nworld hello\nworld hello\naxc\n12c\na-b\nabc\na\nc\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "sed-sub-global",
+      "kind": "script",
+      "feature": "sed: s///g",
+      "input": [
+        "echo aaa | sed 's/a/b/g'",
+        "echo 'a b c' | sed 's/ /_/g'",
+        "echo aaa | sed 's/a/b/2'",
+        "echo aaa | sed 's/a/b/2g'",
+        "echo 'x-y-z' | sed 's/-/\\//g'",
+        "echo abc | sed 's/[ac]/X/g'",
+        "echo abc | sed 's/*/X/g'"
+      ],
+      "stdout": "bbb\na_b_c\naba\nabb\nx/y/z\nXbX\nabc\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "sed-inplace",
+      "kind": "script",
+      "feature": "sed: -i",
+      "input": [
+        "printf 'a\\nb\\n' > f",
+        "sed -i 's/a/X/' f",
+        "cat f",
+        "sed -i.bak 's/X/Y/' f",
+        "cat f f.bak",
+        "sed -i 's/q/z/' nofile",
+        "echo code=$?",
+        "sed -i '1d' f; cat f"
+      ],
+      "stdout": "X\nb\nY\nb\nX\nb\ncode=2\nb\n",
+      "stderr": "sed: can't read nofile: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "sed-quiet-print",
+      "kind": "script",
+      "feature": "sed: -n p",
+      "input": [
+        "printf 'a\\nb\\n' | sed -n '2p'",
+        "printf 'a\\nb\\n' | sed -n '/a/p'",
+        "printf 'a\\nb\\n' | sed -n 'p;p'",
+        "printf 'a\\nb\\n' | sed p",
+        "printf 'a\\nb\\n' | sed -n '$p'",
+        "printf 'a\\nb\\n' | sed -n '1!p'",
+        "printf 'a\\nb\\n' | sed -n 's/a/X/p'",
+        "printf 'a\\nb\\n' | sed -n '='"
+      ],
+      "stdout": "b\na\na\na\nb\nb\na\na\nb\nb\nb\nb\nX\n1\n2\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "sed-delete",
+      "kind": "script",
+      "feature": "sed: d",
+      "input": [
+        "printf 'a\\nb\\nc\\n' | sed '2d'",
+        "printf 'a\\nb\\nc\\n' | sed '/b/d'",
+        "printf 'a\\nb\\nc\\n' | sed '$d'",
+        "printf 'a\\nb\\nc\\n' | sed '1d;3d'",
+        "printf 'a\\n\\nb\\n' | sed '/^$/d'",
+        "printf 'a\\nb\\nc\\n' | sed '/b/!d'"
+      ],
+      "stdout": "a\nc\na\nc\na\nb\nb\na\nb\nb\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "sed-ranges",
+      "kind": "script",
+      "feature": "sed: ranges",
+      "input": [
+        "seq 1 5 | sed -n '2,4p'",
+        "seq 1 5 | sed '2,3d'",
+        "seq 1 5 | sed -n '/2/,/4/p'",
+        "seq 1 5 | sed -n '$p'",
+        "seq 1 6 | sed -n '2~2p'",
+        "seq 1 5 | sed -n '2,+1p'",
+        "seq 1 5 | sed '3,$d'",
+        "seq 1 5 | sed '2,3s/$/!/'"
+      ],
+      "stdout": "2\n3\n4\n1\n4\n5\n2\n3\n4\n5\n2\n4\n6\n2\n3\n1\n2\n1\n2!\n3!\n4\n5\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "diff-cmd",
+      "kind": "script",
+      "feature": "diff",
+      "input": [
+        "printf 'a\\nb\\n' > x",
+        "printf 'a\\nc\\n' > y",
+        "diff x y",
+        "echo code=$?",
+        "diff x x",
+        "echo code=$?",
+        "diff -u x y",
+        "diff x nofile",
+        "echo code=$?",
+        "printf 'a\\n' > z; diff x z",
+        "diff -q x y",
+        "diff <(printf 'a\\n') <(printf 'a\\nb\\n')"
+      ],
+      "stdout": "2c2\n< b\n---\n> c\ncode=1\ncode=0\n--- x\t2026-11-25 02:50:10.556514731 +0000\n+++ y\t2026-11-25 02:50:10.556514731 +0000\n@@ -1,2 +1,2 @@\n a\n-b\n+c\ncode=2\n2d1\n< b\nFiles x and y differ\n1a2\n> b\n",
+      "stderr": "diff: nofile: No such file or directory\n",
+      "code": 1
+    },
+    {
+      "id": "md5sum-cmd",
+      "kind": "script",
+      "feature": "md5sum",
+      "input": [
+        "echo hello > f",
+        "md5sum f",
+        "echo hello | md5sum",
+        "md5sum f > sums",
+        "md5sum -c sums",
+        "echo changed > f",
+        "md5sum -c sums",
+        "echo code=$?",
+        "md5sum nofile",
+        "echo code=$?",
+        "printf '' | md5sum"
+      ],
+      "stdout": "b1946ac92492d2347c6235b4d2611184  f\nb1946ac92492d2347c6235b4d2611184  -\nf: OK\nf: FAILED\ncode=1\ncode=1\nd41d8cd98f00b204e9800998ecf8427e  -\n",
+      "stderr": "md5sum: WARNING: 1 computed checksum did NOT match\nmd5sum: nofile: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "sha256sum-cmd",
+      "kind": "script",
+      "feature": "sha256sum",
+      "input": [
+        "echo hello > f",
+        "sha256sum f",
+        "echo hello | sha256sum",
+        "sha256sum f > sums",
+        "sha256sum -c sums",
+        "echo changed > f",
+        "sha256sum -c sums",
+        "echo code=$?",
+        "sha256sum nofile",
+        "echo code=$?"
+      ],
+      "stdout": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03  f\n5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03  -\nf: OK\nf: FAILED\ncode=1\ncode=1\n",
+      "stderr": "sha256sum: WARNING: 1 computed checksum did NOT match\nsha256sum: nofile: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "stat-cmd",
+      "kind": "script",
+      "feature": "stat",
+      "input": [
+        "printf 'hello\\n' > f",
+        "stat f",
+        "stat -c '%s %n %a %F' f",
+        "mkdir d",
+        "stat -c '%F %a' d",
+        "chmod 600 f; stat -c '%a %A' f",
+        "stat nofile",
+        "echo code=$?",
+        "stat -c '%U %G' f",
+        "stat d"
+      ],
+      "stdout": "  File: f\n  Size: 6         \tBlocks: 8          IO Block: 4096   regular file\nDevice: 0,171\tInode: 2607609     Links: 1\nAccess: (0644/-rw-r--r--)  Uid: ( 1000/   cadet)   Gid: ( 1000/   cadet)\nAccess: 2026-11-25 02:50:16.281879170 +0000\nModify: 2026-11-25 02:50:16.281879170 +0000\nChange: 2026-11-25 02:50:16.281879170 +0000\n Birth: 2026-11-25 02:50:16.281879170 +0000\n6 f 644 regular file\ndirectory 755\n600 -rw-------\ncode=1\ncadet cadet\n  File: d\n  Size: 4096      \tBlocks: 8          IO Block: 4096   directory\nDevice: 0,171\tInode: 2607612     Links: 2\nAccess: (0755/drwxr-xr-x)  Uid: ( 1000/   cadet)   Gid: ( 1000/   cadet)\nAccess: 2026-11-25 02:50:16.334050027 +0000\nModify: 2026-11-25 02:50:16.334050027 +0000\nChange: 2026-11-25 02:50:16.334050027 +0000\n Birth: 2026-11-25 02:50:16.334050027 +0000\n",
+      "stderr": "stat: cannot statx 'nofile': No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "du-cmd",
+      "kind": "script",
+      "feature": "du",
+      "input": [
+        "mkdir -p d/s",
+        "printf 'x' > d/a",
+        "printf 'y' > d/s/b",
+        "du d",
+        "du -s d",
+        "du -sh d",
+        "du -a d | sort -k2",
+        "du -b d/a",
+        "du -h d/a",
+        "du nofile",
+        "echo code=$?",
+        "du -sk d",
+        "du -c d/a d/s/b"
+      ],
+      "stdout": "8\td/s\n16\td\n16\td\n16K\td\n16\td\n4\td/a\n8\td/s\n4\td/s/b\n1\td/a\n4.0K\td/a\ncode=1\n16\td\n4\td/a\n4\td/s/b\n8\ttotal\n",
+      "stderr": "du: cannot access 'nofile': No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "df-cmd",
+      "kind": "script",
+      "feature": "df",
+      "input": [
+        "df -h /",
+        "df /",
+        "df -h nofile",
+        "echo code=$?",
+        "df -h / | head -1",
+        "df -P / | head -1"
+      ],
+      "stdout": "Filesystem      Size  Used Avail Use% Mounted on\noverlay        1007G   94G  863G  10% /\nFilesystem      1K-blocks     Used Available Use% Mounted on\noverlay        1055762868 97857464 904201932  10% /\ncode=1\nFilesystem      Size  Used Avail Use% Mounted on\nFilesystem     1024-blocks     Used Available Capacity Mounted on\n",
+      "stderr": "df: nofile: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "touch-d",
+      "kind": "script",
+      "feature": "touch: -d",
+      "input": [
+        "touch -d '2024-01-15 10:30:00' f",
+        "stat -c %Y f",
+        "touch -d '2024-01-15' g",
+        "stat -c %Y g",
+        "touch -d '@86400' h",
+        "stat -c %Y h",
+        "touch -d 'invalid date' i",
+        "echo code=$?",
+        "ls i 2>&1",
+        "touch -d '2024-01-15 10:30' f; stat -c %Y f"
+      ],
+      "stdout": "1705314600\n1705276800\n86400\ncode=1\nls: cannot access 'i': No such file or directory\n1705314600\n",
+      "stderr": "touch: invalid date format ‘invalid date’\n",
+      "code": 0
+    },
+    {
+      "id": "touch-t",
+      "kind": "script",
+      "feature": "touch: -t",
+      "input": [
+        "touch -t 202401151030 f",
+        "stat -c %Y f",
+        "touch -t 202401151030.45 g",
+        "stat -c %Y g",
+        "touch -t 2401151030 h",
+        "stat -c %Y h",
+        "touch -t 99 i",
+        "echo code=$?",
+        "touch -t 202401151030 existing; touch existing; ls existing"
+      ],
+      "stdout": "1705314600\n1705314645\n1705314600\ncode=1\nexisting\n",
+      "stderr": "touch: invalid date format ‘99’\n",
+      "code": 0
+    },
+    {
+      "id": "tar-create",
+      "kind": "script",
+      "feature": "tar: -c",
+      "input": [
+        "mkdir d",
+        "echo hi > d/a",
+        "tar -cf t.tar d",
+        "tar -tf t.tar",
+        "tar -cvf u.tar d",
+        "tar -cf v.tar nofile",
+        "echo code=$?",
+        "tar -c d | tar -t",
+        "tar -cf w.tar d/a d",
+        "tar -tf w.tar"
+      ],
+      "stdout": "d/\nd/a\nd/\nd/a\ncode=2\nd/\nd/a\nd/a\nd/\nd/a\n",
+      "stderr": "tar: nofile: Cannot stat: No such file or directory\ntar: Exiting with failure status due to previous errors\n",
+      "code": 0
+    },
+    {
+      "id": "tar-extract",
+      "kind": "script",
+      "feature": "tar: -x",
+      "input": [
+        "mkdir d",
+        "echo hi > d/a",
+        "tar -cf t.tar d",
+        "rm -r d",
+        "tar -xf t.tar",
+        "cat d/a",
+        "rm -r d",
+        "tar -xvf t.tar",
+        "mkdir out",
+        "tar -xf t.tar -C out",
+        "ls out/d",
+        "tar -xf nofile.tar",
+        "echo code=$?"
+      ],
+      "stdout": "hi\nd/\nd/a\na\ncode=2\n",
+      "stderr": "tar: nofile.tar: Cannot open: No such file or directory\ntar: Error is not recoverable: exiting now\n",
+      "code": 0
+    },
+    {
+      "id": "tar-list",
+      "kind": "script",
+      "feature": "tar: -t",
+      "input": [
+        "mkdir -p d/s",
+        "echo hi > d/a",
+        "echo yo > d/s/b",
+        "tar -cf t.tar d",
+        "tar -tf t.tar",
+        "tar -tvf t.tar",
+        "tar -tf t.tar d/s",
+        "tar -tf nofile.tar",
+        "echo code=$?"
+      ],
+      "stdout": "d/\nd/s/\nd/s/b\nd/a\ndrwxr-xr-x cadet/cadet       0 2026-11-25 02:50 d/\ndrwxr-xr-x cadet/cadet       0 2026-11-25 02:50 d/s/\n-rw-r--r-- cadet/cadet       3 2026-11-25 02:50 d/s/b\n-rw-r--r-- cadet/cadet       3 2026-11-25 02:50 d/a\nd/s/\nd/s/b\ncode=2\n",
+      "stderr": "tar: nofile.tar: Cannot open: No such file or directory\ntar: Error is not recoverable: exiting now\n",
+      "code": 0
+    },
+    {
+      "id": "tar-gzip",
+      "kind": "script",
+      "feature": "tar: -z",
+      "input": [
+        "mkdir d",
+        "echo hi > d/a",
+        "tar -czf t.tgz d",
+        "tar -tzf t.tgz",
+        "rm -r d",
+        "tar -xzf t.tgz",
+        "cat d/a",
+        "tar -tf t.tgz",
+        "tar -czvf u.tgz d",
+        "file -b t.tgz | cut -d, -f1"
+      ],
+      "stdout": "d/\nd/a\nhi\nd/\nd/a\nd/\nd/a\ngzip compressed data\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "tar-file",
+      "kind": "script",
+      "feature": "tar: -f",
+      "input": [
+        "mkdir d",
+        "echo hi > d/a",
+        "tar -c -f t.tar d",
+        "tar -t -f t.tar",
+        "tar --create --file=u.tar d",
+        "tar --list --file=u.tar",
+        "tar cf v.tar d; tar tf v.tar",
+        "tar -f",
+        "echo code=$?",
+        "tar",
+        "echo code=$?"
+      ],
+      "stdout": "d/\nd/a\nd/\nd/a\nd/\nd/a\ncode=64\ncode=2\n",
+      "stderr": "tar: option requires an argument -- 'f'\nTry 'tar --help' or 'tar --usage' for more information.\ntar: You must specify one of the '-Acdtrux', '--delete' or '--test-label' options\nTry 'tar --help' or 'tar --usage' for more information.\n",
+      "code": 0
+    },
+    {
+      "id": "env-cmd",
+      "kind": "script",
+      "feature": "env",
+      "input": [
+        "env | sort | grep -E '^(HOME|USER|LOGNAME|SHELL|PATH|LANG)='",
+        "A=1 env | grep '^A='",
+        "env -i A=1 env",
+        "env -u HOME env | grep -c '^HOME='",
+        "env nosuchcmd_xyz",
+        "echo code=$?",
+        "env -i /usr/bin/printenv A",
+        "export B=2; env | grep '^B='",
+        "env echo hi"
+      ],
+      "stdout": "HOME=/home/cadet\nLANG=C.UTF-8\nLOGNAME=cadet\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nSHELL=/bin/bash\nUSER=cadet\nA=1\nA=1\n0\ncode=127\nB=2\nhi\n",
+      "stderr": "env: ‘nosuchcmd_xyz’: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "printenv-cmd",
+      "kind": "script",
+      "feature": "printenv",
+      "input": [
+        "printenv HOME",
+        "printenv NOSUCH",
+        "echo code=$?",
+        "printenv HOME USER",
+        "A=1 printenv A",
+        "export B=2",
+        "printenv B",
+        "C=3",
+        "printenv C",
+        "echo code=$?",
+        "printenv | grep -c '^HOME='"
+      ],
+      "stdout": "/home/cadet\ncode=1\n/home/cadet\ncadet\n1\n2\ncode=1\n1\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "which-cmd",
+      "kind": "script",
+      "feature": "which",
+      "input": [
+        "which ls",
+        "which ls cat",
+        "which nosuch",
+        "echo code=$?",
+        "which cd",
+        "echo code=$?",
+        "which -a ls",
+        "which",
+        "echo code=$?",
+        "which bash"
+      ],
+      "stdout": "/usr/bin/ls\n/usr/bin/ls\n/usr/bin/cat\ncode=1\ncode=1\n/usr/bin/ls\n/bin/ls\ncode=1\n/usr/bin/bash\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "crontab-file",
+      "kind": "script",
+      "feature": "crontab: FILE",
+      "input": [
+        "printf '* * * * * echo hi\\n' > c",
+        "crontab c",
+        "echo code=$?",
+        "crontab -l",
+        "printf '0 5 * * 1 /bin/true\\n# comment\\n*/10 * * * * echo x\\n' > d",
+        "crontab d",
+        "crontab -l",
+        "crontab nofile",
+        "echo code=$?",
+        "printf '@daily echo hi\\nMAILTO=\"\"\\n' > e",
+        "crontab e; echo code=$?",
+        "crontab -l"
+      ],
+      "stdout": "code=0\n* * * * * echo hi\n0 5 * * 1 /bin/true\n# comment\n*/10 * * * * echo x\ncode=1\ncode=0\n@daily echo hi\nMAILTO=\"\"\n",
+      "stderr": "nofile: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "crontab-list",
+      "kind": "script",
+      "feature": "crontab: -l",
+      "input": [
+        "crontab -l",
+        "echo code=$?",
+        "printf '* * * * * echo hi\\n' > c",
+        "crontab c",
+        "crontab -l",
+        "crontab -l | wc -l",
+        "crontab -z",
+        "echo code=$?"
+      ],
+      "stdout": "code=1\n* * * * * echo hi\n1\ncode=1\n",
+      "stderr": "no crontab for cadet\ncrontab: invalid option -- 'z'\ncrontab: usage error: unrecognized option\nusage:\tcrontab [-u user] [-n] file\n\tcrontab [ -u user ] [ -i ] { -e | -l | -r }\n\n\t-h\t(displays this help message)\n\n\tfile\t(default operation is replace, per 1003.2)\n\t-n\t(dry run: checks the syntax, then bails out)\n\t-u user\t(choose the user whose crontab is touched)\n\n\t-e\t(edit user's crontab)\n\t-l\t(list user's crontab)\n\t-r\t(delete user's crontab)\n\n\t-i\t(prompt before deleting user's crontab)\n",
+      "code": 0
+    },
+    {
+      "id": "crontab-remove",
+      "kind": "script",
+      "feature": "crontab: -r",
+      "input": [
+        "crontab -r",
+        "echo code=$?",
+        "printf '* * * * * echo hi\\n' > c",
+        "crontab c",
+        "crontab -r",
+        "echo code=$?",
+        "crontab -l",
+        "echo code=$?"
+      ],
+      "stdout": "code=1\ncode=0\ncode=1\n",
+      "stderr": "no crontab for cadet\nno crontab for cadet\n",
+      "code": 0
+    },
+    {
+      "id": "crontab-invalid",
+      "kind": "script",
+      "feature": "crontab: invalid field",
+      "input": [
+        "printf '70 * * * * echo\\n' > bad",
+        "crontab bad",
+        "echo code=$?",
+        "crontab -l",
+        "printf '* 25 * * * echo\\n' > bad2",
+        "crontab bad2",
+        "printf '* * 32 * * echo\\n' > bad3",
+        "crontab bad3",
+        "printf '* * * 13 * echo\\n' > bad4",
+        "crontab bad4",
+        "printf '* * * * 8 echo\\n' > bad5",
+        "crontab bad5",
+        "printf '* * *\\n' > bad6",
+        "crontab bad6",
+        "printf '* * * * *\\n' > bad7",
+        "crontab bad7",
+        "printf 'x * * * * echo\\n' > bad8",
+        "crontab bad8",
+        "crontab -l"
+      ],
+      "stdout": "code=1\n* * * * *\n",
+      "stderr": "\"bad\":0: bad minute\nerrors in crontab file, can't install.\nno crontab for cadet\n\"bad2\":0: bad hour\nerrors in crontab file, can't install.\n\"bad3\":0: bad day-of-month\nerrors in crontab file, can't install.\n\"bad4\":0: bad month\nerrors in crontab file, can't install.\n\"bad5\":0: bad day-of-week\nerrors in crontab file, can't install.\n\"bad6\":1: bad month\nerrors in crontab file, can't install.\n\"bad8\":0: bad minute\nerrors in crontab file, can't install.\n",
+      "code": 0
+    }
+  ]
+}

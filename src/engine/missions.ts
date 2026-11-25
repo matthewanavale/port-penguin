@@ -1,7 +1,7 @@
 // Chapters, the 70 tasks, and ranks. Ported from index.html:1284-1374 at
 // 5e96ce5. The task text, the checks, and the order must not change.
 import { findImg, findNet, makeContainer, pull } from "./docker";
-import type { Ctx } from "./helpers";
+import type { Ctx } from "./shell/io";
 import { get, getDir } from "./paths";
 import { f, HOME, S } from "./state";
 import type { FileNode, Image } from "./state";

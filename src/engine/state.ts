@@ -1,6 +1,7 @@
 // Game state, the fresh state, and load and save through an injected
 // storage. Ported from index.html:188, :342-378 at 5e96ce5. The save key and
 // the saved JSON format do not change (D4).
+import { nul } from "./nullmap";
 import {
   APP,
   BROKEN_APP,
@@ -13,25 +14,36 @@ import {
   INDEX,
   MANIFEST,
   NOTES,
+  OS_RELEASE,
   SECRET,
+  SKEL_BASH_LOGOUT,
+  SKEL_BASHRC,
+  SKEL_PROFILE,
   SYSLOG,
+  USR_BIN,
   WELCOME,
 } from "./content";
+import type { VarMeta } from "./shell/context";
 
 export const HOME = "/home/cadet";
 export const HOST = "port-penguin";
 export const SAVE_KEY = "port-penguin-v2";
+/** G-SEC-1: set while `~/.bashrc` runs; a start that finds it set skips the file. */
+export const RC_KEY = "port-penguin-rc-running";
 
 export interface FileNode {
   t: "f";
   x: string;
   m: string;
   sz?: number;
+  /** Time of the last change in ms (D18). Absent: the run-1 time. */
+  mtime?: number;
 }
 export interface DirNode {
   t: "d";
   c: Record<string, FsNode>;
   m: string;
+  mtime?: number;
 }
 export type FsNode = FileNode | DirNode;
 
@@ -122,12 +134,25 @@ export interface State {
   hist: string[];
   setup: Record<string, boolean>;
   unlocked: boolean;
+  /* New optional fields (D11). A run-1 build ignores them. */
+  /** Names of exported variables (D14). */
+  exported?: string[];
+  /** Arrays and variable attributes (D14). */
+  vars?: Record<string, VarMeta>;
+  /** Function name to its source text. */
+  functions?: Record<string, string>;
+  aliases?: Record<string, string>;
+  options?: Record<string, boolean>;
+  /** The crontab of `cadet` (AC4). */
+  crontab?: string;
 }
 
 /** Where the game saves. `localStorage` fits; tests pass a Map. */
 export interface SaveStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  /** Optional. Without it, the engine writes an empty string instead. */
+  removeItem?(key: string): void;
 }
 
 /**
@@ -149,8 +174,13 @@ export function hex(n: number): string {
 
 export const d = (c: Record<string, FsNode>): DirNode => ({
   t: "d",
-  c: c,
+  c: nul(c),
   m: "rwxr-xr-x",
+});
+const dm = (m: string, c: Record<string, FsNode>): DirNode => ({
+  t: "d",
+  c: nul(c),
+  m: m,
 });
 export const f = (x: string, m?: string | null, sz?: number): FileNode => {
   const n: FileNode = { t: "f", x: x, m: m || "rw-r--r--" };
@@ -158,13 +188,22 @@ export const f = (x: string, m?: string | null, sz?: number): FileNode => {
   return n;
 };
 
+/** An executable stand-in for a simulated command, such as /usr/bin/ls (D15). */
+const usrBin = (): Record<string, FsNode> => {
+  const c: Record<string, FsNode> = nul<FsNode>();
+  for (const n of USR_BIN) c[n] = f("", "rwxr-xr-x");
+  return c;
+};
+
 function freshFS(): DirNode {
   return d({
     home: d({
-      cadet: d({
+      cadet: dm("rwxr-x---", {
         "welcome.txt": f(WELCOME),
         ".secret": f(SECRET),
-        ".bashrc": f("alias ll='ls -l'\n"),
+        ".bashrc": f(SKEL_BASHRC),
+        ".profile": f(SKEL_PROFILE),
+        ".bash_logout": f(SKEL_BASH_LOGOUT),
         "notes.txt": f(NOTES),
         "crew.txt": f(CREW),
         logs: d({ "system.log": f(SYSLOG), "crane.log": f(CRANELOG) }),
@@ -189,10 +228,10 @@ function freshFS(): DirNode {
     }),
     etc: d({
       hostname: f(HOST + "\n"),
-      "os-release": f('NAME="Penguin Linux"\nVERSION="26.04 (Harbor)"\n'),
+      "os-release": f(OS_RELEASE),
     }),
     tmp: d({ "old-cargo.log": f("2026-11-01 crate 7781 lost at sea\n") }),
-    usr: d({ bin: d({}), share: d({}) }),
+    usr: d({ bin: d(usrBin()), share: d({}) }),
     var: d({
       log: d({
         syslog: f(
@@ -258,12 +297,28 @@ export const fresh = (): State => ({
   unlocked: false,
 });
 
-export function save(storage: SaveStorage, s: State): void {
+/**
+ * Saves the game. Returns null when it worked, and the reason when it did
+ * not (storage full or blocked). The game goes on either way (D21); the
+ * caller shows the one dim line.
+ */
+export function save(storage: SaveStorage, s: State): string | null {
   try {
     storage.setItem(SAVE_KEY, JSON.stringify(s));
-  } catch {
-    // Storage full or blocked: the game goes on without saving, as before.
+    return null;
+  } catch (e) {
+    return e instanceof Error && e.message ? e.message : "storage unavailable";
   }
+}
+
+/** Gives every directory of a tree (a saved one, a clone) a prototype-less `c` map. */
+export function nulTree(n: FsNode): FsNode {
+  if (n.t !== "d") return n;
+  const c = nul<FsNode>();
+  const src = (n.c ?? {}) as Record<string, FsNode>;
+  for (const k of Object.keys(src)) c[k] = nulTree(src[k]);
+  n.c = c;
+  return n;
 }
 
 export function load(storage: SaveStorage): State | null {
@@ -271,8 +326,10 @@ export function load(storage: SaveStorage): State | null {
     const r = storage.getItem(SAVE_KEY);
     if (r) {
       const o = JSON.parse(r) as Partial<State> | null;
-      if (o && o.fs && o.dk && o.procs && Array.isArray(o.done))
+      if (o && o.fs && o.dk && o.procs && Array.isArray(o.done)) {
+        o.fs = nulTree(o.fs) as DirNode;
         return o as State;
+      }
     }
   } catch {
     // A broken save starts a fresh game, as before.

@@ -1,0 +1,70 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "skel-alias-list",
+      "kind": "prompt",
+      "feature": "skel: alias",
+      "input": [
+        "alias",
+        "type ls",
+        "type ll",
+        "alias ll"
+      ],
+      "transcript": "cadet@port-penguin:~$ alias\r\nalias alert='notify-send --urgency=low -i \"$([ $? = 0 ] && echo terminal || echo error)\" \"$(history|tail -n1|sed -e '\\''s/^\\s*[0-9]\\+\\s*//;s/[;&|]\\s*alert$//'\\'')\"'\r\nalias egrep='egrep --color=auto'\r\nalias fgrep='fgrep --color=auto'\r\nalias grep='grep --color=auto'\r\nalias l='ls -CF'\r\nalias la='ls -A'\r\nalias ll='ls -alF'\r\nalias ls='ls --color=auto'\r\ncadet@port-penguin:~$ type ls\r\nls is aliased to `ls --color=auto'\r\ncadet@port-penguin:~$ type ll\r\nll is aliased to `ls -alF'\r\ncadet@port-penguin:~$ alias ll\r\nalias ll='ls -alF'\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "skel-ls-color",
+      "kind": "prompt",
+      "feature": "skel: ls color alias",
+      "input": [
+        "touch a b c",
+        "mkdir dir",
+        "ls",
+        "ls -F",
+        "alias | grep color"
+      ],
+      "transcript": "cadet@port-penguin:~$ touch a b c\r\ncadet@port-penguin:~$ mkdir dir\r\ncadet@port-penguin:~$ ls\r\na  b  c  dir\r\ncadet@port-penguin:~$ ls -F\r\na  b  c  dir/\r\ncadet@port-penguin:~$ alias | grep color\r\nalias egrep='egrep --color=auto'\r\nalias fgrep='fgrep --color=auto'\r\nalias grep='grep --color=auto'\r\nalias ls='ls --color=auto'\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "skel-ll",
+      "kind": "prompt",
+      "feature": "skel: ll",
+      "input": [
+        "touch f",
+        "chmod +x f",
+        "mkdir d",
+        "ll",
+        "la",
+        "l"
+      ],
+      "transcript": "cadet@port-penguin:~$ touch f\r\ncadet@port-penguin:~$ chmod +x f\r\ncadet@port-penguin:~$ mkdir d\r\ncadet@port-penguin:~$ ll\r\ntotal 32\r\ndrwxr-x--- 1 cadet cadet 4096 Nov 25 02:48 ./\r\ndrwxr-xr-x 1 root  root  4096 Nov 25 02:32 ../\r\n-rw-r--r-- 1 cadet cadet  220 Mar 31  2024 .bash_logout\r\n-rw-r--r-- 1 cadet cadet 3771 Mar 31  2024 .bashrc\r\n-rw-r--r-- 1 cadet cadet   31 Nov 25 02:32 .inputrc\r\n-rw-r--r-- 1 cadet cadet  807 Mar 31  2024 .profile\r\ndrwxr-xr-x 2 cadet cadet 4096 Nov 25 02:48 d/\r\n-rwxr-xr-x 1 cadet cadet    0 Nov 25 02:48 f*\r\ncadet@port-penguin:~$ la\r\n.bash_logout  .bashrc  .inputrc  .profile  d  f\r\ncadet@port-penguin:~$ l\r\nd/  f*\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "skel-env",
+      "kind": "prompt",
+      "feature": "env",
+      "input": [
+        "env | sort",
+        "printenv | sort"
+      ],
+      "transcript": "cadet@port-penguin:~$ env | sort\r\nCOLUMNS=80\r\nHOME=/home/cadet\r\nLANG=C.UTF-8\r\nLOGNAME=cadet\r\nLS_COLORS=\r\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\r\nPWD=/home/cadet\r\nSHELL=/bin/bash\r\nSHLVL=1\r\nTERM=dumb\r\nTZ=UTC\r\nUSER=cadet\r\n_=/usr/bin/env\r\ncadet@port-penguin:~$ printenv | sort\r\nCOLUMNS=80\r\nHOME=/home/cadet\r\nLANG=C.UTF-8\r\nLOGNAME=cadet\r\nLS_COLORS=\r\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\r\nPWD=/home/cadet\r\nSHELL=/bin/bash\r\nSHLVL=1\r\nTERM=dumb\r\nTZ=UTC\r\nUSER=cadet\r\n_=/usr/bin/printenv\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "skel-interactive",
+      "kind": "prompt",
+      "feature": "param: $-",
+      "input": [
+        "echo $-",
+        "echo $0",
+        "shopt -q login_shell; echo $?",
+        "echo $HISTCONTROL",
+        "cd /tmp",
+        "pwd",
+        "cd",
+        "cd -"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo $-\r\nhimBHs\r\ncadet@port-penguin:~$ echo $0\r\nbash\r\ncadet@port-penguin:~$ shopt -q login_shell; echo $?\r\n1\r\ncadet@port-penguin:~$ echo $HISTCONTROL\r\nignoreboth\r\ncadet@port-penguin:~$ cd /tmp\r\ncadet@port-penguin:/tmp$ pwd\r\n/tmp\r\ncadet@port-penguin:/tmp$ cd\r\ncadet@port-penguin:~$ cd -\r\n/tmp\r\ncadet@port-penguin:/tmp$ "
+    }
+  ]
+}

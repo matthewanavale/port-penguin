@@ -13,7 +13,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "golden:record": "vitest run src/test/legacy.test.ts --update"
+    "golden:record": "vitest run src/test/engine.golden.test.ts --update",
+    "size": "node --experimental-strip-types src/tools/size.ts"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",

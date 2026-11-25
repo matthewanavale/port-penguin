@@ -1,0 +1,547 @@
+{
+  "fs": {
+    "t": "d",
+    "c": {
+      "home": {
+        "t": "d",
+        "c": {
+          "cadet": {
+            "t": "d",
+            "c": {
+              "welcome.txt": {
+                "t": "f",
+                "x": "Welcome to Port Penguin, dockhand! 🐧\n\nThis terminal is a sandbox. Nothing you type here can harm a real computer,\nso experiment freely.\n\nYour logbook lists one task at a time. Finish it and the next one appears.\nThere are 70 tasks, and they get harder as you go.\n\nHandy keys\n  Tab        finish a file or command name for you\n  ↑ and ↓    bring back commands you typed before\n  help       list every command this terminal knows\n  man NAME   explain one command, like: man grep\n",
+                "m": "rw-r--r--"
+              },
+              ".secret": {
+                "t": "f",
+                "x": "Psst. You found the hidden file.\n\nCaptain’s code word: BARNACLE\n\nFiles whose names start with a dot are hidden from a plain ls.\nSettings files often hide this way, like .bashrc.\n",
+                "m": "rw-r--r--"
+              },
+              ".bashrc": {
+                "t": "f",
+                "x": "alias ll='ls -l'\n",
+                "m": "rw-r--r--"
+              },
+              "notes.txt": {
+                "t": "f",
+                "x": "Shipment schedule\nMonday     40 containers of bananas\nWednesday  12 containers of rubber ducks\nFriday     1 very suspicious crate\n",
+                "m": "rw-r--r--"
+              },
+              "crew.txt": {
+                "t": "f",
+                "x": "Marina\nOtto\nGus\nPearl\nOtto\nBarney\nMarina\nSkip\nCoral\nGus\n",
+                "m": "rw-r--r--"
+              },
+              "logs": {
+                "t": "d",
+                "c": {
+                  "system.log": {
+                    "t": "f",
+                    "x": "2026-11-24 06:00:01 INFO  Harbor systems online\n2026-11-24 06:02:13 INFO  Crane 1 calibrated\n2026-11-24 06:05:47 WARN  Fog detected near pier 3\n2026-11-24 06:11:09 ERROR Crane 2 hydraulic pressure low\n2026-11-24 06:15:30 INFO  Ship “Saltwater Sally” docked at pier 1\n2026-11-24 06:21:52 INFO  Unloading started\n2026-11-24 06:24:18 ERROR Container 4471 label unreadable\n2026-11-24 06:30:00 INFO  Coffee machine refilled\n2026-11-24 06:33:41 WARN  Seagull on conveyor belt\n2026-11-24 06:40:05 ERROR Seagull stole a sandwich\n2026-11-24 06:52:26 INFO  Unloading complete\n2026-11-24 07:01:14 INFO  Ship “Knot Today” approaching\n2026-11-24 07:03:58 ERROR Gate B stuck halfway open\n2026-11-24 07:10:00 INFO  Shift change\n",
+                    "m": "rw-r--r--"
+                  },
+                  "crane.log": {
+                    "t": "f",
+                    "x": "crane-1 lift ok 18t\ncrane-2 lift ok 22t\ncrane-2 pressure low\ncrane-1 idle\n",
+                    "m": "rw-r--r--"
+                  }
+                },
+                "m": "rwxr-xr-x"
+              },
+              "projects": {
+                "t": "d",
+                "c": {
+                  "webapp": {
+                    "t": "d",
+                    "c": {
+                      "index.html": {
+                        "t": "f",
+                        "x": "<!DOCTYPE html>\n<html>\n  <head><title>Port Penguin</title></head>\n  <body><h1>Welcome to Port Penguin</h1></body>\n</html>\n",
+                        "m": "rw-r--r--"
+                      },
+                      "app.py": {
+                        "t": "f",
+                        "x": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Hello from the harbor! 🚢\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+                        "m": "rw-r--r--"
+                      },
+                      "Dockerfile": {
+                        "t": "f",
+                        "x": "# Start from a small official Python image\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+                        "m": "rw-r--r--"
+                      },
+                      "deploy.sh": {
+                        "t": "f",
+                        "x": "#!/bin/bash\n# Deploy script for the harbor website\necho \"Loading cargo...\"\necho \"Securing containers...\"\necho \"🚢 Website deployed. Nice work, dockhand!\"\n",
+                        "m": "rw-r--r--"
+                      }
+                    },
+                    "m": "rwxr-xr-x"
+                  },
+                  "legacy": {
+                    "t": "d",
+                    "c": {
+                      "old": {
+                        "t": "d",
+                        "c": {
+                          "crate-manifest.txt": {
+                            "t": "f",
+                            "x": "CRATE MANIFEST (1998)\nCrate 0001  Cargo: 300 tins of sardines\nCrate 0002  Cargo: one (1) grand piano\nCrate 0003  Cargo: classified\n",
+                            "m": "rw-r--r--"
+                          }
+                        },
+                        "m": "rwxr-xr-x"
+                      },
+                      "README": {
+                        "t": "f",
+                        "x": "Nobody remembers what this folder is for.\n",
+                        "m": "rw-r--r--"
+                      }
+                    },
+                    "m": "rwxr-xr-x"
+                  },
+                  "stack": {
+                    "t": "d",
+                    "c": {
+                      "docker-compose.yml": {
+                        "t": "f",
+                        "x": "# The harbor stack: a web server and a cache\nservices:\n  web:\n    image: nginx\n    ports:\n      - \"8081:80\"\n    depends_on:\n      - cache\n  cache:\n    image: redis\n    volumes:\n      - cache-data:/data\n\nvolumes:\n  cache-data:\n",
+                        "m": "rw-r--r--"
+                      }
+                    },
+                    "m": "rwxr-xr-x"
+                  },
+                  "broken": {
+                    "t": "d",
+                    "c": {
+                      "Dockerfile": {
+                        "t": "f",
+                        "x": "# Harbor status page\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+                        "m": "rw-r--r--"
+                      },
+                      "app.py": {
+                        "t": "f",
+                        "x": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Status: all piers operational ⚓\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+                        "m": "rw-r--r--"
+                      }
+                    },
+                    "m": "rwxr-xr-x"
+                  }
+                },
+                "m": "rwxr-xr-x"
+              },
+              "t": {
+                "t": "d",
+                "c": {
+                  "Dockerfile": {
+                    "t": "f",
+                    "x": "FROM alpine\nCMD echo plain\n",
+                    "m": "rw-r--r--"
+                  }
+                },
+                "m": "rwxr-xr-x"
+              }
+            },
+            "m": "rwxr-xr-x"
+          }
+        },
+        "m": "rwxr-xr-x"
+      },
+      "etc": {
+        "t": "d",
+        "c": {
+          "hostname": {
+            "t": "f",
+            "x": "port-penguin\n",
+            "m": "rw-r--r--"
+          },
+          "os-release": {
+            "t": "f",
+            "x": "NAME=\"Penguin Linux\"\nVERSION=\"26.04 (Harbor)\"\n",
+            "m": "rw-r--r--"
+          }
+        },
+        "m": "rwxr-xr-x"
+      },
+      "tmp": {
+        "t": "d",
+        "c": {
+          "old-cargo.log": {
+            "t": "f",
+            "x": "2026-11-01 crate 7781 lost at sea\n",
+            "m": "rw-r--r--"
+          }
+        },
+        "m": "rwxr-xr-x"
+      },
+      "usr": {
+        "t": "d",
+        "c": {
+          "bin": {
+            "t": "d",
+            "c": {},
+            "m": "rwxr-xr-x"
+          },
+          "share": {
+            "t": "d",
+            "c": {},
+            "m": "rwxr-xr-x"
+          }
+        },
+        "m": "rwxr-xr-x"
+      },
+      "var": {
+        "t": "d",
+        "c": {
+          "log": {
+            "t": "d",
+            "c": {
+              "syslog": {
+                "t": "f",
+                "x": "Nov 24 06:00:01 port-penguin systemd[1]: Started harbor.\n",
+                "m": "rw-r-----",
+                "sz": 48000000
+              },
+              "auth.log": {
+                "t": "f",
+                "x": "Nov 24 06:00:03 sshd: session opened for cadet\n",
+                "m": "rw-r-----",
+                "sz": 2100000
+              },
+              "dpkg.log": {
+                "t": "f",
+                "x": "2026-11-20 status installed docker-ce\n",
+                "m": "rw-r--r--",
+                "sz": 900000
+              }
+            },
+            "m": "rwxr-xr-x"
+          }
+        },
+        "m": "rwxr-xr-x"
+      }
+    },
+    "m": "rwxr-xr-x"
+  },
+  "cwd": "/home/cadet",
+  "oldpwd": "/home/cadet/projects/broken",
+  "env": {},
+  "procs": [
+    {
+      "pid": 1,
+      "user": "root",
+      "cpu": 0,
+      "mem": 0.3,
+      "cmd": "/sbin/init"
+    },
+    {
+      "pid": 214,
+      "user": "root",
+      "cpu": 0,
+      "mem": 0.2,
+      "cmd": "/usr/sbin/sshd -D"
+    },
+    {
+      "pid": 388,
+      "user": "root",
+      "cpu": 0.4,
+      "mem": 1.9,
+      "cmd": "/usr/bin/dockerd"
+    },
+    {
+      "pid": 1021,
+      "user": "cadet",
+      "cpu": 0.2,
+      "mem": 0.8,
+      "cmd": "harbor-radio --station 16"
+    },
+    {
+      "pid": 4242,
+      "user": "cadet",
+      "cpu": 99.1,
+      "mem": 2.3,
+      "cmd": "crane-sim --loop"
+    },
+    {
+      "pid": 5150,
+      "user": "cadet",
+      "cpu": 0,
+      "mem": 0.1,
+      "cmd": "-bash"
+    }
+  ],
+  "lastCode": 0,
+  "dk": {
+    "images": [
+      {
+        "repo": "myapp",
+        "tag": "latest",
+        "id": "82b15fe643ca",
+        "size": "156MB",
+        "created": 1795510800000,
+        "cmd": "python app.py",
+        "server": true,
+        "expose": "5000",
+        "reply": "Hello from the harbor! 🚢",
+        "files": [
+          "Dockerfile",
+          "app.py",
+          "deploy.sh",
+          "index.html"
+        ],
+        "filesText": {
+          "Dockerfile": "# Start from a small official Python image\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+          "app.py": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Hello from the harbor! 🚢\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+          "deploy.sh": "#!/bin/bash\n# Deploy script for the harbor website\necho \"Loading cargo...\"\necho \"Securing containers...\"\necho \"🚢 Website deployed. Nice work, dockhand!\"\n",
+          "index.html": "<!DOCTYPE html>\n<html>\n  <head><title>Port Penguin</title></head>\n  <body><h1>Welcome to Port Penguin</h1></body>\n</html>\n"
+        },
+        "logs": [
+          " * Serving Flask app 'app'",
+          " * Debug mode: off",
+          " * Running on all addresses (0.0.0.0)",
+          " * Running on http://127.0.0.1:5000",
+          "Press CTRL+C to quit"
+        ]
+      },
+      {
+        "repo": "myapp",
+        "tag": "3",
+        "id": "27a7d4e4c3f2",
+        "size": "156MB",
+        "created": 1795510800000,
+        "cmd": "python app.py",
+        "server": true,
+        "expose": "5000",
+        "reply": "Hello from the harbor! 🚢",
+        "files": [
+          "Dockerfile",
+          "app.py",
+          "deploy.sh",
+          "index.html"
+        ],
+        "filesText": {
+          "Dockerfile": "# Start from a small official Python image\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+          "app.py": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Hello from the harbor! 🚢\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+          "deploy.sh": "#!/bin/bash\n# Deploy script for the harbor website\necho \"Loading cargo...\"\necho \"Securing containers...\"\necho \"🚢 Website deployed. Nice work, dockhand!\"\n",
+          "index.html": "<!DOCTYPE html>\n<html>\n  <head><title>Port Penguin</title></head>\n  <body><h1>Welcome to Port Penguin</h1></body>\n</html>\n"
+        },
+        "logs": [
+          " * Serving Flask app 'app'",
+          " * Debug mode: off",
+          " * Running on all addresses (0.0.0.0)",
+          " * Running on http://127.0.0.1:5000",
+          "Press CTRL+C to quit"
+        ]
+      },
+      {
+        "repo": "myapp",
+        "tag": "1.0",
+        "id": "82b15fe643ca",
+        "size": "156MB",
+        "created": 1795510800000,
+        "cmd": "python app.py",
+        "server": true,
+        "expose": "5000",
+        "reply": "Hello from the harbor! 🚢",
+        "files": [
+          "Dockerfile",
+          "app.py",
+          "deploy.sh",
+          "index.html"
+        ],
+        "filesText": {
+          "Dockerfile": "# Start from a small official Python image\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+          "app.py": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Hello from the harbor! 🚢\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n",
+          "deploy.sh": "#!/bin/bash\n# Deploy script for the harbor website\necho \"Loading cargo...\"\necho \"Securing containers...\"\necho \"🚢 Website deployed. Nice work, dockhand!\"\n",
+          "index.html": "<!DOCTYPE html>\n<html>\n  <head><title>Port Penguin</title></head>\n  <body><h1>Welcome to Port Penguin</h1></body>\n</html>\n"
+        },
+        "logs": [
+          " * Serving Flask app 'app'",
+          " * Debug mode: off",
+          " * Running on all addresses (0.0.0.0)",
+          " * Running on http://127.0.0.1:5000",
+          "Press CTRL+C to quit"
+        ]
+      },
+      {
+        "repo": "fixed",
+        "tag": "latest",
+        "id": "fb111fb836ba",
+        "size": "156MB",
+        "created": 1795510800000,
+        "cmd": "python app.py",
+        "server": true,
+        "expose": "5000",
+        "reply": "Status: all piers operational ⚓",
+        "files": [
+          "Dockerfile",
+          "app.py"
+        ],
+        "filesText": {
+          "Dockerfile": "# Harbor status page\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install flask\nEXPOSE 5000\nCMD [\"python\", \"app.py\"]\n",
+          "app.py": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return \"Status: all piers operational ⚓\"\n\nif __name__ == \"__main__\":\n    app.run(host=\"0.0.0.0\", port=5000)\n"
+        },
+        "logs": [
+          " * Serving Flask app 'app'",
+          " * Debug mode: off",
+          " * Running on all addresses (0.0.0.0)",
+          " * Running on http://127.0.0.1:5000",
+          "Press CTRL+C to quit"
+        ]
+      },
+      {
+        "repo": "t2",
+        "tag": "latest",
+        "id": "5f58c14802ce",
+        "size": "156MB",
+        "created": 1795510800000,
+        "cmd": "echo plain",
+        "server": false,
+        "reply": null,
+        "files": [
+          "Dockerfile"
+        ],
+        "filesText": {
+          "Dockerfile": "FROM alpine\nCMD echo plain\n"
+        },
+        "logs": [
+          " * Serving Flask app 'app'",
+          " * Debug mode: off",
+          " * Running on all addresses (0.0.0.0)",
+          " * Running on http://127.0.0.1:5000",
+          "Press CTRL+C to quit"
+        ]
+      }
+    ],
+    "containers": [
+      {
+        "id": "f1cd8e4dce95",
+        "name": "app",
+        "image": "myapp",
+        "repo": "myapp",
+        "cmd": "python app.py",
+        "ports": [
+          "5000:5000"
+        ],
+        "env": [],
+        "mounts": [],
+        "networks": {
+          "bridge": "172.17.0.2"
+        },
+        "aliases": [],
+        "project": null,
+        "service": null,
+        "created": 1795510800000,
+        "started": 1795510800000,
+        "status": "exited",
+        "exit": 0,
+        "logs": [
+          " * Serving Flask app 'app'",
+          " * Debug mode: off",
+          " * Running on all addresses (0.0.0.0)",
+          " * Running on http://127.0.0.1:5000",
+          "Press CTRL+C to quit",
+          "172.17.0.1 - - [24/Nov/2026:09:00:00 +0000] \"GET / HTTP/1.1\" 200 -"
+        ],
+        "stopped": 1795510800000
+      },
+      {
+        "id": "b200a79041c9",
+        "name": "jolly_barnacle",
+        "image": "t2",
+        "repo": "t2",
+        "cmd": "echo plain",
+        "ports": [],
+        "env": [],
+        "mounts": [],
+        "networks": {
+          "bridge": "172.17.0.3"
+        },
+        "aliases": [],
+        "project": null,
+        "service": null,
+        "created": 1795510800000,
+        "started": 1795510800000,
+        "status": "exited",
+        "exit": 0,
+        "logs": [],
+        "stopped": 1795510800000
+      }
+    ],
+    "volumes": [],
+    "networks": [
+      {
+        "name": "bridge",
+        "id": "b4f16a5485f7",
+        "driver": "bridge",
+        "subnet": "172.17",
+        "next": 3
+      },
+      {
+        "name": "host",
+        "id": "a648dc235504",
+        "driver": "host"
+      },
+      {
+        "name": "none",
+        "id": "0584f0b1beb9",
+        "driver": "null"
+      }
+    ]
+  },
+  "done": [],
+  "cur": 0,
+  "hist": [
+    "cd projects/webapp",
+    "docker build",
+    "docker build -t myapp .",
+    "docker images",
+    "docker build -t myapp:2 -f Dockerfile .",
+    "docker build --tag=x .",
+    "docker build -t=myapp:3 .",
+    "docker build .",
+    "docker images",
+    "docker tag myapp myapp:1.0",
+    "docker tag",
+    "docker tag nosuch x",
+    "docker run -d --name app -p 5000:5000 myapp",
+    "curl localhost:5000",
+    "docker logs app",
+    "docker exec app ls",
+    "docker exec app cat app.py",
+    "docker exec app pwd",
+    "docker inspect app",
+    "docker inspect -f \"{{.State.Status}} {{.NetworkSettings.IPAddress}}\" app",
+    "docker inspect --format='{{json .Config.Env}}' app",
+    "docker inspect -f \"{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}\" app",
+    "docker inspect -f \"{{.Nope}} {{.State}} {{.Config.Cmd}}\" app",
+    "docker inspect myapp",
+    "docker inspect app myapp:1.0",
+    "docker inspect nosuch",
+    "docker inspect",
+    "docker stop app",
+    "docker inspect app",
+    "cd ~/projects/broken",
+    "docker build -t fixed .",
+    "sed -i 's/FORM/FROM/' Dockerfile",
+    "docker build -t fixed .",
+    "cd ~",
+    "docker build -t x projects/legacy",
+    "docker build -t x nosuchdir",
+    "mkdir t",
+    "echo \"FROM nosuchbase\" > t/Dockerfile",
+    "docker build -t t1 t",
+    "echo \"RUN echo hi\" > t/Dockerfile",
+    "docker build t",
+    "echo \"FROM alpine\" > t/Dockerfile",
+    "echo \"CMD echo plain\" >> t/Dockerfile",
+    "docker build -t t2 t",
+    "docker run t2",
+    "docker rmi myapp:2",
+    "docker image prune -f",
+    "docker images",
+    "docker stats"
+  ],
+  "setup": {},
+  "unlocked": false
+}

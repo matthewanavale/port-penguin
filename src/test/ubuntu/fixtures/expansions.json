@@ -1,0 +1,415 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "brace-list",
+      "kind": "script",
+      "feature": "expand: brace list",
+      "input": [
+        "echo {a,b,c}",
+        "echo x{1,2}y",
+        "echo {a,b}{1,2}",
+        "echo {a,{b,c}}",
+        "echo {a}"
+      ],
+      "stdout": "a b c\nx1y x2y\na1 a2 b1 b2\na b c\n{a}\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "brace-range",
+      "kind": "script",
+      "feature": "expand: brace range",
+      "input": [
+        "echo {1..5} {a..e} {5..1}",
+        "echo {1..10..3} {01..03}"
+      ],
+      "stdout": "1 2 3 4 5 a b c d e 5 4 3 2 1\n1 4 7 10 01 02 03\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "tilde",
+      "kind": "script",
+      "feature": "expand: tilde",
+      "input": [
+        "echo ~ ~/x ~cadet",
+        "cd /tmp",
+        "echo ~+ ~-",
+        "echo a~ \"~\" '~'"
+      ],
+      "stdout": "/home/cadet /home/cadet/x /home/cadet\n/tmp /home/cadet\na~ ~ ~\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-simple",
+      "kind": "script",
+      "feature": "expand: $VAR",
+      "input": [
+        "x=hi",
+        "echo $x $y end"
+      ],
+      "stdout": "hi end\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-braces",
+      "kind": "script",
+      "feature": "expand: ${VAR}",
+      "input": [
+        "x=hi",
+        "echo ${x}there $xthere"
+      ],
+      "stdout": "hithere\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-default",
+      "kind": "script",
+      "feature": "expand: ${VAR:-x}",
+      "input": [
+        "unset a",
+        "echo ${a:-d}",
+        "a=",
+        "echo ${a:-d}",
+        "a=v",
+        "echo ${a:-d}",
+        "a=",
+        "echo [${a-d}]"
+      ],
+      "stdout": "d\nd\nv\n[]\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-assign",
+      "kind": "script",
+      "feature": "expand: ${VAR:=x}",
+      "input": [
+        "unset a",
+        "echo ${a:=d}",
+        "echo $a",
+        "echo ${a:=e}"
+      ],
+      "stdout": "d\nd\nd\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-error",
+      "kind": "script",
+      "feature": "expand: ${VAR:?msg}",
+      "input": [
+        "unset a",
+        "(echo ${a:?msg})",
+        "echo code=$?",
+        "(echo ${a:?})",
+        "a=ok; echo ${a:?msg}"
+      ],
+      "stdout": "code=1\nok\n",
+      "stderr": "/tmp/case.sh: line 2: a: msg\n/tmp/case.sh: line 4: a: parameter null or not set\n",
+      "code": 0
+    },
+    {
+      "id": "var-alt",
+      "kind": "script",
+      "feature": "expand: ${VAR:+x}",
+      "input": [
+        "a=v",
+        "echo ${a:+alt}",
+        "unset a",
+        "echo \"[${a:+alt}]\""
+      ],
+      "stdout": "alt\n[]\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-length",
+      "kind": "script",
+      "feature": "expand: ${#VAR}",
+      "input": [
+        "x=hello",
+        "echo ${#x}",
+        "set -- a b c",
+        "echo ${#} ${#unset}"
+      ],
+      "stdout": "5\n3 0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-trim-prefix",
+      "kind": "script",
+      "feature": "expand: ${VAR#p}",
+      "input": [
+        "p=/a/b/c.tar.gz",
+        "echo ${p#*/}",
+        "echo ${p#/a/}"
+      ],
+      "stdout": "a/b/c.tar.gz\nb/c.tar.gz\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-trim-prefix-long",
+      "kind": "script",
+      "feature": "expand: ${VAR##p}",
+      "input": [
+        "p=/a/b/c.tar.gz",
+        "echo ${p##*/}",
+        "echo ${p##*.}"
+      ],
+      "stdout": "c.tar.gz\ngz\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-trim-suffix",
+      "kind": "script",
+      "feature": "expand: ${VAR%p}",
+      "input": [
+        "p=/a/b/c.tar.gz",
+        "echo ${p%.*}",
+        "echo ${p%/*}"
+      ],
+      "stdout": "/a/b/c.tar\n/a/b\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-trim-suffix-long",
+      "kind": "script",
+      "feature": "expand: ${VAR%%p}",
+      "input": [
+        "p=/a/b/c.tar.gz",
+        "echo ${p%%.*}",
+        "echo ${p%%/*}"
+      ],
+      "stdout": "/a/b/c\n\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-replace",
+      "kind": "script",
+      "feature": "expand: ${VAR/p/r}",
+      "input": [
+        "s=aXbXc",
+        "echo ${s/X/-}",
+        "echo ${s/X}",
+        "echo ${s/#a/A}",
+        "echo ${s/%c/C}"
+      ],
+      "stdout": "a-bXc\nabXc\nAXbXc\naXbXC\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-replace-all",
+      "kind": "script",
+      "feature": "expand: ${VAR//p/r}",
+      "input": [
+        "s=aXbXc",
+        "echo ${s//X/-}",
+        "echo ${s//X}",
+        "echo ${s//[abc]/.}"
+      ],
+      "stdout": "a-b-c\nabc\n.X.X.\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-substring",
+      "kind": "script",
+      "feature": "expand: ${VAR:o:l}",
+      "input": [
+        "s=abcdef",
+        "echo ${s:2} ${s:2:3} ${s: -2} ${s:1:-1} ${s:9}"
+      ],
+      "stdout": "cdef cde ef bcde\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-upper",
+      "kind": "script",
+      "feature": "expand: ${VAR^^}",
+      "input": [
+        "s=hello",
+        "echo ${s^^} ${s^} ${s^^[l]}"
+      ],
+      "stdout": "HELLO Hello heLLo\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "var-lower",
+      "kind": "script",
+      "feature": "expand: ${VAR,,}",
+      "input": [
+        "s=HELLO",
+        "echo ${s,,} ${s,} ${s,,[L]}"
+      ],
+      "stdout": "hello hELLO HEllO\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "arith",
+      "kind": "script",
+      "feature": "expand: $(( ))",
+      "input": [
+        "echo $((1+2*3)) $((2**10)) $((7/2)) $((-7%3)) $((1<<4))",
+        "echo $((5>3 && 2<1)) $((x=4, x+1)) $((0x1f)) $((010))",
+        "y=3; echo $((y++)) $y $((++y)) $((y*=2))",
+        "echo $((1/0))",
+        "echo after"
+      ],
+      "stdout": "7 1024 3 -1 16\n0 5 31 8\n3 4 5 10\nafter\n",
+      "stderr": "/tmp/case.sh: line 4: 1/0: division by 0 (error token is \"0\")\n",
+      "code": 0
+    },
+    {
+      "id": "cmd-subst",
+      "kind": "script",
+      "feature": "expand: $( )",
+      "input": [
+        "echo \"$(echo a; echo b)\"",
+        "echo $(echo a  b)",
+        "x=$(printf 'a\\n\\n')",
+        "echo \"[$x]\"",
+        "echo $(( $(echo 2) + 1 ))",
+        "echo $(false); echo $?",
+        "echo $(echo $(echo nested))"
+      ],
+      "stdout": "a\nb\na b\n[a]\n3\n\n0\nnested\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "backticks",
+      "kind": "script",
+      "feature": "expand: backticks",
+      "input": [
+        "echo `echo hi`",
+        "echo \"`echo a b`\"",
+        "echo `echo \\`echo nested\\``"
+      ],
+      "stdout": "hi\na b\nnested\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "procsub-in",
+      "kind": "script",
+      "feature": "expand: <( )",
+      "input": [
+        "diff <(echo a) <(echo b)",
+        "echo code=$?",
+        "cat <(echo hi)",
+        "while read -r l; do echo \"[$l]\"; done < <(printf 'x\\ny\\n')"
+      ],
+      "stdout": "1c1\n< a\n---\n> b\ncode=1\nhi\n[x]\n[y]\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "procsub-out",
+      "kind": "script",
+      "feature": "expand: >( )",
+      "input": [
+        "echo data | tee >(tr a-z A-Z > up.txt) > /dev/null",
+        "sleep 0.3",
+        "cat up.txt"
+      ],
+      "stdout": "DATA\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "word-split",
+      "kind": "script",
+      "feature": "expand: word splitting IFS",
+      "input": [
+        "x=\"a b  c\"",
+        "for w in $x; do echo \"[$w]\"; done",
+        "IFS=:",
+        "y=a:b::c",
+        "for w in $y; do echo \"[$w]\"; done",
+        "IFS=",
+        "for w in $x; do echo \"[$w]\"; done",
+        "IFS=$' \\t\\n'",
+        "for w in \"$x\"; do echo \"[$w]\"; done"
+      ],
+      "stdout": "[a]\n[b]\n[c]\n[a]\n[b]\n[]\n[c]\n[a b  c]\n[a b  c]\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "glob-star",
+      "kind": "script",
+      "feature": "expand: glob *",
+      "input": [
+        "touch a.txt b.txt c.md .hidden",
+        "echo *",
+        "echo *.txt",
+        "echo nomatch*",
+        "echo \"*\"",
+        "echo .h*"
+      ],
+      "stdout": "a.txt b.txt c.md\na.txt b.txt\nnomatch*\n*\n.hidden\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "glob-question",
+      "kind": "script",
+      "feature": "expand: glob ?",
+      "input": [
+        "touch a1 a2 b1",
+        "echo a?",
+        "echo ?1",
+        "echo a??"
+      ],
+      "stdout": "a1 a2\na1 b1\na??\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "glob-class",
+      "kind": "script",
+      "feature": "expand: glob [...]",
+      "input": [
+        "touch a1 a2 b1 c1",
+        "echo [ab]1",
+        "echo [!a]1",
+        "echo [a-b]*",
+        "echo [[:digit:]]*"
+      ],
+      "stdout": "a1 b1\nb1 c1\na1 a2 b1\n[[:digit:]]*\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "glob-ext",
+      "kind": "script",
+      "feature": "expand: extglob",
+      "input": [
+        "shopt -s extglob",
+        "touch a.txt b.txt c.md",
+        "echo !(*.txt)",
+        "echo @(a|b).txt",
+        "echo +(a|b)*",
+        "echo ?(a).txt",
+        "echo *(a|c)*"
+      ],
+      "stdout": "c.md\na.txt b.txt\na.txt b.txt\na.txt\na.txt b.txt c.md\n",
+      "stderr": "",
+      "code": 0
+    }
+  ]
+}
