@@ -442,3 +442,90 @@ describe("bindExtraKeys (AC8, G-A11Y-1)", () => {
     expect(t.key).not.toHaveBeenCalled();
   });
 });
+
+// AC1, AC10: continuation input. The terminal keeps lines until
+// `engine.isComplete` says the input is complete, then calls `execute` with
+// the lines joined by a newline. It always draws `engine.prompt()`.
+describe("continuation input (AC1, AC10)", () => {
+  const plainWritten = (x: Fake) =>
+    // eslint-disable-next-line no-control-regex
+    x.written.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+
+  it("shows > twice for an if over three lines, then the output", () => {
+    const { x, execute } = setup();
+    x.dataHandler?.("if true; then\r");
+    x.dataHandler?.("echo seen\r");
+    x.dataHandler?.("fi\r");
+    const shown = plainWritten(x);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith("if true; then\necho seen\nfi");
+    const tail = shown.slice(shown.lastIndexOf("if true; then"));
+    expect(tail.match(/(^|\n)> /g)?.length).toBe(2);
+    expect(tail).toContain("seen");
+    expect(tail.indexOf("seen")).toBeGreaterThan(tail.lastIndexOf("> "));
+  });
+
+  it("does not call execute while the input is incomplete", () => {
+    const { x, execute } = setup();
+    x.dataHandler?.("echo 'open\r");
+    x.dataHandler?.("close'\r");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith("echo 'open\nclose'");
+  });
+
+  it("Ctrl-C at > drops the lines, prints ^C, and sets $? to 130", () => {
+    const { x, engine, execute } = setup();
+    const cancel = vi.spyOn(engine, "cancelInput");
+    x.dataHandler?.("if true; then\r");
+    x.dataHandler?.("\x03");
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(plainWritten(x)).toContain("^C");
+    expect(engine.state.lastCode).toBe(130);
+    x.dataHandler?.("echo $?\r");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith("echo $?");
+  });
+
+  it("Ctrl-C at the main prompt prints ^C and sets $? to 130", () => {
+    const { x, engine } = setup();
+    x.dataHandler?.("\x03");
+    expect(plainWritten(x)).toContain("^C");
+    expect(engine.state.lastCode).toBe(130);
+  });
+
+  it("passes the column count to the engine as COLUMNS", () => {
+    const { x, engine } = setup();
+    x.cols = 40;
+    const res = engine.execute("echo $COLUMNS");
+    expect(res.chunks.map((c) => c.text).join("")).toBe("80\n");
+    x.dataHandler?.("echo $COLUMNS\r");
+    expect(plainWritten(x)).toContain("40");
+  });
+
+  it("shows the save-failure line once when save() fails", () => {
+    document.body.innerHTML = `<section class="term"><div id="term"></div></section>`;
+    (document as unknown as { fonts: unknown }).fonts = {
+      ready: Promise.resolve(),
+    };
+    const engine = createEngine({
+      storage: {
+        getItem: () => null,
+        setItem: () => {
+          throw new Error("quota full");
+        },
+      },
+    });
+    engine.start();
+    createTerminal({
+      container: document.getElementById("term") as HTMLElement,
+      engine,
+      intro: [],
+      onResult: vi.fn(),
+    });
+    const x = FakeTerminal.all[FakeTerminal.all.length - 1] as Fake;
+    x.dataHandler?.("pwd\r");
+    expect(plainWritten(x).match(/progress could not be saved/g)?.length).toBe(
+      1,
+    );
+  });
+});
