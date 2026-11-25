@@ -1,7 +1,8 @@
 // AC4: `tar` (GNU tar 1.35): -c -x -t with -f -v -z -C. The archive is a
-// text file: "PPTAR" and a JSON list. A gzip archive (-z) starts with the
-// two gzip magic bytes, so `file` can tell it. Archives that run 1 wrote
-// (a tree under `node`) still open.
+// text file: "PPTAR" and a JSON list. A gzip archive (-z) has the two gzip
+// magic bytes right after "PPTAR", so `file` can tell it and the task check
+// (the text starts with PPTAR) still holds. Archives that run 1 wrote (a
+// tree under `node`) still open.
 import { get, split } from "../paths";
 import { byteSize, size } from "../helpers";
 import { d as mkDir, f as mkFile } from "../state";
@@ -45,8 +46,10 @@ function decode(text: string): Member[] | null {
   let t = text;
   if (t.startsWith(GZ)) t = t.slice(2);
   if (!t.startsWith(MAGIC)) return null;
+  t = t.slice(MAGIC.length);
+  if (t.startsWith(GZ)) t = t.slice(2);
   try {
-    const raw = JSON.parse(t.slice(MAGIC.length)) as unknown[];
+    const raw = JSON.parse(t) as unknown[];
     const out: Member[] = [];
     for (const e of raw) {
       const o = e as { name?: string; node?: FsNode } & Member;
@@ -216,7 +219,7 @@ const tar: CmdFn = (argv, sh, io) => {
       flatten(name, node, members);
     }
     if (stripped) io.err.write("tar: Removing leading `/' from member names\n");
-    const text = (gzip ? GZ : "") + MAGIC + JSON.stringify(members);
+    const text = MAGIC + (gzip ? GZ : "") + JSON.stringify(members);
     if (toStdio) io.out.write(text);
     else {
       const ap = sh.abs(arch as string);

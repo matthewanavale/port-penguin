@@ -248,4 +248,5 @@ export const USR_BIN: string[] = [
   "which",
   "whoami",
   "xargs",
+  "yes",
 ];

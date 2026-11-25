@@ -1244,6 +1244,7 @@ const source: Builtin = (sh, argv) => {
   if (argv.length > 2) ctx.params = argv.slice(2);
   ctx.src = { kind: "file", path };
   sh.depth++;
+  sh.depthName = "source";
   sh.nest++;
   ctx.sourceDepth++;
   let code: number;
@@ -1285,6 +1286,7 @@ const evalCmd: Builtin = (sh, argv) => {
     return 2;
   }
   sh.depth++;
+  sh.depthName = "eval";
   sh.nest++;
   try {
     return sh.runList(r.ast.items);

@@ -77,11 +77,7 @@ const fx = new Map<
 for (const f of Object.values(files)) for (const c of f.cases) fx.set(c.id, c);
 
 describe("host table against the script fixtures", () => {
-  // array-assoc needs `m[x y]=v` in the lexer (Phase A); reference.test.ts has it.
-  const SKIP = new Set(["array-assoc"]);
-  for (const c of CASES.filter(
-    (x) => x.kind === "script" && !SKIP.has(x.id),
-  ) as ScriptCase[]) {
+  for (const c of CASES.filter((x) => x.kind === "script") as ScriptCase[]) {
     it(c.id, () => {
       const want = fx.get(c.id);
       if (!want) return;

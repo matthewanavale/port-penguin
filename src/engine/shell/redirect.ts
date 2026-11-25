@@ -12,9 +12,14 @@ import { resolvePath } from "./glob";
 
 /* ---------- file helpers (absolute paths) ---------- */
 
-/** Folders where the learner may create and change files. */
+/**
+ * Folders where the learner may create and change files. `/var/log` stays
+ * open because task 68 (`rm /var/log/crane-debug.log`) needs it.
+ */
 export function canWrite(abs: string): boolean {
   return (
+    abs === "/var/log" ||
+    abs.startsWith("/var/log/") ||
     abs === "/tmp" ||
     abs.startsWith("/tmp/") ||
     abs === "/home/cadet" ||

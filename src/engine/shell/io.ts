@@ -26,6 +26,9 @@ export interface TaskCtx {
   allOut: string;
 }
 
+/** What a task check receives (D10). */
+export type Ctx = TaskCtx;
+
 export interface Writer {
   write(text: string, html?: string): void;
   /** True for the terminal (`ls` prints columns there). */
@@ -97,6 +100,8 @@ export class Input {
   pos = 0;
   /** True once a command read from the terminal input (the D22 hint). */
   used = false;
+  /** The interpreter sets this: only a command typed at the prompt counts (D12). */
+  counts: () => boolean = () => true;
   constructor(
     public text = "",
     /** True when it is the terminal (empty in 2a, D22). */
@@ -104,14 +109,14 @@ export class Input {
   ) {}
   /** Reads the rest. */
   readAll(): string {
-    if (this.tty) this.used = true;
+    if (this.tty && this.counts()) this.used = true;
     const r = this.text.slice(this.pos);
     this.pos = this.text.length;
     return r;
   }
   /** One line without its newline, and whether the newline was there. */
   readLine(): { line: string; nl: boolean } | null {
-    if (this.tty) this.used = true;
+    if (this.tty && this.counts()) this.used = true;
     if (this.pos >= this.text.length) return null;
     const i = this.text.indexOf("\n", this.pos);
     if (i < 0) {
@@ -124,7 +129,7 @@ export class Input {
     return { line, nl: true };
   }
   readChars(n: number): string | null {
-    if (this.tty) this.used = true;
+    if (this.tty && this.counts()) this.used = true;
     if (this.pos >= this.text.length) return null;
     const r = this.text.slice(this.pos, this.pos + n);
     this.pos += r.length;

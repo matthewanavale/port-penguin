@@ -2514,7 +2514,8 @@ function describe(n: FsNode): string {
   if (n.t === "d") return "directory";
   const x = n.x;
   if (x === "") return "empty";
-  if (x.startsWith("\x1f\x8b")) return "gzip compressed data, from Unix";
+  if (x.startsWith("\x1f\x8b") || x.startsWith("PPTAR\x1f\x8b"))
+    return "gzip compressed data, from Unix";
   if (x.startsWith("PPTAR")) return "POSIX tar archive (GNU)";
   if (x.startsWith("#!")) {
     const sh = /^#!\s*\S*\/(?:env\s+)?(\w+)/.exec(x)?.[1] ?? "sh";
@@ -2775,6 +2776,12 @@ const dircolors: CmdFn = (argv, _sh, io) => {
   if (argv.includes("-p") || argv.includes("--print-database")) return 0;
   io.out.write("LS_COLORS='';\nexport LS_COLORS\n");
   return 0;
+};
+
+/** `yes` writes until a limit stops it: there is no SIGPIPE in 2a (D20, D5). */
+const yes: CmdFn = (argv, _sh, io) => {
+  const text = (argv.length > 1 ? argv.slice(1).join(" ") : "y") + "\n";
+  for (;;) io.out.write(text);
 };
 
 const sleep: CmdFn = (argv, sh, io) => {
@@ -3162,6 +3169,7 @@ export const CMDS: Record<string, CmdFn> = {
   which,
   dircolors,
   sleep,
+  yes,
   tree,
   whoami,
   hostname,

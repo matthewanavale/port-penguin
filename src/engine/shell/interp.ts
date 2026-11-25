@@ -84,6 +84,8 @@ export class Interp {
   stepName = `${LIM.steps} steps`;
   /** Depth of functions, `eval`, and `source` (D6). */
   depth = 0;
+  /** What the innermost counted level is, for the message of a stack overflow (D6). */
+  depthName = "function";
   scripts = 0;
   /** Depth of things that make a command not "typed at the prompt" (D12). */
   nest = 0;
@@ -133,6 +135,7 @@ export class Interp {
     this.nest = 0;
     this.exited = null;
     this.rootIn = new Input("", true);
+    this.rootIn.counts = () => this.promptLevel();
     this.ctx.io = {
       in: this.rootIn,
       out: new TermWriter("stdout", this.chunks, this.meter, task),
@@ -230,7 +233,7 @@ export class Interp {
       return e.code;
     }
     if (e instanceof RangeError) {
-      this.note(nestMessage("function calls", LIM.depth), true);
+      this.note(nestMessage(this.depthName, LIM.depth), true);
       return 1;
     }
     if (e instanceof ExitSig) {
@@ -736,9 +739,11 @@ export class Interp {
     if (src === undefined) return null;
     let b = this.fnCache.get(src);
     if (!b) {
+      // A saved function is its body text (`{ ...; }`); a whole definition also works.
       const r = parse(src);
-      if (r.status !== "ok" || r.ast.items[0]?.type !== "function") return null;
-      b = (r.ast.items[0] as FunctionDef).body;
+      const first = r.status === "ok" ? r.ast.items[0] : undefined;
+      if (!first) return null;
+      b = first.type === "function" ? (first as FunctionDef).body : first;
       this.fnCache.set(src, b);
     }
     return b;
@@ -752,6 +757,7 @@ export class Interp {
   callFunction(name: string, args: string[], body: Node): number {
     if (this.depth >= LIM.depth) throw new NestStop(name, LIM.depth);
     this.depth++;
+    this.depthName = name;
     this.nest++;
     const ctx = this.ctx;
     const savedParams = ctx.params;
@@ -1040,7 +1046,9 @@ export class Interp {
     if (ctx.aliases[name] !== undefined) return { kind: "alias" };
     if (KEYWORDS.has(name)) return { kind: "keyword" };
     if (ctx.functions[name] !== undefined) return { kind: "function" };
-    if (BUILTINS[name]) return { kind: "builtin" };
+    // `bash` and `sh` are programs in Ubuntu, though the table runs them as builtins.
+    if (BUILTINS[name] && name !== "bash" && name !== "sh")
+      return { kind: "builtin" };
     if (this.host.commands[name])
       return { kind: "file", path: "/usr/bin/" + name };
     return null;

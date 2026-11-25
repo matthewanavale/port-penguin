@@ -3,7 +3,7 @@
 // check of the current task and run one input.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { M } from "../engine/index";
-import type { Ctx } from "../engine/helpers";
+import type { Ctx } from "../engine/shell/io";
 import { openShell, restore } from "./engineHarness";
 import type { Shell } from "./engineHarness";
 

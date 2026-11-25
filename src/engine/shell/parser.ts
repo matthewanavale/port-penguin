@@ -302,6 +302,20 @@ class P {
           }
           break;
         }
+        // `m[x y]=v`: a subscript with a space is part of the assignment word.
+        if (c === "[" && parts.length === 0 && NAME_RE.test(lit)) {
+          let j = this.pos + 1;
+          while (j < s.length && !"]\n;&|'\"`$\\".includes(s[j])) j++;
+          if (
+            s[j] === "]" &&
+            (s[j + 1] === "=" || (s[j + 1] === "+" && s[j + 2] === "=")) &&
+            /[ \t]/.test(s.slice(this.pos, j))
+          ) {
+            lit += s.slice(this.pos, j + 1);
+            this.pos = j + 1;
+            continue;
+          }
+        }
         if (c === "(") {
           const arrOk =
             parts.length === 0 &&

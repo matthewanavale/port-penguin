@@ -233,17 +233,31 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
 
   const CLEAR = "\x1b[H\x1b[2J\x1b[3J";
 
+  /** Lines of an input that is not complete yet (shown with `> `). */
+  let kept: string[] = [];
+
   function run(actions: EditorAction[]): string {
     let out = "";
     for (const a of actions) {
       if (a.type === "submit") {
         out += endInput(a.line);
-        const res = engine.execute(a.line);
+        kept.push(a.line);
+        const text = kept.join("\n");
+        if (!engine.isComplete(text)) {
+          // Draw `> ` at once, so a pasted multi-line input keeps its order.
+          out += renderRuns(engine.prompt());
+          continue;
+        }
+        kept = [];
+        engine.setColumns(term.cols);
+        const res = engine.execute(text);
         if (res.cleared) out += CLEAR;
         out += renderLines(res.lines);
         opts.onResult(res);
       } else if (a.type === "interrupt") {
         out += endInput(a.line, "^C");
+        kept = [];
+        engine.cancelInput();
       } else if (a.type === "clear") {
         out += CLEAR;
         rowsAbove = 0;
