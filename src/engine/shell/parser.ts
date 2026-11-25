@@ -114,6 +114,25 @@ const REDIR_OPS = new Set([
   "<<<",
 ]);
 const ASSIGN_RE = /^([A-Za-z_][A-Za-z0-9_]*)(?:\[([^\]]*)\])?(\+?)=/;
+const SPACED_SUB_RE =
+  /^([A-Za-z_][A-Za-z0-9_]*\[)([^\]]*[ \t][^\]]*)(\]\+?=[^]*)$/;
+
+/**
+ * The lexer joins `m[x y]=v` into one word, which is right only before the
+ * command name. In an argument it is two words, as in bash (`m[x` and `y]=v`).
+ */
+function splitSubscript(w: Word): Word[] {
+  const f = w[0];
+  if (!f || f.k !== "lit") return [w];
+  const m = SPACED_SUB_RE.exec(f.v);
+  if (!m) return [w];
+  const pieces = (m[1] + m[2]).split(/[ \t]+/).filter((p) => p !== "");
+  const last = pieces.pop() as string;
+  return [
+    ...pieces.map((p): Word => [{ k: "lit", v: p }]),
+    [{ k: "lit", v: last + m[3] }, ...w.slice(1)],
+  ];
+}
 const COND_UNARY = new Set(
   "-n -z -f -d -e -r -w -x -s -L -h -b -c -p -S -t -O -G -N -k -u -g -v -o".split(
     " ",
@@ -1422,7 +1441,8 @@ class P {
         }
       }
       this.next();
-      words.push(t.w);
+      if (words.length) words.push(...splitSubscript(t.w));
+      else words.push(t.w);
     }
     if (!assigns.length && !words.length && !redirs.length)
       throw this.unexpected(first);

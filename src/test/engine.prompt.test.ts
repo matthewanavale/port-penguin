@@ -31,6 +31,12 @@ describe("m[x y]=v", () => {
     expect(r.out).toBe("sp\n");
     expect(r.code).toBe(0);
   });
+
+  it("is two words in an argument, as in bash", () => {
+    const r = sh.run("printf '%s\\n' m[a b]=c");
+    expect(r.out).toBe("m[a\nb]=c\n");
+    expect(r.code).toBe(0);
+  });
 });
 
 describe("clear", () => {
