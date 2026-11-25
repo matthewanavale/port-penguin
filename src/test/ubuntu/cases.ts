@@ -1810,6 +1810,13 @@ const parsing: Case[] = [
     "cat <<EOF",
     "hello $HOME",
     "EOF",
+  ),
+  // A typed Tab runs completion in a pty, so a prompt case can never close a
+  // tab-indented heredoc. The <<- part is a script case instead.
+  s(
+    "parsing",
+    "heredoc-dash-tabs",
+    "redirect: <<- quoted",
     "cat <<-'X'",
     "\tquoted $HOME",
     "\tX",

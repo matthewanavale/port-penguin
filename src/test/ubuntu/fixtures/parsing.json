@@ -170,12 +170,22 @@
       "input": [
         "cat <<EOF",
         "hello $HOME",
-        "EOF",
+        "EOF"
+      ],
+      "transcript": "cadet@port-penguin:~$ cat <<EOF\r\n> hello $HOME\r\n> EOF\r\nhello /home/cadet\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "heredoc-dash-tabs",
+      "kind": "script",
+      "feature": "redirect: <<- quoted",
+      "input": [
         "cat <<-'X'",
         "\tquoted $HOME",
         "\tX"
       ],
-      "transcript": "cadet@port-penguin:~$ cat <<EOF\r\n> hello $HOME\r\n> EOF\r\nhello /home/cadet\r\ncadet@port-penguin:~$ cat <<-'X'\r\n> \u0007.quoted $HOME\r\n> \u0007.X\r\n> "
+      "stdout": "quoted $HOME\n",
+      "stderr": "",
+      "code": 0
     },
     {
       "id": "cont-ctrl-c",
