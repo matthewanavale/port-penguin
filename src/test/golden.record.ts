@@ -67,6 +67,7 @@ export function recordGolden(script: GoldenScript): Golden {
           value: r.value,
           newCursor: r.cursor,
           listing: r.listing.length ? r.listing.join("  ") : null,
+          ...(step.reason !== undefined ? { reason: step.reason } : {}),
         });
       }
     }
@@ -88,7 +89,10 @@ function recording(): boolean {
 }
 
 for (const script of SCRIPTS) {
-  it.runIf(recording())(`records "${script.name}"`, async () => {
+  // `recording()` reads the snapshot mode, which exists only while a test
+  // runs, so the check is here and not at collection time.
+  it(`records "${script.name}"`, async (ctx) => {
+    if (!recording()) ctx.skip();
     process.env.RECORD = "1";
     const g = recordGolden(script);
     await expect(JSON.stringify(g, null, 2) + "\n").toMatchFileSnapshot(
