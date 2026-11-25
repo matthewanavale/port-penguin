@@ -75,6 +75,8 @@ export class Context {
   noErr = 0;
   inTrap = false;
   loopDepth = 0;
+  /** Depth of `source` in this context (`return` is allowed in it). */
+  sourceDepth = 0;
   seconds = Date.now();
 
   protected _cwd = HOME;
@@ -122,6 +124,7 @@ export class Context {
     c.io = this.io;
     c.interactive = this.interactive;
     c.noErr = this.noErr;
+    c.sourceDepth = this.sourceDepth;
     c.seconds = this.seconds;
     c.cwd = this.cwd;
     c.oldpwd = this.oldpwd;
@@ -247,7 +250,9 @@ export class Context {
     const m = this.array(name);
     if (m) {
       if (m.type === "array")
-        return (m.value as ArrayValue).filter((x): x is string => x !== undefined);
+        return (m.value as ArrayValue).filter(
+          (x): x is string => x !== undefined,
+        );
       return Object.values(m.value as Record<string, string>);
     }
     const v = this.get(name);
@@ -310,7 +315,12 @@ export class Context {
     return null;
   }
 
-  setElem(name: string, idx: string, value: string, append = false): string | null {
+  setElem(
+    name: string,
+    idx: string,
+    value: string,
+    append = false,
+  ): string | null {
     const attrs = this.attrs(name);
     if (attrs.includes("r")) return `${name}: readonly variable`;
     let m = this.vars[name];
@@ -498,7 +508,9 @@ export function cloneVars(v: Record<string, VarMeta>): Record<string, VarMeta> {
 }
 
 /** Turns loaded JSON (arrays with null holes) into the in-memory form. */
-export function reviveVars(v: Record<string, unknown>): Record<string, VarMeta> {
+export function reviveVars(
+  v: Record<string, unknown>,
+): Record<string, VarMeta> {
   const out: Record<string, VarMeta> = {};
   for (const [k, raw] of Object.entries(v)) {
     const m = raw as { type?: string; value?: unknown; attrs?: string } | null;

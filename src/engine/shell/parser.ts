@@ -49,6 +49,13 @@ export type ParseResult =
   | { status: "incomplete" }
   | { status: "error"; message: string };
 
+interface CondTok {
+  t: "]]" | "&&" | "||" | "(" | ")" | "<" | ">" | "word";
+  w?: Word;
+  raw?: string;
+  pos: number;
+}
+
 class Incomplete extends Error {
   constructor(
     readonly kind: "quote" | "eof",
@@ -252,7 +259,13 @@ class P {
     if (this.pos === start) throw new SyntaxErr("", start);
     const raw = this.src.slice(start, this.pos);
     const last = w[w.length - 1];
-    return { t: "word", w, raw, pos: start, arr: last?.k === "arr" ? last.items : undefined };
+    return {
+      t: "word",
+      w,
+      raw,
+      pos: start,
+      arr: last?.k === "arr" ? last.items : undefined,
+    };
   }
 
   /* ---------- words ---------- */
@@ -324,7 +337,7 @@ class P {
           continue;
         }
         if (mode === "dq" || mode === "hd") {
-          if ("$`\"\\".includes(n) && (n !== '"' || mode === "dq")) {
+          if ('$`"\\'.includes(n) && (n !== '"' || mode === "dq")) {
             lit += n;
             this.pos += 2;
           } else {
@@ -433,7 +446,9 @@ class P {
       const m = f.k === "lit" ? /^\[([^\]]*)\]=/.exec(f.v) : null;
       if (m && f.k === "lit") {
         const rest = f.v.slice(m[0].length);
-        const value: Word = rest ? [{ k: "lit", v: rest }, ...w.slice(1)] : w.slice(1);
+        const value: Word = rest
+          ? [{ k: "lit", v: rest }, ...w.slice(1)]
+          : w.slice(1);
         items.push({ key: this.parseText(m[1], "hd"), value });
       } else items.push({ value: w });
     }
@@ -678,9 +693,7 @@ class P {
       }
       if (!closed && !this.opts.eof) throw new Incomplete("eof", this.pos);
       hd.redir.heredoc = {
-        body: hd.quoted
-          ? [{ k: "sq", v: body }]
-          : this.parseText(body, "hd"),
+        body: hd.quoted ? [{ k: "sq", v: body }] : this.parseText(body, "hd"),
         strip: hd.strip,
         quoted: hd.quoted,
       };
@@ -793,7 +806,10 @@ class P {
       if (!(this.isOp(t, "&&") || this.isOp(t, "||"))) break;
       this.next();
       this.skipNewlinesNeed();
-      rest.push({ op: (t as { v: string }).v as "&&" | "||", node: this.pipeline() });
+      rest.push({
+        op: (t as { v: string }).v as "&&" | "||",
+        node: this.pipeline(),
+      });
     }
     if (!rest.length) return first;
     return { type: "andor", line: first.line, first, rest };
@@ -1126,13 +1142,16 @@ class P {
 
   /* ---------- [[ ]] ---------- */
 
-  private cbuf: { t: "]]" | "&&" | "||" | "(" | ")" | "<" | ">" | "word"; w?: Word; raw?: string; pos: number } | null = null;
+  private cbuf: CondTok | null = null;
 
   condTok() {
     if (this.cbuf) return this.cbuf;
     const s = this.src;
     for (;;) {
-      while (this.pos < s.length && (isSpace(s[this.pos]) || s[this.pos] === "\n"))
+      while (
+        this.pos < s.length &&
+        (isSpace(s[this.pos]) || s[this.pos] === "\n")
+      )
         this.pos++;
       if (s[this.pos] === "\\" && s[this.pos + 1] === "\n") this.pos += 2;
       else break;
@@ -1140,8 +1159,11 @@ class P {
     if (this.pos >= s.length) throw new Incomplete("eof", this.pos);
     const pos = this.pos;
     const c = s[pos];
-    const set = (t: NonNullable<typeof this.cbuf>) => (this.cbuf = t);
-    if (s.startsWith("]]", pos) && (pos + 2 >= s.length || /[\s;&|()<>]/.test(s[pos + 2]))) {
+    const set = (t: CondTok): CondTok => (this.cbuf = t);
+    if (
+      s.startsWith("]]", pos) &&
+      (pos + 2 >= s.length || /[\s;&|()<>]/.test(s[pos + 2]))
+    ) {
       this.pos += 2;
       return set({ t: "]]", pos });
     }
@@ -1283,11 +1305,19 @@ class P {
       );
     this.condNext();
     const nx = this.condTok();
-    if (COND_UNARY.has(t.raw as string) && nx.t === "word" && !COND_BIN.has(nx.raw as string)) {
+    if (
+      COND_UNARY.has(t.raw as string) &&
+      nx.t === "word" &&
+      !COND_BIN.has(nx.raw as string)
+    ) {
       this.condNext();
       return { op: "unary", flag: t.raw as string, w: nx.w as Word };
     }
-    if ((nx.t === "word" && COND_BIN.has(nx.raw as string)) || nx.t === "<" || nx.t === ">") {
+    if (
+      (nx.t === "word" && COND_BIN.has(nx.raw as string)) ||
+      nx.t === "<" ||
+      nx.t === ">"
+    ) {
       this.condNext();
       const cmp = nx.t === "word" ? (nx.raw as string) : nx.t;
       let r: Word;
@@ -1324,7 +1354,11 @@ class P {
         fd,
         op: "<<",
         target: target.w,
-        heredoc: { body: [], strip: t.v === "<<-", quoted: /['"\\]/.test(target.raw) },
+        heredoc: {
+          body: [],
+          strip: t.v === "<<-",
+          quoted: /['"\\]/.test(target.raw),
+        },
       };
       this.pending.push({
         redir: r,
@@ -1407,50 +1441,81 @@ class P {
   }
 }
 
-/** Parses text with the details a script needs. In script mode the units before an error are in `done`. */
-export function parseFull(text: string, opts: ParseOptions = {}): ParseFull {
+export type UnitResult =
+  | { status: "unit"; nodes: Node[] }
+  | { status: "end" }
+  | Exclude<ParseFull, { status: "ok" }>;
+
+/**
+ * Parses one unit (one line, or one compound command) at a time, so a script
+ * can run `shopt -s extglob` before the next line is read, as bash does. The
+ * caller may change `opts.extglob` between two calls.
+ */
+export function parseUnits(
+  text: string,
+  opts: ParseOptions = {},
+): { next(): UnitResult } {
   const p = new P(text, opts);
   const done: Node[] = [];
-  try {
-    const items: Node[] = [];
-    for (;;) {
-      p.skipNewlines();
-      if (p.peek().t === "eof") break;
-      const u = p.unit();
-      items.push(...u);
-      done.push(...u);
-    }
-    return { status: "ok", ast: { type: "script", items } };
-  } catch (e) {
-    if (e instanceof Incomplete) {
-      return {
-        status: "incomplete",
-        kind: e.kind,
-        line: p.lineAt(Math.min(e.pos, Math.max(0, text.length - 1))),
-        ch: e.ch,
-      };
-    }
-    if (e instanceof SyntaxErr) {
-      const line = p.lineAt(Math.min(e.pos, Math.max(0, text.length - 1)));
-      const m = e.message;
-      return {
-        status: "error",
-        message: `bash: ${m || "syntax error"}`,
-        line,
-        text: e.detail ? p.lineText(line) : "",
-        done,
-      };
-    }
-    if (e instanceof DepthErr || e instanceof RangeError)
-      return {
-        status: "error",
-        message: `port-penguin: parser: nesting too deep (${LIM.parse})`,
-        line: 1,
-        text: "",
-        done: [],
-        nest: true,
-      };
-    throw e;
+  let finished = false;
+  return {
+    next(): UnitResult {
+      if (finished) return { status: "end" };
+      try {
+        p.skipNewlines();
+        if (p.peek().t === "eof") {
+          finished = true;
+          return { status: "end" };
+        }
+        const u = p.unit();
+        done.push(...u);
+        return { status: "unit", nodes: u };
+      } catch (e) {
+        finished = true;
+        if (e instanceof Incomplete) {
+          return {
+            status: "incomplete",
+            kind: e.kind,
+            line: p.lineAt(Math.min(e.pos, Math.max(0, text.length - 1))),
+            ch: e.ch,
+          };
+        }
+        if (e instanceof SyntaxErr) {
+          const line = p.lineAt(Math.min(e.pos, Math.max(0, text.length - 1)));
+          const m = e.message;
+          return {
+            status: "error",
+            message: `bash: ${m || "syntax error"}`,
+            line,
+            text: e.detail ? p.lineText(line) : "",
+            done,
+          };
+        }
+        if (e instanceof DepthErr || e instanceof RangeError)
+          return {
+            status: "error",
+            message: `port-penguin: parser: nesting too deep (${LIM.parse})`,
+            line: 1,
+            text: "",
+            done: [],
+            nest: true,
+          };
+        throw e;
+      }
+    },
+  };
+}
+
+/** Parses text with the details a script needs. In script mode the units before an error are in `done`. */
+export function parseFull(text: string, opts: ParseOptions = {}): ParseFull {
+  const it = parseUnits(text, opts);
+  const items: Node[] = [];
+  for (;;) {
+    const r = it.next();
+    if (r.status === "unit") items.push(...r.nodes);
+    else if (r.status === "end")
+      return { status: "ok", ast: { type: "script", items } };
+    else return r;
   }
 }
 

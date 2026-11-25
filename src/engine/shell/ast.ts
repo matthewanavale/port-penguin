@@ -46,17 +46,7 @@ export interface Assign {
 }
 
 export type RedirOp =
-  | ">"
-  | ">>"
-  | "<"
-  | ">&"
-  | "<&"
-  | "<>"
-  | ">|"
-  | "&>"
-  | "&>>"
-  | "<<"
-  | "<<<";
+  ">" | ">>" | "<" | ">&" | "<&" | "<>" | ">|" | "&>" | "&>>" | "<<" | "<<<";
 
 export interface Redir {
   /** File descriptor on the left, if written. */

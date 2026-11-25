@@ -12,9 +12,7 @@ export interface ArithHost {
 export class ArithError extends Error {}
 
 type Tok =
-  | { t: "num"; v: bigint }
-  | { t: "id"; v: string }
-  | { t: "op"; v: string };
+  { t: "num"; v: bigint } | { t: "id"; v: string } | { t: "op"; v: string };
 
 const OPS3 = ["<<=", ">>=", "**="];
 const OPS2 = [
@@ -147,7 +145,11 @@ export function evalArith(src: string, host: ArithHost, depth = 0): bigint {
         : host.setElem(ref.name, ref.idx, v.toString());
     if (err) throw new ArithError(err);
   };
-  const bin = (next: () => bigint, ops: string[], f: (op: string, a: bigint, b: bigint) => bigint) => {
+  const bin = (
+    next: () => bigint,
+    ops: string[],
+    f: (op: string, a: bigint, b: bigint) => bigint,
+  ) => {
     let v = next();
     for (;;) {
       const t = peek();
