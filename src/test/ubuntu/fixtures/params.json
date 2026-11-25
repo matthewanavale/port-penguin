@@ -1,0 +1,182 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "param-zero",
+      "kind": "script",
+      "feature": "param: $0",
+      "input": [
+        "echo $0",
+        "echo ${0##*/}"
+      ],
+      "stdout": "/tmp/case.sh\ncase.sh\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-positional",
+      "kind": "script",
+      "feature": "param: $1-$9",
+      "input": [
+        "set -- a b c d e f g h i j",
+        "echo $1 $2 $9 $10"
+      ],
+      "stdout": "a b i a0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-ten",
+      "kind": "script",
+      "feature": "param: ${10}",
+      "input": [
+        "set -- a b c d e f g h i j k",
+        "echo ${10} ${11} ${12}"
+      ],
+      "stdout": "j k\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-count",
+      "kind": "script",
+      "feature": "param: $#",
+      "input": [
+        "echo $#",
+        "set -- a b",
+        "echo $#"
+      ],
+      "stdout": "0\n2\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-at",
+      "kind": "script",
+      "feature": "param: $@",
+      "input": [
+        "set -- \"a b\" c",
+        "for x in $@; do echo \"[$x]\"; done",
+        "echo $@"
+      ],
+      "stdout": "[a]\n[b]\n[c]\na b c\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-star",
+      "kind": "script",
+      "feature": "param: $*",
+      "input": [
+        "set -- a b",
+        "IFS=,; echo \"$*\" $*",
+        "unset IFS",
+        "echo \"$*\""
+      ],
+      "stdout": "a,b a b\na b\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-at-quoted",
+      "kind": "script",
+      "feature": "param: \"$@\"",
+      "input": [
+        "set -- \"a b\" c \"\" d",
+        "for x in \"$@\"; do echo \"[$x]\"; done",
+        "f() { for x in \"$@\"; do echo \"<$x>\"; done; }",
+        "f \"$@\" extra",
+        "set --",
+        "f \"$@\""
+      ],
+      "stdout": "[a b]\n[c]\n[]\n[d]\n<a b>\n<c>\n<>\n<d>\n<extra>\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-shift",
+      "kind": "script",
+      "feature": "param: shift",
+      "input": [
+        "set -- a b c d",
+        "shift; echo $1",
+        "shift 2; echo $# $1",
+        "shift; echo $?",
+        "shift 5",
+        "echo code=$?"
+      ],
+      "stdout": "b\n1 d\n0\ncode=1\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-status",
+      "kind": "script",
+      "feature": "param: $?",
+      "input": [
+        "false; echo $?",
+        "true; echo $?",
+        "ls /nonexistent 2>/dev/null; echo $?",
+        "nosuchcmd_xyz 2>/dev/null; echo $?",
+        "(exit 9); echo $?"
+      ],
+      "stdout": "1\n0\n2\n127\n9\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-pid",
+      "kind": "script",
+      "feature": "param: $$",
+      "input": [
+        "[[ $$ =~ ^[0-9]+$ ]] && echo pid-ok"
+      ],
+      "stdout": "pid-ok\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-flags",
+      "kind": "script",
+      "feature": "param: $-",
+      "input": [
+        "echo $-",
+        "set -e",
+        "echo $-"
+      ],
+      "stdout": "hB\nehB\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-last-arg",
+      "kind": "script",
+      "feature": "param: $_",
+      "input": [
+        "echo a b",
+        "echo $_",
+        "true",
+        "echo $_"
+      ],
+      "stdout": "a b\nb\ntrue\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "param-set-dashdash",
+      "kind": "script",
+      "feature": "set --",
+      "input": [
+        "set -- x y",
+        "echo $# $1",
+        "set --",
+        "echo $#",
+        "set -- -n",
+        "echo $1"
+      ],
+      "stdout": "2 x\n0\n",
+      "stderr": "",
+      "code": 0
+    }
+  ]
+}

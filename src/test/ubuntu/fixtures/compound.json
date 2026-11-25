@@ -1,0 +1,211 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "if-elif-else",
+      "kind": "script",
+      "feature": "compound: if/elif/else",
+      "input": [
+        "for x in 1 2 3; do",
+        "  if [ $x -eq 1 ]; then echo one",
+        "  elif [ $x -eq 2 ]; then echo two",
+        "  else echo other",
+        "  fi",
+        "done",
+        "if false; then echo no; fi; echo $?",
+        "if ! true; then echo no; else echo else-branch; fi"
+      ],
+      "stdout": "one\ntwo\nother\n0\nelse-branch\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "case-basic",
+      "kind": "script",
+      "feature": "compound: case",
+      "input": [
+        "for f in a.md b.txt c.log d.bin; do",
+        "  case $f in",
+        "    *.md) echo md;;",
+        "    *.txt|*.log) echo text;;",
+        "    *) echo other;;",
+        "  esac",
+        "done",
+        "case x in y) echo no;; esac; echo $?"
+      ],
+      "stdout": "md\ntext\ntext\nother\n0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "case-fall",
+      "kind": "script",
+      "feature": "compound: case ;&",
+      "input": [
+        "case a in",
+        "  a) echo A;&",
+        "  b) echo B;;",
+        "  c) echo C;;",
+        "esac"
+      ],
+      "stdout": "A\nB\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "case-continue",
+      "kind": "script",
+      "feature": "compound: case ;;&",
+      "input": [
+        "case ab in",
+        "  a*) echo 1;;&",
+        "  *b) echo 2;;&",
+        "  x) echo no;;",
+        "  *) echo 3;;",
+        "esac"
+      ],
+      "stdout": "1\n2\n3\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "for-in",
+      "kind": "script",
+      "feature": "compound: for in",
+      "input": [
+        "for i in 1 2 3; do echo $i; done",
+        "for f in a \"b c\"; do echo \"[$f]\"; done",
+        "for i in; do echo never; done; echo $?",
+        "for i; do echo no; done",
+        "set -- p q",
+        "for i; do echo $i; done"
+      ],
+      "stdout": "1\n2\n3\n[a]\n[b c]\n0\np\nq\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "for-arith",
+      "kind": "script",
+      "feature": "compound: for (( ))",
+      "input": [
+        "for ((i=0; i<3; i++)); do echo $i; done",
+        "for ((i=10, j=0; i>7; i--, j+=2)); do echo $i $j; done"
+      ],
+      "stdout": "0\n1\n2\n10 0\n9 2\n8 4\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "while-loop",
+      "kind": "script",
+      "feature": "compound: while",
+      "input": [
+        "i=0",
+        "while [ $i -lt 3 ]; do echo $i; i=$((i+1)); done",
+        "while false; do echo no; done; echo $?",
+        "printf 'a\\nb\\n' | while read -r l; do echo \"got $l\"; done"
+      ],
+      "stdout": "0\n1\n2\n0\ngot a\ngot b\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "until-loop",
+      "kind": "script",
+      "feature": "compound: until",
+      "input": [
+        "i=0",
+        "until [ $i -ge 3 ]; do echo $i; i=$((i+1)); done"
+      ],
+      "stdout": "0\n1\n2\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "break-n",
+      "kind": "script",
+      "feature": "compound: break N",
+      "input": [
+        "for i in 1 2; do",
+        "  for j in a b c; do",
+        "    if [ $j = b ]; then break 2; fi",
+        "    echo $i$j",
+        "  done",
+        "done",
+        "echo end",
+        "for i in 1 2 3; do if [ $i = 2 ]; then break; fi; echo $i; done"
+      ],
+      "stdout": "1a\nend\n1\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "continue-n",
+      "kind": "script",
+      "feature": "compound: continue N",
+      "input": [
+        "for i in 1 2; do",
+        "  for j in a b c; do",
+        "    if [ $j = b ]; then continue 2; fi",
+        "    echo $i$j",
+        "  done",
+        "done",
+        "for i in 1 2 3; do if [ $i = 2 ]; then continue; fi; echo $i; done"
+      ],
+      "stdout": "1a\n2a\n1\n3\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "arith-command",
+      "kind": "script",
+      "feature": "compound: (( ))",
+      "input": [
+        "((x=3))",
+        "(( x > 2 )) && echo big",
+        "((x--)); echo $x",
+        "(( 0 )); echo $?",
+        "(( 5 )); echo $?",
+        "(( y = x * 2 )); echo $y"
+      ],
+      "stdout": "big\n2\n1\n0\n4\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "double-bracket",
+      "kind": "script",
+      "feature": "compound: [[ ]]",
+      "input": [
+        "[[ -n abc && abc == a* ]] && echo match",
+        "[[ abc < abd ]] && echo lt",
+        "mkdir d; f=d",
+        "[[ -d $f ]] && echo dir",
+        "[[ \"a b\" == \"a b\" ]] && echo spaces",
+        "[[ -z $unset || 1 -eq 2 ]] && echo or",
+        "[[ ! -e nofile ]] && echo missing",
+        "[[ a == b ]]; echo $?",
+        "[[ abc == a?c ]] && echo glob",
+        "[[ abc == \"a?c\" ]] || echo quoted"
+      ],
+      "stdout": "match\nlt\ndir\nspaces\nor\nmissing\n1\nglob\nquoted\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "double-bracket-regex",
+      "kind": "script",
+      "feature": "compound: [[ =~ ]]",
+      "input": [
+        "[[ \"abc123\" =~ ([a-z]+)([0-9]+) ]]",
+        "echo ${BASH_REMATCH[0]} ${BASH_REMATCH[1]} ${BASH_REMATCH[2]}",
+        "[[ x =~ ^y ]]; echo $?",
+        "re='^a.c$'; [[ abc =~ $re ]] && echo yes"
+      ],
+      "stdout": "abc123 abc 123\n1\nyes\n",
+      "stderr": "",
+      "code": 0
+    }
+  ]
+}

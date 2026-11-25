@@ -1,0 +1,146 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "script-shebang",
+      "kind": "script",
+      "feature": "script: shebang",
+      "input": [
+        "printf '#!/bin/bash\\necho from shebang $0 $#\\n' > s.sh",
+        "chmod +x s.sh",
+        "./s.sh a b",
+        "printf '#!/bin/sh\\necho from sh\\n' > t.sh; chmod +x t.sh; ./t.sh",
+        "printf '#!/nonexistent/interp\\necho x\\n' > u.sh; chmod +x u.sh; ./u.sh",
+        "echo code=$?"
+      ],
+      "stdout": "from shebang ./s.sh 2\nfrom sh\ncode=127\n",
+      "stderr": "/tmp/case.sh: line 5: ./u.sh: cannot execute: required file not found\n",
+      "code": 0
+    },
+    {
+      "id": "script-chmod",
+      "kind": "script",
+      "feature": "script: chmod +x",
+      "input": [
+        "printf 'echo hi\\n' > s.sh",
+        "./s.sh",
+        "echo code=$?",
+        "chmod +x s.sh",
+        "./s.sh",
+        "chmod -x s.sh",
+        "./s.sh",
+        "echo code=$?",
+        "chmod 755 s.sh; ./s.sh",
+        "chmod u+x nofile",
+        "echo code=$?"
+      ],
+      "stdout": "code=126\nhi\ncode=126\nhi\ncode=1\n",
+      "stderr": "/tmp/case.sh: line 2: ./s.sh: Permission denied\n/tmp/case.sh: line 7: ./s.sh: Permission denied\nchmod: cannot access 'nofile': No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "script-path",
+      "kind": "script",
+      "feature": "script: ./script.sh",
+      "input": [
+        "mkdir bin",
+        "printf 'echo in bin $0\\n' > bin/run.sh",
+        "chmod +x bin/run.sh",
+        "./bin/run.sh",
+        "$PWD/bin/run.sh",
+        "cd bin; ./run.sh; cd ..",
+        "run.sh",
+        "echo code=$?",
+        "./nofile.sh",
+        "echo code=$?"
+      ],
+      "stdout": "in bin ./bin/run.sh\nin bin /home/cadet/bin/run.sh\nin bin ./run.sh\ncode=127\ncode=127\n",
+      "stderr": "/tmp/case.sh: line 7: run.sh: command not found\n/tmp/case.sh: line 9: ./nofile.sh: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "script-bash-file",
+      "kind": "script",
+      "feature": "script: bash script.sh",
+      "input": [
+        "printf 'echo \"args: $# $1\"\\n' > s.sh",
+        "bash s.sh a b",
+        "bash nofile.sh",
+        "echo code=$?",
+        "bash",
+        "echo"
+      ],
+      "stdout": "args: 2 a\ncode=127\n\n",
+      "stderr": "bash: nofile.sh: No such file or directory\n",
+      "code": 0
+    },
+    {
+      "id": "script-bash-c",
+      "kind": "script",
+      "feature": "script: bash -c",
+      "input": [
+        "bash -c 'echo \"$0 $1\"' name arg",
+        "bash -c 'exit 4'",
+        "echo $?",
+        "bash -c 'echo $((1+1))'",
+        "bash -c 'echo out; echo err >&2' 2>&1",
+        "bash -c 'nosuchcmd_xyz'",
+        "echo $?"
+      ],
+      "stdout": "name arg\n4\n2\nout\nerr\n127\n",
+      "stderr": "bash: line 1: nosuchcmd_xyz: command not found\n",
+      "code": 0
+    },
+    {
+      "id": "script-sh-file",
+      "kind": "script",
+      "feature": "script: sh script.sh",
+      "input": [
+        "printf 'echo from-sh $1\\n' > s.sh",
+        "sh s.sh x",
+        "sh -c 'echo viash'"
+      ],
+      "stdout": "from-sh x\nviash\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "script-own-context",
+      "kind": "script",
+      "feature": "script: own context",
+      "input": [
+        "x=outer",
+        "printf 'echo [$x]; x=inner; cd /tmp\\n' > s.sh",
+        "bash s.sh",
+        "echo $x",
+        "pwd",
+        "export y=exp",
+        "printf 'echo $y\\n' > t.sh",
+        "bash t.sh",
+        "printf 'f() { echo fn; }; f\\n' > u.sh",
+        "bash u.sh",
+        "f 2>&1 | head -1"
+      ],
+      "stdout": "[]\nouter\n/home/cadet\nexp\nfn\n/tmp/case.sh: line 11: f: command not found\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "script-exit-n",
+      "kind": "script",
+      "feature": "script: exit N",
+      "input": [
+        "printf 'echo before\\nexit 7\\necho after\\n' > s.sh",
+        "bash s.sh",
+        "echo code=$?",
+        "printf 'false\\n' > t.sh",
+        "bash t.sh",
+        "echo code=$?",
+        "printf 'exit\\n' > u.sh; bash u.sh; echo code=$?"
+      ],
+      "stdout": "before\ncode=7\ncode=1\ncode=0\n",
+      "stderr": "",
+      "code": 0
+    }
+  ]
+}
