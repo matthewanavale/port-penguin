@@ -1619,7 +1619,7 @@ const command: Builtin = (sh, argv, io) => {
       }
       if (V) describe(sh, n, io, "V");
       else if (l.kind === "alias")
-        out(io, `alias ${n}='${sh.ctx.aliases[n]}'\n`);
+        out(io, `alias ${n}='${sh.ctx.aliases[n].replace(/'/g, "'\\''")}'\n`);
       else out(io, (l.kind === "file" ? l.path : n) + "\n");
     }
     return code;
@@ -1637,7 +1637,7 @@ const aliasCmd: Builtin = (sh, argv, io) => {
   const args = argv.slice(1).filter((a) => a !== "-p");
   if (!args.length) {
     for (const k of Object.keys(ctx.aliases).sort())
-      out(io, `alias ${k}='${ctx.aliases[k]}'\n`);
+      out(io, `alias ${k}='${ctx.aliases[k].replace(/'/g, "'\\''")}'\n`);
     return 0;
   }
   let code = 0;
@@ -1647,7 +1647,7 @@ const aliasCmd: Builtin = (sh, argv, io) => {
       if (ctx.aliases[a] === undefined) {
         sh.fail(`alias: ${a}: not found`);
         code = 1;
-      } else out(io, `alias ${a}='${ctx.aliases[a]}'\n`);
+      } else out(io, `alias ${a}='${ctx.aliases[a].replace(/'/g, "'\\''")}'\n`);
     } else ctx.aliases[a.slice(0, eq)] = a.slice(eq + 1);
   }
   return code;

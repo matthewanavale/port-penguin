@@ -19,7 +19,8 @@ export function canWrite(abs: string): boolean {
     abs.startsWith("/tmp/") ||
     abs === "/home/cadet" ||
     abs.startsWith("/home/cadet/") ||
-    abs === "/dev/null"
+    abs === "/dev/null" ||
+    abs.startsWith("/dev/fd/")
   );
 }
 

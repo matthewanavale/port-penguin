@@ -332,7 +332,7 @@ export class Interp {
   }
 
   /** Runs `>( )` consumers and removes the /dev/fd files. */
-  private cleanProcs(): void {
+  cleanProcs(): void {
     const list = this.procFiles;
     this.procFiles = [];
     for (const p of list) {

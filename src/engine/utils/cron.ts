@@ -1,12 +1,12 @@
 // AC4: `crontab` (Debian cron 3.0pl1). One crontab for the user `cadet`,
-// kept in the optional state field `cron` (D11). Nothing runs it: the game
+// kept in the optional state field `crontab` (D11). Nothing runs it: the game
 // does not run jobs. `-e` is not available (no editor).
 import { get } from "../paths";
 import { S } from "../state";
 import type { CmdFn } from "../shell/io";
 import { readOperand, splitLines } from "./text";
 
-const store = (): { cron?: string } => S as unknown as { cron?: string };
+const store = (): { crontab?: string } => S;
 
 const USAGE = `usage:\tcrontab [-u user] [-n] file
 \tcrontab [ -u user ] [ -i ] { -e | -l | -r }
@@ -121,19 +121,19 @@ const crontab: CmdFn = (argv, sh, io) => {
   }
   const st = store();
   if (op === "l") {
-    if (st.cron === undefined) {
+    if (st.crontab === undefined) {
       io.err.write("no crontab for cadet\n");
       return 1;
     }
-    io.out.write(st.cron);
+    io.out.write(st.crontab);
     return 0;
   }
   if (op === "r") {
-    if (st.cron === undefined) {
+    if (st.crontab === undefined) {
       io.err.write("no crontab for cadet\n");
       return 1;
     }
-    delete st.cron;
+    delete st.crontab;
     return 0;
   }
   if (op === "e") {
@@ -162,7 +162,7 @@ const crontab: CmdFn = (argv, sh, io) => {
     );
     return 1;
   }
-  if (!dry) st.cron = text;
+  if (!dry) st.crontab = text;
   return 0;
 };
 
