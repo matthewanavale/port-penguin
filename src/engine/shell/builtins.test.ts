@@ -144,7 +144,7 @@ describe("command table (D15)", () => {
 
   it("has cosmetic /usr/bin entries and /etc/os-release for Ubuntu 24.04 on a fresh game", () => {
     const fresh = openShell();
-    expect(fresh.run("ls /usr/bin").out).toContain("ls\n");
+    expect(fresh.run("ls -1 /usr/bin | grep -x ls").out).toBe("ls\n");
     expect(fresh.run("cat /etc/os-release").out).toContain("Ubuntu");
     expect(fresh.run("cat /etc/os-release").out).toContain("24.04");
   });

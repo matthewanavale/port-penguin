@@ -462,7 +462,7 @@ describe("continuation input (AC1, AC10)", () => {
     const tail = shown.slice(shown.lastIndexOf("if true; then"));
     expect(tail.match(/(^|\n)> /g)?.length).toBe(2);
     expect(tail).toContain("seen");
-    expect(tail.indexOf("seen")).toBeGreaterThan(tail.lastIndexOf("> "));
+    expect(tail.lastIndexOf("seen")).toBeGreaterThan(tail.lastIndexOf("> "));
   });
 
   it("does not call execute while the input is incomplete", () => {

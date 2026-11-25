@@ -38,7 +38,7 @@ describe("command names in new positions", () => {
   it("lists the candidates when several match", () => {
     const r = tab("echo a | hist");
     expect(r.value.startsWith("echo a | history")).toBe(true);
-    const many = tab("true && ch");
+    const many = tab("true && c");
     expect(many.listing.length).toBeGreaterThan(1);
     expect(many.listing).toContain("chmod");
   });
