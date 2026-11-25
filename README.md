@@ -15,7 +15,7 @@ and HTTPS.
 | `src/ui/panel.ts`, `src/main.ts`, `src/styles.css` | The side panel and the page wiring                                        |
 | `src/sw/`                                          | The service worker template and the build plugin that writes `dist/sw.js` |
 | `public/`                                          | `manifest.webmanifest` and the icons, copied as they are into `dist/`     |
-| `src/legacy/`, `src/test/`                         | The old single-file game and the tests that compare it with the port      |
+| `src/test/`                                        | Tests, golden transcripts, and the Ubuntu reference fixtures              |
 | `Dockerfile`, `nginx.conf`, `docker-compose.yml`   | The container that builds and serves the game                             |
 | `proxy/port-penguin.conf`                          | Server block for your reverse proxy nginx                                 |
 | `proxy/make-self-signed-cert.sh`                   | Creates a self-signed certificate                                         |
@@ -38,6 +38,7 @@ npm run lint          # ESLint, then the TypeScript type check
 npm run format:check  # Prettier
 npm test              # Vitest
 npm run build
+npm run size          # gzip size of dist/assets/, at most 200 KB
 ```
 
 ## Setup
@@ -159,6 +160,33 @@ Keep in mind the check happens in the browser. Only the hash is in the
 page, so the password itself can't be read from the source, but a
 determined student who knows JavaScript could bypass the lock. It's a
 speed bump for a learning game, not real security.
+
+## The shell
+
+The game terminal runs a bash interpreter (`src/engine/shell/`). It parses
+each input into a syntax tree before it runs anything. It supports:
+
+- quoting, escapes, and heredocs (`<<`, `<<-`, `<<<`);
+- variables, arrays, `${...}` forms, `$(...)`, `<(...)`, and `$((...))`;
+- pipes, `&&`, `||`, `;`, `{ }`, `( )`, redirects, and globs;
+- `if`, `for`, `while`, `until`, `case`, and functions;
+- aliases, `source`, `bash FILE`, `sh -c`, and the common builtins;
+- an unfinished input shows `> ` and waits for more lines; Ctrl-C drops it.
+
+The utilities (`find`, `awk`, `sed`, `tar`, `date`, `cut`, `tr`, `crontab`,
+and others) are in `src/engine/utils/`. Their messages follow Ubuntu 24.04.
+
+### Goldens and Ubuntu fixtures
+
+- `npm run golden:record` records `src/test/golden/*.json` from the engine.
+  `src/test/golden-run1/` holds the run-1 baseline and is never edited. A
+  step that differs from it needs a `reason` (R1 to R6) in
+  `src/test/scripts.ts`.
+- The reference fixtures in `src/test/ubuntu/fixtures/` come from real
+  Ubuntu 24.04. To capture them again, run
+  `node --experimental-strip-types src/test/ubuntu/capture.ts [group ...]`.
+  This needs Docker and Node 24. Tests read the fixtures and do not need
+  Docker.
 
 ## Where progress is stored
 
