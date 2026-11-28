@@ -83,7 +83,7 @@ describe("host table against the script fixtures", () => {
       const want = fx.get(c.id);
       if (!want) return;
       const sh = open(c.lines.join("\n") + "\n");
-      const r = await run(sh, `bash ${SCRIPT_PATH}`);
+      const r = await run(sh, `bash ${SCRIPT_PATH} < /dev/null`);
       expect({
         stdout: normalize(r.out),
         stderr: normalize(r.err),

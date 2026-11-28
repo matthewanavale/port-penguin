@@ -1,12 +1,13 @@
 // B20: the new capture steps (type with no prompt, control key, wait), the
 // job-PID rule of the normalizer, and the list of run-2b cases that wait for a
-// capture. The cases are not in `CASES` yet: their fixtures need Docker.
+// capture. The cases are in `CASES`; their fixtures were captured with Docker.
 import { describe, expect, it } from "vitest";
 import {
   ASYNC_CASES,
   ASYNC_FEATURES,
   CASES,
   CONTROL_KEYS,
+  FEATURES,
   promptStep,
 } from "./cases";
 import { normalize } from "./normalize";
@@ -59,9 +60,18 @@ describe("prompt steps (B20)", () => {
 });
 
 describe("run-2b reference cases (B20)", () => {
-  it("have unique ids that do not clash with the captured cases", () => {
-    const ids = [...CASES, ...ASYNC_CASES].map((c) => c.id);
+  it("have unique ids that do not clash with the captured cases (they are in CASES)", () => {
+    const ids = CASES.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("are all in CASES, and their features are in FEATURES", () => {
+    const ids = new Set(CASES.map((c) => c.id));
+    expect(ASYNC_CASES.filter((c) => !ids.has(c.id)).map((c) => c.id)).toEqual(
+      [],
+    );
+    const known = new Set(FEATURES);
+    expect(ASYNC_FEATURES.filter((x) => !known.has(x))).toEqual([]);
   });
 
   it("use only the listed features, and cover each of them", () => {
@@ -107,6 +117,13 @@ describe("normalizer: job process ids (B20)", () => {
       ),
     ).toBe(
       "[1]-  <PID> Running                 sleep 100 &\n[2]+  <PID> Stopped                 sleep 101",
+    );
+  });
+
+  it("gives one text for a short real PID and a longer simulated one", () => {
+    // Real bash: one space after the mark, the PID right-aligned in 5 columns.
+    expect(normalize("[1]-    10 Running                 sleep 100 &")).toBe(
+      normalize("[1]-  4242 Running                 sleep 100 &"),
     );
   });
 

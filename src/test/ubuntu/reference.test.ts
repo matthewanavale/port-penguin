@@ -25,7 +25,8 @@ import {
   START_MS,
 } from "../determinism";
 import type { FakeEngineClock } from "../determinism";
-import { CASES, FEATURES, SCRIPT_PATH } from "./cases";
+import { openShell, restore } from "../engineHarness";
+import { CASES, FEATURES, SCRIPT_PATH, promptStep } from "./cases";
 import type { Case, PromptCase, ScriptCase } from "./cases";
 import { HOME_FILES } from "./home";
 import { normalize } from "./normalize";
@@ -121,9 +122,120 @@ async function simulatePrompt(c: PromptCase): Promise<string> {
   return t;
 }
 
+/**
+ * The simulator side of a prompt case that types or waits (B20). A line step
+ * starts an input. A command that still runs when the next line step comes ends
+ * first, on the fake clock, as the capture waits for the prompt. `@type` and
+ * `@raw` go to the tty, `@key` is a signal or Ctrl-D, `@wait` moves the clock.
+ */
+async function simulateAsyncPrompt(c: PromptCase): Promise<string> {
+  const sh = await openShell({ saved: referenceSave() });
+  // The capture pty has no width, so a `select` menu is one item a row.
+  sh.engine.setColumns(1);
+  const prompt = (): string =>
+    sh.engine
+      .prompt()
+      .map((r) => r.text)
+      .join("");
+  const noticeText = (): string =>
+    sh.engine
+      .notices()
+      .filter((n) => n.text)
+      .map((n) => n.text + "\n")
+      .join("");
+  let t = prompt();
+  let pending: string[] = [];
+  let running: ReturnType<typeof sh.start> | null = null;
+  let seenOut = 0;
+  let seenEcho = 0;
+  /** The text of the running input, where its output starts in `t`, and the depth of nested shells. */
+  let lastInput = "";
+  let mark = 0;
+  let depth = 0;
+  let exited = false;
+  /**
+   * Adds what the running input wrote and what the tty echoed since the last
+   * call. A key press echoes before the command reacts, so the echo goes first.
+   */
+  const flow = (): void => {
+    const echo = sh.echoed();
+    t += echo.slice(seenEcho);
+    seenEcho = echo.length;
+    if (!running) return;
+    const out = sh.sofar();
+    t += out.slice(seenOut);
+    seenOut = out.length;
+  };
+  /** Ends the running input: moves the clock until it is done. */
+  const finish = async (): Promise<void> => {
+    if (!running) return;
+    for (let i = 0; i < 400 && !running.done(); i++) await sh.advance(50);
+    if (!running.done()) throw new Error(`${c.id}: the command does not end`);
+    flow();
+    const r = await running.result;
+    // `sofar` ends with the input; the rest of the foreground text is in the result.
+    t += r.both.slice(seenOut);
+    running = null;
+    // The game keeps its prompt after the last `exit`; the capture ends there.
+    const word = lastInput.trim();
+    if (word === "bash" || word === "sh") depth++;
+    else if (/^exit(\s|$)/.test(word)) {
+      if (depth > 0) depth--;
+      else if (!t.slice(mark).includes("There are stopped jobs."))
+        exited = true;
+    }
+    if (!exited) t += noticeText() + prompt();
+  };
+  for (const raw of c.inputs) {
+    const step = promptStep(raw);
+    if (step.kind === "line" || step.kind === "ctrl-c-at-prompt") {
+      await finish();
+      if (step.kind === "ctrl-c-at-prompt") {
+        sh.engine.cancelInput();
+        pending = [];
+        t += "^C\n" + prompt();
+        continue;
+      }
+      t += step.text + "\n";
+      pending.push(step.text);
+      const text = pending.join("\n");
+      if (!sh.engine.isComplete(text)) {
+        t += prompt();
+        continue;
+      }
+      pending = [];
+      seenEcho = sh.echoed().length;
+      seenOut = 0;
+      lastInput = text;
+      mark = t.length;
+      running = sh.start(text);
+      await sh.advance(0);
+      if (running.done()) await finish();
+      else flow();
+    } else if (step.kind === "type" || step.kind === "raw") {
+      flow();
+      await sh.keys(step.kind === "type" ? step.text + "\n" : step.text);
+      flow();
+    } else if (step.kind === "key") {
+      flow();
+      await sh.keys(step.byte);
+      flow();
+      if (running?.done()) await finish();
+    } else {
+      flow();
+      await sh.advance(step.ms);
+      flow();
+      if (running?.done()) await finish();
+    }
+  }
+  await finish();
+  restore();
+  return t;
+}
+
 async function simulateScript(c: ScriptCase) {
   const [e, clock] = await open(c.lines.join("\n") + "\n");
-  const r = await drive(e.execute(`bash ${SCRIPT_PATH}`), clock);
+  const r = await drive(e.execute(`bash ${SCRIPT_PATH} < /dev/null`), clock);
   const part = (stream: "stdout" | "stderr") =>
     r.chunks
       .filter((k) => k.stream === stream)
@@ -216,9 +328,13 @@ describe("simulator against Ubuntu 24.04 (AC2)", () => {
       expect(fx, `no fixture for ${c.id}`).toBeDefined();
       if (!fx) return;
       if (c.kind === "prompt") {
-        expect(normalize(await simulatePrompt(c))).toBe(
-          normalize(fx.transcript as string),
-        );
+        const usesSteps =
+          c.group === "async" || c.inputs.some((i) => i.startsWith("@"));
+        expect(
+          normalize(
+            await (usesSteps ? simulateAsyncPrompt(c) : simulatePrompt(c)),
+          ),
+        ).toBe(normalize(fx.transcript as string));
       } else {
         const got = await simulateScript(c);
         expect({

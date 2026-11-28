@@ -225,7 +225,8 @@ export async function openShell(opts: ShellOptions = {}): Promise<Shell> {
       await settle();
       if (engine.busy() && SIG[data]) {
         tty.flush();
-        echoed += ECHO[SIG[data]] + "\r\n";
+        // As the terminal: the key only; the engine ends the line.
+        echoed += ECHO[SIG[data]];
         engine.signal(SIG[data]);
       } else echoed += tty.feed(data);
       await settle();

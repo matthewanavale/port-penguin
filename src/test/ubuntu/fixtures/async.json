@@ -1,0 +1,899 @@
+{
+  "image": "ubuntu:24.04@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b",
+  "cases": [
+    {
+      "id": "pipe-sigpipe",
+      "kind": "script",
+      "feature": "pipe: SIGPIPE",
+      "input": [
+        "yes | head -1",
+        "echo $?"
+      ],
+      "stdout": "y\n0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipe-pipestatus-141",
+      "kind": "script",
+      "feature": "pipe: PIPESTATUS 141",
+      "input": [
+        "yes | head -1; echo \"${PIPESTATUS[@]}\""
+      ],
+      "stdout": "y\n141 0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipe-head-c-wc",
+      "kind": "script",
+      "feature": "pipe: SIGPIPE",
+      "input": [
+        "yes | head -c 100000 | wc -c",
+        "seq 1 200000 | grep -c 7"
+      ],
+      "stdout": "100000\n81902\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipe-streams",
+      "kind": "script",
+      "feature": "pipe: streams",
+      "input": [
+        "(echo a; sleep 1; echo b) | cat",
+        "(echo c; sleep 1; echo d) | while read l; do echo got-$l; done"
+      ],
+      "stdout": "a\nb\ngot-c\ngot-d\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "read-v",
+      "kind": "prompt",
+      "feature": "keyboard: read",
+      "input": [
+        "read v",
+        "@type hello",
+        "echo \"[$v]\""
+      ],
+      "transcript": "cadet@port-penguin:~$ read v\r\nhello\r\ncadet@port-penguin:~$ echo \"[$v]\"\r\n[hello]\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-n1",
+      "kind": "prompt",
+      "feature": "keyboard: read -n",
+      "input": [
+        "read -n 1 c",
+        "@raw \"x\"",
+        "echo \"[$c]\""
+      ],
+      "transcript": "cadet@port-penguin:~$ read -n 1 c\r\nxcadet@port-penguin:~$ echo \"[$c]\"\r\n[x]\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-s",
+      "kind": "prompt",
+      "feature": "keyboard: read -s",
+      "input": [
+        "read -s v",
+        "@type secret",
+        "echo \"[$v]\""
+      ],
+      "transcript": "cadet@port-penguin:~$ read -s v\r\ncadet@port-penguin:~$ echo \"[$v]\"\r\n[secret]\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-p",
+      "kind": "prompt",
+      "feature": "keyboard: read -p",
+      "input": [
+        "read -p 'name: ' v",
+        "@type bob",
+        "echo \"[$v]\""
+      ],
+      "transcript": "cadet@port-penguin:~$ read -p 'name: ' v\r\nname: bob\r\ncadet@port-penguin:~$ echo \"[$v]\"\r\n[bob]\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-t",
+      "kind": "prompt",
+      "feature": "keyboard: read -t",
+      "input": [
+        "read -t 1 v; echo code=$?",
+        "echo next"
+      ],
+      "transcript": "cadet@port-penguin:~$ read -t 1 v; echo code=$?\r\ncode=142\r\ncadet@port-penguin:~$ echo next\r\nnext\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "select-menu",
+      "kind": "prompt",
+      "feature": "keyboard: select",
+      "input": [
+        "select x in a b c; do echo \"[$x]\"; break; done",
+        "@type 2",
+        "echo done"
+      ],
+      "transcript": "cadet@port-penguin:~$ select x in a b c; do echo \"[$x]\"; break; done\r\n1) a\r\n2) b\r\n3) c\r\n#? 2\r\n[b]\r\ncadet@port-penguin:~$ echo done\r\ndone\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cat-ctrl-d",
+      "kind": "prompt",
+      "feature": "keyboard: cat and Ctrl-D",
+      "input": [
+        "cat",
+        "@type hello",
+        "@key ^D",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ cat\r\nhello\r\nhello\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "wc-l-keyboard",
+      "kind": "prompt",
+      "feature": "keyboard: wc -l",
+      "input": [
+        "wc -l",
+        "@type one",
+        "@type two",
+        "@key ^D"
+      ],
+      "transcript": "cadet@port-penguin:~$ wc -l\r\none\r\ntwo\r\n2\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-ctrl-c",
+      "kind": "prompt",
+      "feature": "keyboard: Ctrl-C in read",
+      "input": [
+        "read v",
+        "@wait 300",
+        "@key ^C",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ read v\r\n^C\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=130\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "sleep-ctrl-c",
+      "kind": "prompt",
+      "feature": "signal: Ctrl-C in sleep",
+      "input": [
+        "sleep 100",
+        "@wait 500",
+        "@key ^C",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100\r\n^C\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=130\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "trap-int",
+      "kind": "prompt",
+      "feature": "signal: trap INT",
+      "input": [
+        "trap 'echo caught' INT; sleep 100; echo after",
+        "@wait 500",
+        "@key ^C",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ trap 'echo caught' INT; sleep 100; echo after\r\n^C\r\nafter\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "trap-int-ignore",
+      "kind": "prompt",
+      "feature": "signal: trap '' INT",
+      "input": [
+        "trap '' INT; sleep 4; echo after",
+        "@wait 500",
+        "@key ^C",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ trap '' INT; sleep 4; echo after\r\n^Cafter\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "sleep-quit",
+      "kind": "prompt",
+      "feature": "signal: Ctrl-\\ (SIGQUIT)",
+      "input": [
+        "sleep 100",
+        "@wait 500",
+        "@key ^\\",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100\r\n^\\Quit (core dumped)\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=131\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-start-list",
+      "kind": "prompt",
+      "feature": "job: &",
+      "input": [
+        "sleep 100 &",
+        "echo $?",
+        "test $! -gt 0 && echo bang-ok",
+        "jobs",
+        "kill %1; sleep 0.3",
+        "echo x",
+        "jobs"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 10\r\ncadet@port-penguin:~$ echo $?\r\n0\r\ncadet@port-penguin:~$ test $! -gt 0 && echo bang-ok\r\nbang-ok\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Running                 sleep 100 &\r\ncadet@port-penguin:~$ kill %1; sleep 0.3\r\n[1]+  Terminated              sleep 100\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ jobs\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-list-long",
+      "kind": "prompt",
+      "feature": "job: jobs -l",
+      "input": [
+        "sleep 100 &",
+        "sleep 101 &",
+        "jobs -l",
+        "jobs -p | wc -l",
+        "jobs -r",
+        "jobs -s",
+        "kill %1 %2; sleep 0.3",
+        "echo x"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 10\r\ncadet@port-penguin:~$ sleep 101 &\r\n[2] 11\r\ncadet@port-penguin:~$ jobs -l\r\n[1]-    10 Running                 sleep 100 &\r\n[2]+    11 Running                 sleep 101 &\r\ncadet@port-penguin:~$ jobs -p | wc -l\r\n2\r\ncadet@port-penguin:~$ jobs -r\r\n[1]-  Running                 sleep 100 &\r\n[2]+  Running                 sleep 101 &\r\ncadet@port-penguin:~$ jobs -s\r\ncadet@port-penguin:~$ kill %1 %2; sleep 0.3\r\n[1]-  Terminated              sleep 100\r\n[2]+  Terminated              sleep 101\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-done-notice",
+      "kind": "prompt",
+      "feature": "job: Done notice",
+      "input": [
+        "sleep 1 &",
+        "@wait 1500",
+        "echo next",
+        "jobs"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 1 &\r\n[1] 10\r\ncadet@port-penguin:~$ echo next\r\nnext\r\n[1]+  Done                    sleep 1\r\ncadet@port-penguin:~$ jobs\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-fg",
+      "kind": "prompt",
+      "feature": "job: fg",
+      "input": [
+        "sleep 2 &",
+        "fg %1",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 2 &\r\n[1] 10\r\ncadet@port-penguin:~$ fg %1\r\nsleep 2\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-ctrl-z-bg",
+      "kind": "prompt",
+      "feature": "job: Ctrl-Z, bg",
+      "input": [
+        "sleep 100",
+        "@wait 500",
+        "@key ^Z",
+        "echo code=$?",
+        "jobs",
+        "bg",
+        "jobs",
+        "kill %1; sleep 0.3",
+        "echo end"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100\r\n^Z\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=148\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ bg\r\n[1]+ sleep 100 &\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Running                 sleep 100 &\r\ncadet@port-penguin:~$ kill %1; sleep 0.3\r\n[1]+  Terminated              sleep 100\r\ncadet@port-penguin:~$ echo end\r\nend\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-ctrl-z-list-text",
+      "kind": "prompt",
+      "feature": "job: Stopped line text",
+      "input": [
+        "echo a; sleep 100",
+        "@wait 500",
+        "@key ^Z",
+        "jobs"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo a; sleep 100\r\na\r\n^Z\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-ctrl-z-list-rest",
+      "kind": "prompt",
+      "feature": "job: Ctrl-Z in a list",
+      "input": [
+        "sleep 100; echo b",
+        "@wait 500",
+        "@key ^Z",
+        "echo code=$?",
+        "jobs"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100; echo b\r\n^Z\r\n[1]+  Stopped                 sleep 100\r\nb\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "kill-l",
+      "kind": "prompt",
+      "feature": "job: kill -l",
+      "input": [
+        "kill -l"
+      ],
+      "transcript": "cadet@port-penguin:~$ kill -l\r\n 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 4) SIGILL\t 5) SIGTRAP\r\n 6) SIGABRT\t 7) SIGBUS\t 8) SIGFPE\t 9) SIGKILL\t10) SIGUSR1\r\n11) SIGSEGV\t12) SIGUSR2\t13) SIGPIPE\t14) SIGALRM\t15) SIGTERM\r\n16) SIGSTKFLT\t17) SIGCHLD\t18) SIGCONT\t19) SIGSTOP\t20) SIGTSTP\r\n21) SIGTTIN\t22) SIGTTOU\t23) SIGURG\t24) SIGXCPU\t25) SIGXFSZ\r\n26) SIGVTALRM\t27) SIGPROF\t28) SIGWINCH\t29) SIGIO\t30) SIGPWR\r\n31) SIGSYS\t34) SIGRTMIN\t35) SIGRTMIN+1\t36) SIGRTMIN+2\t37) SIGRTMIN+3\r\n38) SIGRTMIN+4\t39) SIGRTMIN+5\t40) SIGRTMIN+6\t41) SIGRTMIN+7\t42) SIGRTMIN+8\r\n43) SIGRTMIN+9\t44) SIGRTMIN+10\t45) SIGRTMIN+11\t46) SIGRTMIN+12\t47) SIGRTMIN+13\r\n48) SIGRTMIN+14\t49) SIGRTMIN+15\t50) SIGRTMAX-14\t51) SIGRTMAX-13\t52) SIGRTMAX-12\r\n53) SIGRTMAX-11\t54) SIGRTMAX-10\t55) SIGRTMAX-9\t56) SIGRTMAX-8\t57) SIGRTMAX-7\r\n58) SIGRTMAX-6\t59) SIGRTMAX-5\t60) SIGRTMAX-4\t61) SIGRTMAX-3\t62) SIGRTMAX-2\r\n63) SIGRTMAX-1\t64) SIGRTMAX\t\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-wait",
+      "kind": "prompt",
+      "feature": "job: wait",
+      "input": [
+        "sleep 1 & wait",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 1 & wait\r\n[1] 11\r\n[1]+  Done                    sleep 1\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-wait-n",
+      "kind": "prompt",
+      "feature": "job: wait -n",
+      "input": [
+        "sleep 4 & sleep 1 & wait -n; echo code=$?",
+        "jobs",
+        "wait"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 4 & sleep 1 & wait -n; echo code=$?\r\n[1] 9\r\n[2] 10\r\n[2]+  Done                    sleep 1\r\ncode=0\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Running                 sleep 4 &\r\ncadet@port-penguin:~$ wait\r\n[1]+  Done                    sleep 4\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-kill-signals",
+      "kind": "prompt",
+      "feature": "job: kill",
+      "input": [
+        "sleep 100 &",
+        "kill -9 %1; sleep 0.3",
+        "echo x",
+        "sleep 100 &",
+        "kill -TERM %1; sleep 0.3",
+        "echo y",
+        "kill %9",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 11\r\ncadet@port-penguin:~$ kill -9 %1; sleep 0.3\r\n[1]+  Killed                  sleep 100\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ sleep 100 &\r\n[1] 13\r\ncadet@port-penguin:~$ kill -TERM %1; sleep 0.3\r\n[1]+  Terminated              sleep 100\r\ncadet@port-penguin:~$ echo y\r\ny\r\ncadet@port-penguin:~$ kill %9\r\nbash: kill: %9: no such job\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=1\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-stop-cont",
+      "kind": "prompt",
+      "feature": "job: kill -STOP and -CONT",
+      "input": [
+        "sleep 100 &",
+        "kill -STOP %1; sleep 0.3",
+        "echo x",
+        "jobs",
+        "kill -CONT %1",
+        "jobs",
+        "kill %1; sleep 0.3",
+        "echo y"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 10\r\ncadet@port-penguin:~$ kill -STOP %1; sleep 0.3\r\n\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ kill -CONT %1\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Running                 sleep 100 &\r\ncadet@port-penguin:~$ kill %1; sleep 0.3\r\n[1]+  Terminated              sleep 100\r\ncadet@port-penguin:~$ echo y\r\ny\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-disown",
+      "kind": "prompt",
+      "feature": "job: disown",
+      "input": [
+        "sleep 100 &",
+        "disown %1",
+        "jobs",
+        "echo x"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 9\r\ncadet@port-penguin:~$ disown %1\r\ncadet@port-penguin:~$ jobs\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-specs",
+      "kind": "prompt",
+      "feature": "job: specs",
+      "input": [
+        "sleep 100 &",
+        "sleep 101 &",
+        "jobs %1",
+        "jobs %+",
+        "jobs %-",
+        "jobs %%",
+        "jobs %sleep",
+        "jobs %?101",
+        "kill %1 %2; sleep 0.3",
+        "echo x"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 10\r\ncadet@port-penguin:~$ sleep 101 &\r\n[2] 11\r\ncadet@port-penguin:~$ jobs %1\r\n[1]-  Running                 sleep 100 &\r\ncadet@port-penguin:~$ jobs %+\r\n[2]+  Running                 sleep 101 &\r\ncadet@port-penguin:~$ jobs %-\r\n[1]-  Running                 sleep 100 &\r\ncadet@port-penguin:~$ jobs %%\r\n[2]+  Running                 sleep 101 &\r\ncadet@port-penguin:~$ jobs %sleep\r\nbash: jobs: sleep: ambiguous job spec\r\ncadet@port-penguin:~$ jobs %?101\r\n[2]+  Running                 sleep 101 &\r\ncadet@port-penguin:~$ kill %1 %2; sleep 0.3\r\n[1]-  Terminated              sleep 100\r\n[2]+  Terminated              sleep 101\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "exit-stopped-jobs",
+      "kind": "prompt",
+      "feature": "job: exit with stopped jobs",
+      "input": [
+        "sleep 100",
+        "@wait 500",
+        "@key ^Z",
+        "exit",
+        "jobs",
+        "exit"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100\r\n^Z\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ exit\r\nexit\r\nThere are stopped jobs.\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ exit\r\nexit\r\n"
+    },
+    {
+      "id": "nested-shlvl",
+      "kind": "prompt",
+      "feature": "nested: SHLVL",
+      "input": [
+        "echo $SHLVL",
+        "bash",
+        "echo $SHLVL",
+        "exit",
+        "echo $SHLVL"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo $SHLVL\r\n1\r\ncadet@port-penguin:~$ bash\r\ncadet@port-penguin:~$ echo $SHLVL\r\n2\r\ncadet@port-penguin:~$ exit\r\nexit\r\ncadet@port-penguin:~$ echo $SHLVL\r\n1\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "nested-exit-n",
+      "kind": "prompt",
+      "feature": "nested: exit N",
+      "input": [
+        "bash",
+        "exit 3",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ bash\r\ncadet@port-penguin:~$ exit 3\r\nexit\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=3\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "nested-state",
+      "kind": "prompt",
+      "feature": "nested: state",
+      "input": [
+        "X=1; export Y=2",
+        "bash",
+        "echo \"[$X][$Y]\"",
+        "cd /tmp; Z=3",
+        "exit",
+        "echo \"[$Z]\"; pwd"
+      ],
+      "transcript": "cadet@port-penguin:~$ X=1; export Y=2\r\ncadet@port-penguin:~$ bash\r\ncadet@port-penguin:~$ echo \"[$X][$Y]\"\r\n[][2]\r\ncadet@port-penguin:~$ cd /tmp; Z=3\r\ncadet@port-penguin:/tmp$ exit\r\nexit\r\ncadet@port-penguin:~$ echo \"[$Z]\"; pwd\r\n[]\r\n/home/cadet\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "awk-pipe-order",
+      "kind": "script",
+      "feature": "awk: output pipe order",
+      "input": [
+        "awk 'BEGIN{print \"b\\na\" | \"sort\"; close(\"sort\"); print \"x\"}'"
+      ],
+      "stdout": "a\nb\nx\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipe-sigpipe",
+      "kind": "script",
+      "feature": "pipe: SIGPIPE",
+      "input": [
+        "yes | head -1",
+        "echo $?"
+      ],
+      "stdout": "y\n0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipe-pipestatus-141",
+      "kind": "script",
+      "feature": "pipe: PIPESTATUS 141",
+      "input": [
+        "yes | head -1; echo \"${PIPESTATUS[@]}\""
+      ],
+      "stdout": "y\n141 0\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipe-head-c-wc",
+      "kind": "script",
+      "feature": "pipe: SIGPIPE",
+      "input": [
+        "yes | head -c 100000 | wc -c",
+        "seq 1 200000 | grep -c 7"
+      ],
+      "stdout": "100000\n81902\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "pipe-streams",
+      "kind": "script",
+      "feature": "pipe: streams",
+      "input": [
+        "(echo a; sleep 1; echo b) | cat",
+        "(echo c; sleep 1; echo d) | while read l; do echo got-$l; done"
+      ],
+      "stdout": "a\nb\ngot-c\ngot-d\n",
+      "stderr": "",
+      "code": 0
+    },
+    {
+      "id": "read-v",
+      "kind": "prompt",
+      "feature": "keyboard: read",
+      "input": [
+        "read v",
+        "@type hello",
+        "echo \"[$v]\""
+      ],
+      "transcript": "cadet@port-penguin:~$ read v\r\nhello\r\ncadet@port-penguin:~$ echo \"[$v]\"\r\n[hello]\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-n1",
+      "kind": "prompt",
+      "feature": "keyboard: read -n",
+      "input": [
+        "read -n 1 c",
+        "@raw \"x\"",
+        "echo \"[$c]\""
+      ],
+      "transcript": "cadet@port-penguin:~$ read -n 1 c\r\nxcadet@port-penguin:~$ echo \"[$c]\"\r\n[x]\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-s",
+      "kind": "prompt",
+      "feature": "keyboard: read -s",
+      "input": [
+        "read -s v",
+        "@type secret",
+        "echo \"[$v]\""
+      ],
+      "transcript": "cadet@port-penguin:~$ read -s v\r\ncadet@port-penguin:~$ echo \"[$v]\"\r\n[secret]\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-p",
+      "kind": "prompt",
+      "feature": "keyboard: read -p",
+      "input": [
+        "read -p 'name: ' v",
+        "@type bob",
+        "echo \"[$v]\""
+      ],
+      "transcript": "cadet@port-penguin:~$ read -p 'name: ' v\r\nname: bob\r\ncadet@port-penguin:~$ echo \"[$v]\"\r\n[bob]\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-t",
+      "kind": "prompt",
+      "feature": "keyboard: read -t",
+      "input": [
+        "read -t 1 v; echo code=$?",
+        "echo next"
+      ],
+      "transcript": "cadet@port-penguin:~$ read -t 1 v; echo code=$?\r\ncode=142\r\ncadet@port-penguin:~$ echo next\r\nnext\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "select-menu",
+      "kind": "prompt",
+      "feature": "keyboard: select",
+      "input": [
+        "select x in a b c; do echo \"[$x]\"; break; done",
+        "@type 2",
+        "echo done"
+      ],
+      "transcript": "cadet@port-penguin:~$ select x in a b c; do echo \"[$x]\"; break; done\r\n1) a\r\n2) b\r\n3) c\r\n#? 2\r\n[b]\r\ncadet@port-penguin:~$ echo done\r\ndone\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "cat-ctrl-d",
+      "kind": "prompt",
+      "feature": "keyboard: cat and Ctrl-D",
+      "input": [
+        "cat",
+        "@type hello",
+        "@key ^D",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ cat\r\nhello\r\nhello\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "wc-l-keyboard",
+      "kind": "prompt",
+      "feature": "keyboard: wc -l",
+      "input": [
+        "wc -l",
+        "@type one",
+        "@type two",
+        "@key ^D"
+      ],
+      "transcript": "cadet@port-penguin:~$ wc -l\r\none\r\ntwo\r\n2\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "read-ctrl-c",
+      "kind": "prompt",
+      "feature": "keyboard: Ctrl-C in read",
+      "input": [
+        "read v",
+        "@wait 300",
+        "@key ^C",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ read v\r\n^C\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=130\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "sleep-ctrl-c",
+      "kind": "prompt",
+      "feature": "signal: Ctrl-C in sleep",
+      "input": [
+        "sleep 100",
+        "@wait 500",
+        "@key ^C",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100\r\n^C\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=130\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "trap-int",
+      "kind": "prompt",
+      "feature": "signal: trap INT",
+      "input": [
+        "trap 'echo caught' INT; sleep 100; echo after",
+        "@wait 500",
+        "@key ^C",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ trap 'echo caught' INT; sleep 100; echo after\r\n^C\r\nafter\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "trap-int-ignore",
+      "kind": "prompt",
+      "feature": "signal: trap '' INT",
+      "input": [
+        "trap '' INT; sleep 4; echo after",
+        "@wait 500",
+        "@key ^C",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ trap '' INT; sleep 4; echo after\r\n^Cafter\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "sleep-quit",
+      "kind": "prompt",
+      "feature": "signal: Ctrl-\\ (SIGQUIT)",
+      "input": [
+        "sleep 100",
+        "@wait 500",
+        "@key ^\\",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100\r\n^\\Quit (core dumped)\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=131\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-start-list",
+      "kind": "prompt",
+      "feature": "job: &",
+      "input": [
+        "sleep 100 &",
+        "echo $?",
+        "test $! -gt 0 && echo bang-ok",
+        "jobs",
+        "kill %1; sleep 0.3",
+        "echo x",
+        "jobs"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 10\r\ncadet@port-penguin:~$ echo $?\r\n0\r\ncadet@port-penguin:~$ test $! -gt 0 && echo bang-ok\r\nbang-ok\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Running                 sleep 100 &\r\ncadet@port-penguin:~$ kill %1; sleep 0.3\r\n[1]+  Terminated              sleep 100\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ jobs\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-list-long",
+      "kind": "prompt",
+      "feature": "job: jobs -l",
+      "input": [
+        "sleep 100 &",
+        "sleep 101 &",
+        "jobs -l",
+        "jobs -p | wc -l",
+        "jobs -r",
+        "jobs -s",
+        "kill %1 %2; sleep 0.3",
+        "echo x"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 10\r\ncadet@port-penguin:~$ sleep 101 &\r\n[2] 11\r\ncadet@port-penguin:~$ jobs -l\r\n[1]-    10 Running                 sleep 100 &\r\n[2]+    11 Running                 sleep 101 &\r\ncadet@port-penguin:~$ jobs -p | wc -l\r\n2\r\ncadet@port-penguin:~$ jobs -r\r\n[1]-  Running                 sleep 100 &\r\n[2]+  Running                 sleep 101 &\r\ncadet@port-penguin:~$ jobs -s\r\ncadet@port-penguin:~$ kill %1 %2; sleep 0.3\r\n[1]-  Terminated              sleep 100\r\n[2]+  Terminated              sleep 101\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-done-notice",
+      "kind": "prompt",
+      "feature": "job: Done notice",
+      "input": [
+        "sleep 1 &",
+        "@wait 1500",
+        "echo next",
+        "jobs"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 1 &\r\n[1] 10\r\ncadet@port-penguin:~$ echo next\r\nnext\r\n[1]+  Done                    sleep 1\r\ncadet@port-penguin:~$ jobs\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-fg",
+      "kind": "prompt",
+      "feature": "job: fg",
+      "input": [
+        "sleep 2 &",
+        "fg %1",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 2 &\r\n[1] 10\r\ncadet@port-penguin:~$ fg %1\r\nsleep 2\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-ctrl-z-bg",
+      "kind": "prompt",
+      "feature": "job: Ctrl-Z, bg",
+      "input": [
+        "sleep 100",
+        "@wait 500",
+        "@key ^Z",
+        "echo code=$?",
+        "jobs",
+        "bg",
+        "jobs",
+        "kill %1; sleep 0.3",
+        "echo end"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100\r\n^Z\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=148\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ bg\r\n[1]+ sleep 100 &\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Running                 sleep 100 &\r\ncadet@port-penguin:~$ kill %1; sleep 0.3\r\n[1]+  Terminated              sleep 100\r\ncadet@port-penguin:~$ echo end\r\nend\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-ctrl-z-list-text",
+      "kind": "prompt",
+      "feature": "job: Stopped line text",
+      "input": [
+        "echo a; sleep 100",
+        "@wait 500",
+        "@key ^Z",
+        "jobs"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo a; sleep 100\r\na\r\n^Z\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-ctrl-z-list-rest",
+      "kind": "prompt",
+      "feature": "job: Ctrl-Z in a list",
+      "input": [
+        "sleep 100; echo b",
+        "@wait 500",
+        "@key ^Z",
+        "echo code=$?",
+        "jobs"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100; echo b\r\n^Z\r\n[1]+  Stopped                 sleep 100\r\nb\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "kill-l",
+      "kind": "prompt",
+      "feature": "job: kill -l",
+      "input": [
+        "kill -l"
+      ],
+      "transcript": "cadet@port-penguin:~$ kill -l\r\n 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 4) SIGILL\t 5) SIGTRAP\r\n 6) SIGABRT\t 7) SIGBUS\t 8) SIGFPE\t 9) SIGKILL\t10) SIGUSR1\r\n11) SIGSEGV\t12) SIGUSR2\t13) SIGPIPE\t14) SIGALRM\t15) SIGTERM\r\n16) SIGSTKFLT\t17) SIGCHLD\t18) SIGCONT\t19) SIGSTOP\t20) SIGTSTP\r\n21) SIGTTIN\t22) SIGTTOU\t23) SIGURG\t24) SIGXCPU\t25) SIGXFSZ\r\n26) SIGVTALRM\t27) SIGPROF\t28) SIGWINCH\t29) SIGIO\t30) SIGPWR\r\n31) SIGSYS\t34) SIGRTMIN\t35) SIGRTMIN+1\t36) SIGRTMIN+2\t37) SIGRTMIN+3\r\n38) SIGRTMIN+4\t39) SIGRTMIN+5\t40) SIGRTMIN+6\t41) SIGRTMIN+7\t42) SIGRTMIN+8\r\n43) SIGRTMIN+9\t44) SIGRTMIN+10\t45) SIGRTMIN+11\t46) SIGRTMIN+12\t47) SIGRTMIN+13\r\n48) SIGRTMIN+14\t49) SIGRTMIN+15\t50) SIGRTMAX-14\t51) SIGRTMAX-13\t52) SIGRTMAX-12\r\n53) SIGRTMAX-11\t54) SIGRTMAX-10\t55) SIGRTMAX-9\t56) SIGRTMAX-8\t57) SIGRTMAX-7\r\n58) SIGRTMAX-6\t59) SIGRTMAX-5\t60) SIGRTMAX-4\t61) SIGRTMAX-3\t62) SIGRTMAX-2\r\n63) SIGRTMAX-1\t64) SIGRTMAX\t\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-wait",
+      "kind": "prompt",
+      "feature": "job: wait",
+      "input": [
+        "sleep 1 & wait",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 1 & wait\r\n[1] 11\r\n[1]+  Done                    sleep 1\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=0\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-wait-n",
+      "kind": "prompt",
+      "feature": "job: wait -n",
+      "input": [
+        "sleep 4 & sleep 1 & wait -n; echo code=$?",
+        "jobs",
+        "wait"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 4 & sleep 1 & wait -n; echo code=$?\r\n[1] 9\r\n[2] 10\r\n[2]+  Done                    sleep 1\r\ncode=0\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Running                 sleep 4 &\r\ncadet@port-penguin:~$ wait\r\n[1]+  Done                    sleep 4\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-kill-signals",
+      "kind": "prompt",
+      "feature": "job: kill",
+      "input": [
+        "sleep 100 &",
+        "kill -9 %1; sleep 0.3",
+        "echo x",
+        "sleep 100 &",
+        "kill -TERM %1; sleep 0.3",
+        "echo y",
+        "kill %9",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 11\r\ncadet@port-penguin:~$ kill -9 %1; sleep 0.3\r\n[1]+  Killed                  sleep 100\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ sleep 100 &\r\n[1] 13\r\ncadet@port-penguin:~$ kill -TERM %1; sleep 0.3\r\n[1]+  Terminated              sleep 100\r\ncadet@port-penguin:~$ echo y\r\ny\r\ncadet@port-penguin:~$ kill %9\r\nbash: kill: %9: no such job\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=1\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-stop-cont",
+      "kind": "prompt",
+      "feature": "job: kill -STOP and -CONT",
+      "input": [
+        "sleep 100 &",
+        "kill -STOP %1; sleep 0.3",
+        "echo x",
+        "jobs",
+        "kill -CONT %1",
+        "jobs",
+        "kill %1; sleep 0.3",
+        "echo y"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 10\r\ncadet@port-penguin:~$ kill -STOP %1; sleep 0.3\r\n\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ kill -CONT %1\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Running                 sleep 100 &\r\ncadet@port-penguin:~$ kill %1; sleep 0.3\r\n[1]+  Terminated              sleep 100\r\ncadet@port-penguin:~$ echo y\r\ny\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-disown",
+      "kind": "prompt",
+      "feature": "job: disown",
+      "input": [
+        "sleep 100 &",
+        "disown %1",
+        "jobs",
+        "echo x"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 9\r\ncadet@port-penguin:~$ disown %1\r\ncadet@port-penguin:~$ jobs\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "job-specs",
+      "kind": "prompt",
+      "feature": "job: specs",
+      "input": [
+        "sleep 100 &",
+        "sleep 101 &",
+        "jobs %1",
+        "jobs %+",
+        "jobs %-",
+        "jobs %%",
+        "jobs %sleep",
+        "jobs %?101",
+        "kill %1 %2; sleep 0.3",
+        "echo x"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100 &\r\n[1] 10\r\ncadet@port-penguin:~$ sleep 101 &\r\n[2] 11\r\ncadet@port-penguin:~$ jobs %1\r\n[1]-  Running                 sleep 100 &\r\ncadet@port-penguin:~$ jobs %+\r\n[2]+  Running                 sleep 101 &\r\ncadet@port-penguin:~$ jobs %-\r\n[1]-  Running                 sleep 100 &\r\ncadet@port-penguin:~$ jobs %%\r\n[2]+  Running                 sleep 101 &\r\ncadet@port-penguin:~$ jobs %sleep\r\nbash: jobs: sleep: ambiguous job spec\r\ncadet@port-penguin:~$ jobs %?101\r\n[2]+  Running                 sleep 101 &\r\ncadet@port-penguin:~$ kill %1 %2; sleep 0.3\r\n[1]-  Terminated              sleep 100\r\n[2]+  Terminated              sleep 101\r\ncadet@port-penguin:~$ echo x\r\nx\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "exit-stopped-jobs",
+      "kind": "prompt",
+      "feature": "job: exit with stopped jobs",
+      "input": [
+        "sleep 100",
+        "@wait 500",
+        "@key ^Z",
+        "exit",
+        "jobs",
+        "exit"
+      ],
+      "transcript": "cadet@port-penguin:~$ sleep 100\r\n^Z\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ exit\r\nexit\r\nThere are stopped jobs.\r\ncadet@port-penguin:~$ jobs\r\n[1]+  Stopped                 sleep 100\r\ncadet@port-penguin:~$ exit\r\nexit\r\n"
+    },
+    {
+      "id": "nested-shlvl",
+      "kind": "prompt",
+      "feature": "nested: SHLVL",
+      "input": [
+        "echo $SHLVL",
+        "bash",
+        "echo $SHLVL",
+        "exit",
+        "echo $SHLVL"
+      ],
+      "transcript": "cadet@port-penguin:~$ echo $SHLVL\r\n1\r\ncadet@port-penguin:~$ bash\r\ncadet@port-penguin:~$ echo $SHLVL\r\n2\r\ncadet@port-penguin:~$ exit\r\nexit\r\ncadet@port-penguin:~$ echo $SHLVL\r\n1\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "nested-exit-n",
+      "kind": "prompt",
+      "feature": "nested: exit N",
+      "input": [
+        "bash",
+        "exit 3",
+        "echo code=$?"
+      ],
+      "transcript": "cadet@port-penguin:~$ bash\r\ncadet@port-penguin:~$ exit 3\r\nexit\r\ncadet@port-penguin:~$ echo code=$?\r\ncode=3\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "nested-state",
+      "kind": "prompt",
+      "feature": "nested: state",
+      "input": [
+        "X=1; export Y=2",
+        "bash",
+        "echo \"[$X][$Y]\"",
+        "cd /tmp; Z=3",
+        "exit",
+        "echo \"[$Z]\"; pwd"
+      ],
+      "transcript": "cadet@port-penguin:~$ X=1; export Y=2\r\ncadet@port-penguin:~$ bash\r\ncadet@port-penguin:~$ echo \"[$X][$Y]\"\r\n[][2]\r\ncadet@port-penguin:~$ cd /tmp; Z=3\r\ncadet@port-penguin:/tmp$ exit\r\nexit\r\ncadet@port-penguin:~$ echo \"[$Z]\"; pwd\r\n[]\r\n/home/cadet\r\ncadet@port-penguin:~$ "
+    },
+    {
+      "id": "awk-pipe-order",
+      "kind": "script",
+      "feature": "awk: output pipe order",
+      "input": [
+        "awk 'BEGIN{print \"b\\na\" | \"sort\"; close(\"sort\"); print \"x\"}'"
+      ],
+      "stdout": "a\nb\nx\n",
+      "stderr": "",
+      "code": 0
+    }
+  ]
+}

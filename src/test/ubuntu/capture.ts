@@ -136,6 +136,8 @@ function runScript(c: ScriptCase, n: number): Promise<ScriptResult> {
 /** True when `text` ends at a prompt: the main prompt or `> `. */
 const AT_PROMPT = /(cadet@port-penguin:[^\n]*\$ |\n> |^> )$/;
 const QUIET_MS = 120;
+/** The pause before a step that needs no prompt: the command that reads must be running first. */
+const NO_PROMPT_MS = 400;
 const STEP_TIMEOUT_MS = 20000;
 
 /** The bytes a step sends to the terminal; null for a step that only waits. */
@@ -221,7 +223,7 @@ function runPrompt(c: PromptCase, n: number): Promise<string> {
       const upcoming = steps[idx];
       if (upcoming && needsNoPrompt(upcoming)) {
         promptWait = false;
-        quiet = setTimeout(next, QUIET_MS);
+        quiet = setTimeout(next, NO_PROMPT_MS);
       } else {
         promptWait = true;
         watchPrompt();

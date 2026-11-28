@@ -77,7 +77,16 @@ export function stripAnsi(text: string): string {
  * `test $! -gt 0 && echo bang-ok`.
  */
 const JOB_START = /^(\[\d+\]) \d+$/;
-const JOB_LONG = /^(\[\d+\][+-]?\s+)\d+( )/;
+const JOB_LONG = /^(\[\d+\][+-]?)(\s+\d+)( )/;
+
+/**
+ * `jobs -l` pads the PID to 5 columns after one space, so a short real PID
+ * and a longer simulated one differ in the spaces before them, not in the width
+ * of the field. The field (spaces and digits) is made as wide as the same field
+ * with a 4-digit PID and 2 spaces gives, so the two sides give one text.
+ */
+const jobLong = (_m: string, mark: string, field: string, sp: string): string =>
+  mark + " ".repeat(Math.max(1, field.length - 4)) + "<PID>" + sp;
 
 /** The shared normalizer. */
 export function normalize(text: string): string {
@@ -92,7 +101,7 @@ export function normalize(text: string): string {
       const m = DF_ROW.exec(line);
       if (m) return `${m[1]} <SIZE> <SIZE> <SIZE> <PCT> ${m[2]}`;
       // A prompt line may carry the echoed command before it: only a line that starts with `[N]` counts.
-      return line.replace(JOB_START, "$1 <PID>").replace(JOB_LONG, "$1<PID>$2");
+      return line.replace(JOB_START, "$1 <PID>").replace(JOB_LONG, jobLong);
     })
     .join("\n");
 }

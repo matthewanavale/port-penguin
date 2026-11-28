@@ -2730,9 +2730,9 @@ const utils: Case[] = [
 /**
  * B20: the cases for the run-2b features (AC3 to AC8, AC14). They wait for a
  * capture on Ubuntu 24.04 (`capture.ts async`, needs Docker): until their
- * fixtures exist they are not in `CASES`, so the suite stays green. After the
- * capture, add them to `CASES` and `ASYNC_FEATURES` to `FEATURES`, and teach
- * `simulatePrompt` in reference.test.ts the steps of `promptStep`.
+ * fixtures exist they are not in `CASES`. The capture is done: they are in
+ * `CASES`, `ASYNC_FEATURES` is in `FEATURES`, and `simulateAsyncPrompt` in
+ * reference.test.ts runs the steps of `promptStep`.
  * Background timing uses `sleep` values at least 0.5 s apart, so the order of
  * events cannot change.
  */
@@ -2758,6 +2758,9 @@ export const ASYNC_FEATURES: string[] = [
   "job: Done notice",
   "job: fg",
   "job: Ctrl-Z, bg",
+  "job: Stopped line text",
+  "job: Ctrl-Z in a list",
+  "job: kill -l",
   "job: wait",
   "job: wait -n",
   "job: kill",
@@ -2770,6 +2773,9 @@ export const ASYNC_FEATURES: string[] = [
   "nested: state",
   "awk: output pipe order",
 ];
+
+// `FEATURES` is declared above, so the run-2b items join it here.
+FEATURES.push(...ASYNC_FEATURES);
 
 const AS = "async";
 
@@ -2834,6 +2840,7 @@ export const ASYNC_CASES: Case[] = [
     AS,
     "select-menu",
     "keyboard: select",
+    // The capture pty has width 0: bash prints one item per line (the simulator is set to 1 column).
     'select x in a b c; do echo "[$x]"; break; done',
     "@type 2",
     "echo done",
@@ -2888,7 +2895,7 @@ export const ASYNC_CASES: Case[] = [
     AS,
     "trap-int-ignore",
     "signal: trap '' INT",
-    "trap '' INT; sleep 2; echo after",
+    "trap '' INT; sleep 4; echo after",
     "@wait 500",
     "@key ^C",
     "echo code=$?",
@@ -2911,7 +2918,7 @@ export const ASYNC_CASES: Case[] = [
     "echo $?",
     "test $! -gt 0 && echo bang-ok",
     "jobs",
-    "kill %1",
+    "kill %1; sleep 0.3",
     "echo x",
     "jobs",
   ),
@@ -2925,7 +2932,7 @@ export const ASYNC_CASES: Case[] = [
     "jobs -p | wc -l",
     "jobs -r",
     "jobs -s",
-    "kill %1 %2",
+    "kill %1 %2; sleep 0.3",
     "echo x",
   ),
   p(
@@ -2937,7 +2944,7 @@ export const ASYNC_CASES: Case[] = [
     "echo next",
     "jobs",
   ),
-  p(AS, "job-fg", "job: fg", "sleep 1 &", "fg %1", "echo code=$?"),
+  p(AS, "job-fg", "job: fg", "sleep 2 &", "fg %1", "echo code=$?"),
   p(
     AS,
     "job-ctrl-z-bg",
@@ -2949,17 +2956,36 @@ export const ASYNC_CASES: Case[] = [
     "jobs",
     "bg",
     "jobs",
-    "kill %1",
+    "kill %1; sleep 0.3",
     "echo end",
   ),
-  p(AS, "job-wait", "job: wait", "sleep 1 &", "wait", "echo code=$?"),
+  p(
+    AS,
+    "job-ctrl-z-list-text",
+    "job: Stopped line text",
+    "echo a; sleep 100",
+    "@wait 500",
+    "@key ^Z",
+    "jobs",
+  ),
+  p(
+    AS,
+    "job-ctrl-z-list-rest",
+    "job: Ctrl-Z in a list",
+    "sleep 100; echo b",
+    "@wait 500",
+    "@key ^Z",
+    "echo code=$?",
+    "jobs",
+  ),
+  p(AS, "kill-l", "job: kill -l", "kill -l"),
+  p(AS, "job-wait", "job: wait", "sleep 1 & wait", "echo code=$?"),
   p(
     AS,
     "job-wait-n",
     "job: wait -n",
-    "sleep 2 &",
-    "sleep 1 &",
-    "wait -n; echo code=$?",
+    // One input: the gap between two inputs on a slow host must not change which job ends first.
+    "sleep 4 & sleep 1 & wait -n; echo code=$?",
     "jobs",
     "wait",
   ),
@@ -2968,10 +2994,10 @@ export const ASYNC_CASES: Case[] = [
     "job-kill-signals",
     "job: kill",
     "sleep 100 &",
-    "kill -9 %1",
+    "kill -9 %1; sleep 0.3",
     "echo x",
     "sleep 100 &",
-    "kill -TERM %1",
+    "kill -TERM %1; sleep 0.3",
     "echo y",
     "kill %9",
     "echo code=$?",
@@ -2981,12 +3007,12 @@ export const ASYNC_CASES: Case[] = [
     "job-stop-cont",
     "job: kill -STOP and -CONT",
     "sleep 100 &",
-    "kill -STOP %1",
+    "kill -STOP %1; sleep 0.3",
     "echo x",
     "jobs",
     "kill -CONT %1",
     "jobs",
-    "kill %1",
+    "kill %1; sleep 0.3",
     "echo y",
   ),
   p(
@@ -3010,7 +3036,7 @@ export const ASYNC_CASES: Case[] = [
     "jobs %%",
     "jobs %sleep",
     "jobs %?101",
-    "kill %1 %2",
+    "kill %1 %2; sleep 0.3",
     "echo x",
   ),
   p(
@@ -3070,6 +3096,7 @@ export const CASES: Case[] = [
   ...parsing,
   ...skel,
   ...utils,
+  ...ASYNC_CASES,
 ];
 
 /** The names of the fixture files, one per group. */
