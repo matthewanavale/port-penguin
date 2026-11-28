@@ -1518,6 +1518,8 @@ function posixToJs(p: string, ere: boolean): string {
 interface GrepSrc {
   name: string;
   text: string;
+  /** Standard input: read as a stream, in its place in the list (B26). */
+  stdin?: boolean;
 }
 
 function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
@@ -1644,13 +1646,6 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
     const recursive = r.has("r") || r.has("R");
     const names = rest.length ? rest : recursive ? ["."] : ["-"];
     const implicitDot = recursive && !rest.length;
-    // B26: `grep` reads standard input as a stream when it has no context lines to keep.
-    const streamIn =
-      names.length === 1 &&
-      names[0] === "-" &&
-      r.val("A") === undefined &&
-      r.val("B") === undefined &&
-      r.val("C") === undefined;
     const srcs: GrepSrc[] = [];
     let code = 0;
     const quiet = r.has("q");
@@ -1688,11 +1683,7 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
     };
     for (const name of names) {
       if (name === "-") {
-        if (!streamIn)
-          srcs.push({
-            name: "(standard input)",
-            text: await io.in.readAll(sh),
-          });
+        srcs.push({ name: "(standard input)", text: "", stdin: true });
         continue;
       }
       const f1 = lookup(sh, name);
@@ -1743,15 +1734,35 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
     const paint = io.out.tty && sh.promptLevel() && color !== false;
     let matched = false;
     let printedGroup = false;
-    if (streamIn) {
-      const stdinName = "(standard input)";
+    /**
+     * B26: one source that is standard input. It is read one chunk at a time,
+     * with the context lines (-A, -B, -C) kept in a small window, so a pipe
+     * that never ends still gives output and `-m` stops the read. Gives the
+     * number of matching lines.
+     */
+    const streamSource = async (src: GrepSrc): Promise<number> => {
+      const useCtx = before > 0 || after > 0;
       let lineNo = 0;
       let count = 0;
+      let prev = -2;
+      let afterLeft = 0;
+      const ring: { i: number; l: string }[] = [];
       let text = "";
       let html = "";
-      const showLine = (l: string, pre: string): void => {
+      const emit = (i: number, l: string, isHit: boolean): void => {
+        if (
+          (useCtx && prev >= 0 && i !== prev + 1) ||
+          (useCtx && prev === -2 && printedGroup)
+        ) {
+          text += "--\n";
+          html += "--\n";
+        }
+        prev = i;
+        const sep = isHit ? ":" : "-";
+        const pre =
+          (withName ? src.name + sep : "") + (numbers ? i + 1 + sep : "");
         if (onlyMatching) {
-          if (invert) return;
+          if (!isHit || invert) return;
           re.lastIndex = 0;
           let m: RegExpExecArray | null;
           while ((m = re.exec(l)) !== null) {
@@ -1769,7 +1780,7 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
         }
         text += pre + l + "\n";
         let body = esc(l);
-        if (paint && !invert) {
+        if (paint && isHit && !invert) {
           body = "";
           let last = 0;
           re.lastIndex = 0;
@@ -1788,45 +1799,76 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
         }
         html += esc(pre) + body + "\n";
       };
+      const flush = (): void => {
+        if (text) {
+          printedGroup = true;
+          io.out.write(text, paint ? html : undefined);
+        }
+        text = "";
+        html = "";
+      };
       if (maxCount > 0)
         await streamLines(io.in, sh, (lines) => {
-          text = "";
-          html = "";
           let stop = false;
           for (const l of lines) {
-            lineNo++;
+            const i = lineNo++;
             re.lastIndex = 0;
-            if (re.test(l) === invert) continue;
+            const isHit = re.test(l) !== invert;
+            // After the last wanted match only its trailing context is left.
+            if (count >= maxCount) {
+              if (afterLeft > 0) {
+                afterLeft--;
+                emit(i, l, false);
+                if (afterLeft === 0) {
+                  stop = true;
+                  break;
+                }
+                continue;
+              }
+              stop = true;
+              break;
+            }
+            if (!isHit) {
+              if (afterLeft > 0) {
+                afterLeft--;
+                emit(i, l, false);
+              } else if (before > 0) {
+                ring.push({ i, l });
+                if (ring.length > before) ring.shift();
+              }
+              continue;
+            }
             count++;
             matched = true;
             if (quiet || listMatch || listNone) {
               stop = true;
               break;
             }
-            if (!onlyCount)
-              showLine(
-                l,
-                (r.has("H") ? stdinName + ":" : "") +
-                  (numbers ? lineNo + ":" : ""),
-              );
-            if (count >= maxCount) {
+            if (!onlyCount) {
+              for (const b of ring.splice(0)) emit(b.i, b.l, false);
+              emit(i, l, true);
+              afterLeft = after;
+            }
+            if (count >= maxCount && afterLeft === 0) {
               stop = true;
               break;
             }
           }
-          if (text) io.out.write(text, paint ? html : undefined);
+          flush();
           return stop;
         });
-      if (quiet) return matched ? 0 : 1;
-      if (listMatch || listNone) {
-        if (count > 0 === listMatch) io.out.write(stdinName + "\n");
-        return matched || listNone ? 0 : 1;
-      }
-      if (onlyCount)
-        io.out.write((r.has("H") ? stdinName + ":" : "") + count + "\n");
-      return matched ? 0 : 1;
-    }
+      return count;
+    };
     for (const src of srcs) {
+      if (src.stdin) {
+        const n = await streamSource(src);
+        if (quiet && matched) return 0;
+        if (listMatch || listNone) {
+          if (n > 0 === listMatch) io.out.write(src.name + "\n");
+        } else if (onlyCount)
+          io.out.write((withName ? src.name + ":" : "") + n + "\n");
+        continue;
+      }
       const lines = splitLines(src.text);
       const hit: boolean[] = lines.map((l) => {
         re.lastIndex = 0;

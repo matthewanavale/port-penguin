@@ -163,7 +163,9 @@ export interface Feed {
 
 /** A feed from a pipe. */
 export function pipeFeed(pipe: Pipe, owner: Proc): Feed {
-  return { next: (sh, want) => pipe.read(sh ?? owner, want.count) };
+  return {
+    next: (sh, want) => pipe.read(sh ?? owner, want.count, want.signal),
+  };
 }
 
 /**
@@ -209,7 +211,9 @@ export class Input {
     const s = await this.feed.next(sh, { ...want, signal: this.signal });
     if (s === null) {
       // A signal that has a trap also ends a wait with null: not the end of input.
-      if (!(sh && sh.signals.length)) this.ended = true;
+      // A timeout (`read -t`) is not the end of input either.
+      if (!(sh && sh.signals.length) && !this.signal?.aborted)
+        this.ended = true;
       return false;
     }
     this.text += s;

@@ -434,32 +434,50 @@ const paste: CmdFn = async (argv, sh, io) => {
     }
   }
   const files = p.rest.length ? p.rest : ["-"];
-  const data: string[][] = [];
+  // B26: a file is read first (an error ends the command before any output);
+  // `-` is standard input, read one line at a time. Every `-` takes the next
+  // line of the same input, as in GNU paste.
+  const data: (string[] | null)[] = [];
   for (const f of files) {
+    if (f === "-") {
+      data.push(null);
+      continue;
+    }
     const t = await readOperand("paste", f, sh, io);
     if (t === null) return 1;
     data.push(splitLines(t));
   }
-  let out = "";
+  const nextLine = async (i: number, row: number): Promise<string | null> => {
+    const d = data[i];
+    if (d) return row < d.length ? d[row] : null;
+    const l = await io.in.readLine(sh);
+    return l === null ? null : l.line;
+  };
   if (serial) {
-    for (const ls of data) {
+    for (let i = 0; i < data.length; i++) {
       let line = "";
-      ls.forEach((l, i) => {
-        line += (i ? delims[(i - 1) % delims.length] : "") + l;
-      });
-      out += line + "\n";
+      for (let row = 0; ; row++) {
+        const l = await nextLine(i, row);
+        if (l === null) break;
+        line += (row ? delims[(row - 1) % delims.length] : "") + l;
+      }
+      io.out.write(line + "\n");
     }
   } else {
-    const rows = Math.max(0, ...data.map((d) => d.length));
-    for (let r = 0; r < rows; r++) {
+    for (let row = 0; ; row++) {
       let line = "";
-      data.forEach((d, i) => {
-        line += (i ? delims[(i - 1) % delims.length] : "") + (d[r] ?? "");
-      });
-      out += line + "\n";
+      let any = false;
+      for (let i = 0; i < data.length; i++) {
+        const l = await nextLine(i, row);
+        if (l !== null) any = true;
+        line += (i ? delims[(i - 1) % delims.length] : "") + (l ?? "");
+      }
+      if (!any) break;
+      // One row goes out as soon as it is complete.
+      io.out.write(line + "\n");
+      await sh.drain();
     }
   }
-  io.out.write(out);
   return 0;
 };
 
@@ -744,39 +762,15 @@ const xargs: CmdFn = async (argv, sh, io) => {
   }
   const cmd = argv.slice(i);
   if (cmd.length === 0) cmd.push("echo");
-  const text = await io.in.readAll(sh);
-  let items: string[];
-  if (repl !== null) {
-    items = text
-      .split(delim ?? "\n")
-      .map((l) => (delim === null ? l.replace(/^[ \t]+/, "") : l))
-      .filter(
-        (l, k, all) => l !== "" || (delim !== null && k < all.length - 1),
-      );
-  } else if (delim !== null) {
-    items = text.split(delim);
-    if (items[items.length - 1] === "") items.pop();
-  } else {
-    const w = xargsWords(text);
-    if (typeof w === "string") {
-      errOut(io, "xargs", w);
-      return 1;
-    }
-    items = w;
-  }
-  if (eof !== null) {
-    const k = items.indexOf(eof);
-    if (k >= 0) items = items.slice(0, k);
-  }
-  const batches: string[][] = [];
-  if (repl !== null) for (const it of items) batches.push([it]);
-  else if (perCall > 0)
-    for (let k = 0; k < items.length; k += perCall)
-      batches.push(items.slice(k, k + perCall));
-  else if (items.length) batches.push(items);
-  if (batches.length === 0 && !noRun && repl === null) batches.push([]);
+  // B26: standard input is read one chunk at a time. A batch runs as soon as
+  // it is full (`-n`, `-L`, `-I`, or the size limit of a command line), so a
+  // slow or endless writer gives output, and `-E` stops the read.
+  const LIMIT = 131_072;
   let code = 0;
-  for (const b of batches) {
+  let ran = false;
+  let stop: number | null = null;
+  let ended = false;
+  const runBatch = async (b: string[]): Promise<void> => {
     const args =
       repl !== null
         ? cmd.map((c) => c.split(repl as string).join(b[0]))
@@ -784,15 +778,107 @@ const xargs: CmdFn = async (argv, sh, io) => {
     if (trace) io.err.write(args.join(" ") + "\n");
     if (!args[0].includes("/") && !sh.lookup(args[0])) {
       errOut(io, "xargs", `${args[0]}: No such file or directory`);
-      return 127;
+      stop = 127;
+      return;
     }
+    ran = true;
     const child: IO = { in: new Input(""), out: io.out, err: io.err };
     const r = await sh.runCommand(args, child, {});
-    if (r === 255) return 124;
-    if (r === 127) code = Math.max(code, 127);
+    if (r === 255) stop = 124;
+    else if (r === 127) code = Math.max(code, 127);
     else if (r !== 0 && code < 123) code = 123;
+  };
+  let pending: string[] = [];
+  let pendingLen = 0;
+  const flush = async (): Promise<void> => {
+    if (!pending.length) return;
+    const b = pending;
+    pending = [];
+    pendingLen = 0;
+    await runBatch(b);
+  };
+  const take = async (list: string[]): Promise<void> => {
+    let items = list;
+    if (eof !== null) {
+      const k = items.indexOf(eof);
+      if (k >= 0) {
+        items = items.slice(0, k);
+        ended = true;
+      }
+    }
+    for (const it of items) {
+      if (repl !== null) {
+        await runBatch([it]);
+      } else {
+        if (pending.length && pendingLen + it.length + 1 > LIMIT) await flush();
+        if (stop !== null) return;
+        pending.push(it);
+        pendingLen += it.length + 1;
+        if (perCall > 0 && pending.length >= perCall) await flush();
+      }
+      if (stop !== null) return;
+    }
+  };
+  /** The items of text that holds only whole items. Gives an error text on a bad quote. */
+  const split = (text: string): string[] | string => {
+    if (repl !== null)
+      return text
+        .split(delim ?? "\n")
+        .map((l) => (delim === null ? l.replace(/^[ \t]+/, "") : l))
+        .filter(
+          (l, k, all) => l !== "" || (delim !== null && k < all.length - 1),
+        );
+    if (delim !== null) {
+      const items = text.split(delim);
+      if (items[items.length - 1] === "") items.pop();
+      return items;
+    }
+    return xargsWords(text);
+  };
+  /** The end of the whole items in `buf`: the rest may be the start of the next one. */
+  const cut = (buf: string): number => {
+    if (delim !== null) return buf.lastIndexOf(delim) + 1;
+    if (repl !== null) return buf.lastIndexOf("\n") + 1;
+    let q: string | null = null;
+    let at = 0;
+    for (let k = 0; k < buf.length; k++) {
+      const c = buf[k];
+      if (q !== null) {
+        if (c === q) q = null;
+      } else if (c === "'" || c === '"') q = c;
+      else if (c === "\\") k++;
+      else if (/\s/.test(c)) at = k + 1;
+    }
+    return at;
+  };
+  let buf = "";
+  while (stop === null && !ended) {
+    const c = await io.in.readChunk(undefined, sh);
+    if (c === null) break;
+    buf += c;
+    const n = cut(buf);
+    if (n <= 0) continue;
+    const w = split(buf.slice(0, n));
+    buf = buf.slice(n);
+    if (typeof w === "string") {
+      errOut(io, "xargs", w);
+      return 1;
+    }
+    await take(w);
+    await sh.drain();
   }
-  return code;
+  if (stop === null && !ended && buf !== "") {
+    const w = split(buf);
+    if (typeof w === "string") {
+      errOut(io, "xargs", w);
+      return 1;
+    }
+    await take(w);
+  }
+  if (stop === null) await flush();
+  if (stop !== null) return stop;
+  if (!ran && !noRun && repl === null) await runBatch([]);
+  return stop ?? code;
 };
 
 /* ---------- diff ---------- */

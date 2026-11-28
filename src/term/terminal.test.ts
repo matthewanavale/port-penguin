@@ -841,6 +841,115 @@ describe("the control keys of the extra-keys bar (B28, AC13)", () => {
   });
 });
 
+describe("background jobs in the terminal (B9, B13, B17)", () => {
+  const plain = (x: Fake) =>
+    // eslint-disable-next-line no-control-regex
+    x.written.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+  const live = (c: HTMLElement) =>
+    c.querySelector('[aria-live="polite"]') as HTMLElement;
+  const later = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  it("writes background output on new lines, then draws the prompt and the edited line again (B13)", async () => {
+    const { x, engine } = await setup();
+    x.dataHandler?.("{ sleep 0.05; echo bg-out; } &\r");
+    await flush();
+    x.dataHandler?.("abc");
+    const before = x.written.length;
+    await later(150);
+    const added = x.written.slice(before);
+    expect(added).toContain("bg-out");
+    // The prompt and the line come after the output, as the last thing written.
+    const prompt = engine
+      .prompt()
+      .map((r) => r.text)
+      .join("");
+    // eslint-disable-next-line no-control-regex
+    const plainAdded = added.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+    expect(plainAdded.indexOf("bg-out")).toBeLessThan(
+      plainAdded.indexOf(prompt + "abc"),
+    );
+    expect(plainAdded.endsWith(prompt + "abc\r")).toBe(true);
+  });
+
+  it("puts the cursor back where it was after background output (B13)", async () => {
+    const { x, engine } = await setup();
+    x.dataHandler?.("{ sleep 0.05; echo bg-out; } &\r");
+    await flush();
+    x.dataHandler?.("abc");
+    x.dataHandler?.("\x1b[D");
+    x.dataHandler?.("\x1b[D");
+    const before = x.written.length;
+    await later(150);
+    const added = x.written.slice(before);
+    const promptWidth = width(
+      engine
+        .prompt()
+        .map((r) => r.text)
+        .join(""),
+    );
+    // The cursor is after the first character of the line.
+    expect(added.endsWith(`\r\x1b[${promptWidth + 1}C`)).toBe(true);
+  });
+
+  it("does not redraw the prompt for output while a command runs", async () => {
+    const { x, engine } = await setup();
+    x.dataHandler?.("echo one; sleep 0.05; echo two\r");
+    await flush();
+    expect(engine.busy()).toBe(true);
+    await later(150);
+    const text = plain(x);
+    expect(text).toContain("one");
+    expect(text).toContain("two");
+    // No prompt was drawn between the two lines of output.
+    expect(text.slice(text.indexOf("one"), text.indexOf("two"))).not.toContain(
+      "cadet@",
+    );
+  });
+
+  it("shows the Done notice before the next prompt and announces it (B9, B17)", async () => {
+    const { x, container } = await setup();
+    x.dataHandler?.("sleep 0.05 &\r");
+    await flush();
+    await later(150);
+    expect(plain(x)).not.toContain("Done");
+    x.dataHandler?.("\r");
+    await flush();
+    expect(plain(x)).toContain("[1]+  Done                    sleep 0.05");
+    expect(live(container).textContent).toBe("Job 1 done");
+  });
+
+  it("shows the Stopped line at once for Ctrl-Z and announces it (B9, B17)", async () => {
+    const { x, engine, container } = await setup();
+    x.dataHandler?.("sleep 100\r");
+    await flush();
+    expect(engine.busy()).toBe(true);
+    x.dataHandler?.("\x1a");
+    await flush();
+    await flush();
+    expect(engine.busy()).toBe(false);
+    expect(plain(x)).toContain("^Z");
+    expect(plain(x)).toContain("[1]+  Stopped                 sleep 100");
+    expect(live(container).textContent).toBe("Job 1 stopped");
+    expect(engine.state.lastCode).toBe(148);
+    await engine.reset();
+  });
+
+  it("flow control also works for a job that writes at the prompt", async () => {
+    const { x, engine } = await setup();
+    x.holdWrites = true;
+    x.dataHandler?.("yes &\r");
+    await flush();
+    await later(30);
+    // xterm holds its writes: the job waits instead of growing the page memory.
+    const held = x.written.length;
+    await later(30);
+    expect(x.written.length - held).toBeLessThan(600_000);
+    x.holdWrites = false;
+    for (const f of x.pending.splice(0)) f();
+    await engine.reset();
+  });
+});
+
 describe("output flow control (B15)", () => {
   it("gives a promise while xterm is more than 256 KB behind, and ends it when xterm catches up", async () => {
     const { x, t } = await setup();

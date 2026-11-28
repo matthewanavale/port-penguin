@@ -59,11 +59,19 @@ export class Pipe {
   }
 
   /** Waits until a process wakes this wait: data, a close, or a signal. */
-  private async block(sh: Proc | undefined): Promise<void> {
+  private async block(
+    sh: Proc | undefined,
+    signal?: AbortSignal,
+  ): Promise<void> {
     if (sh) {
       await sh.interruptible((wake) => {
         this.waiting.add(wake);
-        return () => this.waiting.delete(wake);
+        // `read -t`: the end of the time wakes the wait (B4).
+        signal?.addEventListener("abort", wake, { once: true });
+        return () => {
+          this.waiting.delete(wake);
+          signal?.removeEventListener("abort", wake);
+        };
       });
       return;
     }
@@ -83,7 +91,11 @@ export class Pipe {
    * is open. Gives null at the end of input. A pending signal that has a trap
    * ends the wait with an empty string.
    */
-  async read(sh: Proc | undefined, max = Infinity): Promise<string | null> {
+  async read(
+    sh: Proc | undefined,
+    max = Infinity,
+    signal?: AbortSignal,
+  ): Promise<string | null> {
     for (;;) {
       if (this.size > 0) {
         const part = this.buf.slice(this.pos, this.pos + max);
@@ -99,8 +111,10 @@ export class Pipe {
         return part;
       }
       if (this.writers === 0) return null;
-      await this.block(sh);
+      if (signal?.aborted) return null;
+      await this.block(sh, signal);
       if (sh && sh.signals.length) return null;
+      if (signal?.aborted) return null;
     }
   }
 

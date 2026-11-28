@@ -345,6 +345,85 @@ describe("fg, bg, and Ctrl-Z (B9)", () => {
   });
 });
 
+describe("a background job that reads the terminal (B24)", () => {
+  it("cat & stops with the Stopped line; fg lets it read the keyboard", async () => {
+    await sh.run("cat &");
+    await settle();
+    expect(notes()).toEqual([row(1, "+", "Stopped", "cat")]);
+    expect((await sh.run("jobs")).out).toBe(
+      row(1, "+", "Stopped", "cat") + "\n",
+    );
+    const f = sh.start("fg");
+    await settle();
+    expect(sh.engine.busy()).toBe(true);
+    await sh.keys("hello\n");
+    expect(sh.sofar()).toContain("hello\n");
+    await sh.keys("\x04");
+    const r = await f.result;
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("cat\n");
+  });
+
+  it("read in a job stops it too", async () => {
+    await sh.run("{ read v; echo got $v; } &");
+    await settle();
+    expect(notes()).toEqual([
+      row(1, "+", "Stopped", "{ read v; echo got $v; }"),
+    ]);
+  });
+
+  it("a job whose input is a file does not stop", async () => {
+    await sh.run("echo line > in.txt");
+    await sh.run("cat < in.txt &");
+    await settle();
+    expect(sh.sofar()).toContain("line");
+    expect(notes()[0]).toContain("Done");
+  });
+
+  it("keys typed during a foreground sleep reach the next prompt and a later read (B24)", async () => {
+    const f = sh.start("sleep 2");
+    await settle();
+    await sh.keys("abc");
+    await sh.advance(2000);
+    await f.result;
+    expect(sh.tty.takeAhead()).toBe("abc");
+    sh.tty.feed("xyz\n");
+    const g = sh.start("read v; echo got=$v");
+    await settle();
+    expect((await g.result).out).toContain("got=xyz");
+  });
+});
+
+describe("two jobs and the foreground do not share state (B2, AC2)", () => {
+  it("variables, cwd, and functions stay in their own process", async () => {
+    await sh.run("f() { x=$1; cd $2; echo $x:$PWD; }");
+    await sh.run("mkdir -p /tmp/a /tmp/b");
+    await sh.run("x=prompt");
+    await sh.run(
+      "{ for i in 1 2 3; do f A /tmp/a >> /tmp/A.log; sleep 1; done; } &",
+    );
+    await sh.run(
+      "{ for i in 1 2 3; do f B /tmp/b >> /tmp/B.log; sleep 1; done; } &",
+    );
+    const fg = sh.start(
+      "for i in 1 2 3; do x=F$i; sleep 1; echo fg:$x:$PWD; done",
+    );
+    await sh.advance(3000);
+    const r = await fg.result;
+    expect(r.out).toBe(
+      "fg:F1:/home/cadet\nfg:F2:/home/cadet\nfg:F3:/home/cadet\n",
+    );
+    expect((await sh.run("cat /tmp/A.log")).out).toBe(
+      "A:/tmp/a\nA:/tmp/a\nA:/tmp/a\n",
+    );
+    expect((await sh.run("cat /tmp/B.log")).out).toBe(
+      "B:/tmp/b\nB:/tmp/b\nB:/tmp/b\n",
+    );
+    const end = await sh.run("echo $x; pwd");
+    expect(end.out).toBe("F3\n/home/cadet\n");
+  });
+});
+
 describe("exit with stopped jobs (B9)", () => {
   it("warns once and does not exit; a second exit leaves", async () => {
     const f = sh.start("sleep 100");

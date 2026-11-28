@@ -184,3 +184,134 @@ describe("stream commands (B26)", () => {
     expect(r.out).toBe("a\nb\n3\n");
   });
 });
+
+describe("the Phase C gaps (B4, B26)", () => {
+  it("paste reads stdin as a stream: a row goes out when its lines are there", async () => {
+    const r = sh.start("(echo a; sleep 1; echo b; echo c) | paste -d, - -");
+    await sh.advance(0);
+    await sh.advance(999);
+    expect(sh.sofar()).toBe("");
+    await sh.advance(1);
+    const res = await r.result;
+    // Every `-` takes the next line of the same input, as in GNU paste.
+    expect(res.out).toBe("a,b\nc,\n");
+  });
+
+  it("paste gives a row at once with a file and stdin", async () => {
+    await sh.run("printf '1\\n2\\n3\\n' > nums");
+    const r = await sh.run("printf 'x\\ny\\n' | paste nums -");
+    expect(r.out).toBe("1\tx\n2\ty\n3\t\n");
+  });
+
+  it("paste -s joins the lines of stdin", async () => {
+    const r = await sh.run("printf 'a\\nb\\nc\\n' | paste -s -d+ -");
+    expect(r.out).toBe("a+b+c\n");
+  });
+
+  it("xargs -n runs a batch as soon as it is full, before the input ends", async () => {
+    const r = sh.start("(echo 1 2; sleep 1; echo 3 4) | xargs -n 2 echo");
+    await sh.advance(0);
+    expect(sh.sofar()).toBe("1 2\n");
+    await sh.advance(1000);
+    const res = await r.result;
+    expect(res.out).toBe("1 2\n3 4\n");
+  });
+
+  it("xargs -I runs for each line while the writer goes on", async () => {
+    const r = sh.start("(echo a; sleep 1; echo b) | xargs -I{} echo got-{}");
+    await sh.advance(0);
+    expect(sh.sofar()).toBe("got-a\n");
+    await sh.advance(1000);
+    expect((await r.result).out).toBe("got-a\ngot-b\n");
+  });
+
+  it("xargs stops reading at its -E marker and when its reader ends", async () => {
+    const a = await sh.run("printf 'a\\nSTOP\\nb\\n' | xargs -E STOP");
+    expect(a.out).toBe("a\n");
+    const b = await sh.run("yes | xargs -n 1 echo | head -2");
+    expect(b.out).toBe("y\ny\n");
+  });
+
+  it("xargs with quotes that cross a chunk still joins one word", async () => {
+    const r = await sh.run(
+      '(printf "\'a b"; printf " c\' d\\n") | xargs -n 1 echo',
+    );
+    expect(r.out).toBe("a b c\nd\n");
+  });
+
+  it("xargs with no input runs the command once, and -r does not", async () => {
+    expect((await sh.run("true | xargs echo none")).out).toBe("none\n");
+    expect((await sh.run("true | xargs -r echo none")).out).toBe("");
+  });
+
+  it("grep -A, -B, and -C stream stdin", async () => {
+    const r = sh.start(
+      "(echo a; echo b; echo HIT; echo c; echo d; echo e; sleep 1; echo HIT2; echo f) | grep -n -B1 -A1 HIT",
+    );
+    await sh.advance(0);
+    expect(sh.sofar()).toBe("2-b\n3:HIT\n4-c\n");
+    await sh.advance(1000);
+    const res = await r.result;
+    expect(res.out).toBe("2-b\n3:HIT\n4-c\n--\n6-e\n7:HIT2\n8-f\n");
+  });
+
+  it("grep -C and a numeric -2 keep the window, and -m stops the read", async () => {
+    const a = await sh.run("seq 1 9 | grep -C1 5");
+    expect(a.out).toBe("4\n5\n6\n");
+    const b = await sh.run("seq 1 9 | grep -2 5");
+    expect(b.out).toBe("3\n4\n5\n6\n7\n");
+    const c = await sh.run("yes | grep -m1 -A1 y");
+    expect(c.out).toBe("y\ny\n");
+    expect(c.code).toBe(0);
+  });
+
+  it("grep context keeps -v, -c, and a group separator across matches", async () => {
+    const a = await sh.run("seq 1 7 | grep -v -A1 '[2-6]'");
+    expect(a.out).toBe("1\n2\n--\n7\n");
+    const b = await sh.run("seq 1 7 | grep -c -A1 3");
+    expect(b.out).toBe("1\n");
+  });
+
+  it("grep reads stdin in its place in a list of files", async () => {
+    await sh.run("printf 'one\\nHIT file\\n' > f1");
+    await sh.run("printf 'HIT two\\n' > f2");
+    const r = await sh.run("printf 'x\\nHIT in\\n' | grep HIT f1 - f2");
+    expect(r.out).toBe("f1:HIT file\n(standard input):HIT in\nf2:HIT two\n");
+    const c = await sh.run("printf 'HIT\\nHIT\\n' | grep -c HIT f1 -");
+    expect(c.out).toBe("f1:1\n(standard input):2\n");
+  });
+
+  it("read -t times out on a pipe with status 142, as on the terminal", async () => {
+    const r = sh.start(
+      "(sleep 5; echo late) | { read -t 1 v; echo status=$? v=[$v]; }",
+    );
+    await sh.advance(0);
+    expect(sh.sofar()).toBe("");
+    await sh.advance(1000);
+    expect(sh.sofar()).toBe("status=142 v=[]\n");
+    await sh.advance(4000);
+    expect((await r.result).out).toBe("status=142 v=[]\n");
+  });
+
+  it("read -t gives the line when the data comes in time", async () => {
+    const r = sh.start(
+      "(sleep 1; echo fast) | { read -t 3 v; echo status=$? v=[$v]; }",
+    );
+    await sh.advance(1000);
+    expect((await r.result).out).toBe("status=0 v=[fast]\n");
+  });
+
+  it("read -t 0 on a pipe checks for data without a wait", async () => {
+    const r = await sh.run("echo x | { read -t 0 v; echo status=$?; }");
+    expect(r.out).toBe("status=0\n");
+  });
+
+  it("a timeout does not end the input: the next read still gets the data", async () => {
+    const r = sh.start(
+      "(sleep 2; echo later) | { read -t 1 a; echo a=$?; read b; echo b=$b; }",
+    );
+    await sh.advance(1000);
+    await sh.advance(1000);
+    expect((await r.result).out).toBe("a=142\nb=later\n");
+  });
+});
