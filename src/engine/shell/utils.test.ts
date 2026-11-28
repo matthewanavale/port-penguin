@@ -6,9 +6,9 @@ import { openShell, restore } from "../../test/engineHarness";
 import type { Shell } from "../../test/engineHarness";
 
 let sh: Shell;
-beforeEach(() => {
-  sh = openShell();
-  sh.run("mkdir -p /tmp/w && cd /tmp/w");
+beforeEach(async () => {
+  sh = await openShell();
+  await sh.run("mkdir -p /tmp/w && cd /tmp/w");
 });
 afterEach(restore);
 
@@ -58,92 +58,102 @@ describe("coreutils messages and exit codes", () => {
     ],
   ];
   for (const [cmd, err, code] of cases) {
-    it(`${cmd} gives the Ubuntu message and code ${code}`, () => {
-      const r = sh.run(cmd);
+    it(`${cmd} gives the Ubuntu message and code ${code}`, async () => {
+      const r = await sh.run(cmd);
       expect({ err: r.err, code: r.code }).toEqual({ err, code });
     });
   }
 });
 
 describe("find", () => {
-  beforeEach(() => {
-    sh.run("mkdir -p d/sub; touch d/a.txt d/sub/b.txt d/c.md");
+  beforeEach(async () => {
+    await sh.run("mkdir -p d/sub; touch d/a.txt d/sub/b.txt d/c.md");
   });
 
-  it("combines tests with -o, !, and -exec ... {} +", () => {
-    expect(sh.run("find d -name '*.md' -o -name a.txt | sort").out).toBe(
-      "d/a.txt\nd/c.md\n",
+  it("combines tests with -o, !, and -exec ... {} +", async () => {
+    expect(
+      (await sh.run("find d -name '*.md' -o -name a.txt | sort")).out,
+    ).toBe("d/a.txt\nd/c.md\n");
+    expect((await sh.run("find d -type f ! -name '*.txt'")).out).toBe(
+      "d/c.md\n",
     );
-    expect(sh.run("find d -type f ! -name '*.txt'").out).toBe("d/c.md\n");
-    expect(sh.run("find d -name '*.txt' -exec echo {} +").out).toMatch(
+    expect((await sh.run("find d -name '*.txt' -exec echo {} +")).out).toMatch(
       /^d\/(a|sub\/b)\.txt d\/(a|sub\/b)\.txt\n$/,
     );
   });
 
-  it("deletes files and directories depth first", () => {
-    expect(sh.run("find d -delete; ls d").err).toContain("No such file");
+  it("deletes files and directories depth first", async () => {
+    expect((await sh.run("find d -delete; ls d")).err).toContain(
+      "No such file",
+    );
   });
 });
 
 describe("text tools", () => {
-  it("runs awk programs with fields, patterns, variables, and arrays", () => {
+  it("runs awk programs with fields, patterns, variables, and arrays", async () => {
     expect(
-      sh.run(
-        "printf 'a 1\nb 2\na 3\n' | awk '{c[$1]+=$2} END{print c[\"a\"], c[\"b\"]}'",
+      (
+        await sh.run(
+          "printf 'a 1\nb 2\na 3\n' | awk '{c[$1]+=$2} END{print c[\"a\"], c[\"b\"]}'",
+        )
       ).out,
     ).toBe("4 2\n");
-    expect(sh.run("echo 'x y z' | awk '{print NF, $NF}'").out).toBe("3 z\n");
-    expect(sh.run("awk 'BEGIN{print 1+1}'").out).toBe("2\n");
+    expect((await sh.run("echo 'x y z' | awk '{print NF, $NF}'")).out).toBe(
+      "3 z\n",
+    );
+    expect((await sh.run("awk 'BEGIN{print 1+1}'")).out).toBe("2\n");
   });
 
-  it("runs sed with ranges, -n, and in-place edits", () => {
-    expect(sh.run("seq 1 5 | sed -n '2,4p'").out).toBe("2\n3\n4\n");
-    sh.run("printf 'a\nb\n' > f; sed -i 's/a/X/' f");
-    expect(sh.run("cat f").out).toBe("X\nb\n");
+  it("runs sed with ranges, -n, and in-place edits", async () => {
+    expect((await sh.run("seq 1 5 | sed -n '2,4p'")).out).toBe("2\n3\n4\n");
+    await sh.run("printf 'a\nb\n' > f; sed -i 's/a/X/' f");
+    expect((await sh.run("cat f")).out).toBe("X\nb\n");
   });
 
-  it("runs tr, cut, paste, and tee", () => {
-    expect(sh.run("echo hello | tr a-z A-Z").out).toBe("HELLO\n");
-    expect(sh.run("echo a:b:c | cut -d: -f2").out).toBe("b\n");
-    expect(sh.run("echo hi | tee f; cat f").out).toBe("hi\nhi\n");
+  it("runs tr, cut, paste, and tee", async () => {
+    expect((await sh.run("echo hello | tr a-z A-Z")).out).toBe("HELLO\n");
+    expect((await sh.run("echo a:b:c | cut -d: -f2")).out).toBe("b\n");
+    expect((await sh.run("echo hi | tee f; cat f")).out).toBe("hi\nhi\n");
   });
 });
 
 describe("storage cap (D21)", () => {
-  it("fails a write past 5 MB with the Linux message and keeps the old file", () => {
-    sh.run("echo keep > f");
+  it("fails a write past 5 MB with the Linux message and keeps the old file", async () => {
+    await sh.run("echo keep > f");
     // 1 MB per value (D5), so build several files.
     for (let i = 0; i < 5; i++)
-      sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
-    const r = sh.run("x=$(printf '%0*d' 1000000 0); echo \"$x\" > big9");
+      await sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
+    const r = await sh.run("x=$(printf '%0*d' 1000000 0); echo \"$x\" > big9");
     expect(r.err).toBe("bash: big9: No space left on device\n");
     expect(r.code).toBe(1);
-    expect(sh.run("cat f").out).toBe("keep\n");
+    expect((await sh.run("cat f")).out).toBe("keep\n");
   });
 
-  it("keeps the old text of an existing file that a write cannot fit (G-COR-3)", () => {
-    sh.run("echo keep > f");
+  it("keeps the old text of an existing file that a write cannot fit (G-COR-3)", async () => {
+    await sh.run("echo keep > f");
     for (let i = 0; i < 5; i++)
-      sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
-    const r = sh.run("x=$(printf '%0*d' 1000000 0); echo " + '"$x"' + " > f");
+      await sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
+    const r = await sh.run(
+      "x=$(printf '%0*d' 1000000 0); echo " + '"$x"' + " > f",
+    );
     expect(r.err).toBe("bash: f: No space left on device" + "\n");
     expect(r.code).toBe(1);
-    expect(sh.run("cat f").out).toBe("keep" + "\n");
+    expect((await sh.run("cat f")).out).toBe("keep" + "\n");
   });
 
-  it("reports a write past the cap on an exec redirect (G-COR-4)", () => {
+  it("reports a write past the cap on an exec redirect (G-COR-4)", async () => {
     for (let i = 0; i < 5; i++)
-      sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
-    const r = sh.run(
+      await sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
+    const r = await sh.run(
       "x=$(printf '%0*d' 1000000 0); exec > live; echo " + '"$x"; exec >&2',
     );
     expect(r.err).toContain("No space left on device");
   });
 
-  it("names the utility in the message when a utility writes", () => {
+  it("names the utility in the message when a utility writes", async () => {
     for (let i = 0; i < 5; i++)
-      sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
-    const r = sh.run("cp big0 big8");
+      await sh.run(`x=$(printf '%0*d' 1000000 0); echo "$x" > big${i}`);
+    const r = await sh.run("cp big0 big8");
     expect(r.err).toContain("cp: ");
     expect(r.err).toContain("No space left on device");
     expect(r.code).toBe(1);

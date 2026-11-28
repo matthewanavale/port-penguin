@@ -8,7 +8,7 @@
 //   themeFromCss(style): ITheme             style.getPropertyValue("--term") ...
 import { describe, expect, it } from "vitest";
 import type { OutLine, Style } from "../engine/output";
-import { renderLines, themeFromCss } from "./ansi";
+import { createChunkRenderer, renderLines, themeFromCss } from "./ansi";
 
 const LIGHT: Record<string, string> = {
   "--term": "#0F2133",
@@ -259,5 +259,70 @@ describe("line breaks and text safety", () => {
     expect(out).not.toContain("\x1b]0;");
     expect(stripSgr(out)).not.toContain("\x1b");
     expect(stripSgr(out)).toContain("evil");
+  });
+});
+
+// B15: streamed chunks. The screen must look as the line-by-line output of
+// run 1 did, so a plain command shows the same.
+describe("streamed output chunks (B15)", () => {
+  const strip = (s: string) =>
+    // eslint-disable-next-line no-control-regex
+    s.replace(/\x1b\[[0-9;]*m/g, "");
+
+  it("writes text as it comes and turns each line break into CR LF", () => {
+    const r = createChunkRenderer();
+    expect(strip(r.push({ stream: "stdout", text: "a\nb" }))).toBe("a\r\nb");
+    expect(strip(r.push({ stream: "stdout", text: "c\n" }))).toBe("c\r\n");
+    expect(r.finish()).toBe("");
+  });
+
+  it("ends a last line that has no line break, once", () => {
+    const r = createChunkRenderer();
+    r.push({ stream: "stdout", text: "abc" });
+    expect(r.finish()).toBe("\r\n");
+    expect(r.finish()).toBe("");
+  });
+
+  it("starts a new line when the stream changes in the middle of a line", () => {
+    const r = createChunkRenderer();
+    r.push({ stream: "stdout", text: "ab" });
+    expect(strip(r.push({ stream: "stderr", text: "cd\n" }))).toBe(
+      "\r\ncd\r\n",
+    );
+    // stderr is red, stdout is plain.
+    expect(r.push({ stream: "stderr", text: "x" })).toContain("\x1b[31m");
+  });
+
+  it("keeps a stream change at a line start as it is", () => {
+    const r = createChunkRenderer();
+    r.push({ stream: "stdout", text: "a\n" });
+    expect(strip(r.push({ stream: "stderr", text: "b\n" }))).toBe("b\r\n");
+  });
+
+  it("renders an engine-HTML chunk as a styled line of its own", () => {
+    const r = createChunkRenderer();
+    r.push({ stream: "stdout", text: "x" });
+    const out = r.push({
+      stream: "stdout",
+      text: "dir",
+      html: '<span class="dir">dir</span>\n',
+    });
+    expect(strip(out)).toBe("\r\ndir\r\n");
+    expect(out).toContain("\x1b[1;34m");
+    expect(r.finish()).toBe("");
+  });
+
+  it("removes control characters from the text", () => {
+    const r = createChunkRenderer();
+    expect(strip(r.push({ stream: "stdout", text: "a\x1b[2Jb\n" }))).toBe(
+      "a[2Jb\r\n",
+    );
+  });
+
+  it("starts at the top again after reset()", () => {
+    const r = createChunkRenderer();
+    r.push({ stream: "stdout", text: "abc" });
+    r.reset();
+    expect(r.finish()).toBe("");
   });
 });

@@ -5,6 +5,7 @@
 // grep 3.11, and procps on Ubuntu 24.04, where a reference case covers them.
 // The commands of the game itself (`man`, `hint`, `help`, the process list,
 // `curl`, `docker`) keep their run-1 text.
+import { clockNow, clockDate } from "./clock";
 import { NGINX_HTML, USR_BIN } from "./content";
 import { compose } from "./compose";
 import { docker, findImg } from "./docker";
@@ -20,7 +21,7 @@ import type { DirNode, FileNode, FsNode, Image } from "./state";
 import { BUILTINS } from "./shell/builtins";
 import type { Context } from "./shell/context";
 import { termCols } from "./shell/context";
-import type { Interp } from "./shell/interp";
+import type { Proc } from "./shell/proc";
 import type { CmdFn, Host, IO } from "./shell/io";
 import { LIM } from "./shell/limits";
 import {
@@ -48,9 +49,6 @@ import {
 
 void sha256;
 
-/** `clear` sets this; the engine reads it after the input and resets it. */
-export const screen = { cleared: false };
-
 /* ---------- small helpers ---------- */
 
 /** GNU `quoteaf`: the file name in single quotes, as in `ls: cannot access 'x'`. */
@@ -72,7 +70,7 @@ const cmpStr = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** The year of `now`, for the run-1 file time of nodes without `mtime` (D18). */
 function run1Time(): number {
-  return Date.UTC(new Date(Date.now()).getUTCFullYear(), 10, 24, 9, 0);
+  return Date.UTC(clockDate().getUTCFullYear(), 10, 24, 9, 0);
 }
 export const mtimeMs = (n: FsNode): number => n.mtime ?? run1Time();
 
@@ -114,7 +112,7 @@ interface Missing {
 }
 
 /** Walks a path the way `stat` does, with Linux error texts. */
-function lookup(sh: Interp, p: string): Found | Missing {
+function lookup(sh: Proc, p: string): Found | Missing {
   const abs = sh.abs(p);
   // The device files that redirects know: they are not in the tree.
   if (/^\/dev\/(null|stdin|stdout|stderr)$/.test(abs))
@@ -188,20 +186,20 @@ function human(bytes: number): string {
 }
 
 /** The text of a file for a command; writes the error line on failure. */
-function readFileArg(
+async function readFileArg(
   cmd: string,
-  sh: Interp,
+  sh: Proc,
   io: IO,
   name: string,
   how: (e: string) => string = (e) => `${name}: ${e}`,
-): string | null {
-  if (name === "-") return io.in.readAll();
+): Promise<string | null> {
+  if (name === "-") return await io.in.readAll();
   const r = lookup(sh, name);
   if (!isFound(r)) {
     errOut(io, cmd, how(r.err));
     return null;
   }
-  const got = readPath(r.abs, io);
+  const got = await readPath(r.abs, io);
   if ("err" in got) {
     errOut(io, cmd, how(got.err));
     return null;
@@ -273,7 +271,7 @@ const MONTHS = [
 /** `ls -l` time: month, day, then the time or, for old files, the year. */
 function lsTime(ms: number): string {
   const t = new Date(ms);
-  const now = Date.now();
+  const now = clockNow();
   const day = String(t.getUTCDate()).padStart(2);
   const head = `${MONTHS[t.getUTCMonth()]} ${day} `;
   const recent = ms <= now + 3600_000 && now - ms < 182.5 * 86400_000;
@@ -649,7 +647,7 @@ const ls: CmdFn = (argv0, sh, io) => {
 
 /* ---------- cat, head, tail, wc ---------- */
 
-const cat: CmdFn = (argv, sh, io) => {
+const cat: CmdFn = async (argv, sh, io) => {
   const r = opts(io, "cat", argv, "AbeEnstTuv", {
     "show-all": ["A", false],
     "number-nonblank": ["b", false],
@@ -679,7 +677,7 @@ const cat: CmdFn = (argv, sh, io) => {
         continue;
       }
     }
-    const t = readFileArg("cat", sh, io, name);
+    const t = await readFileArg("cat", sh, io, name);
     if (t === null) {
       code = 1;
       continue;
@@ -733,7 +731,7 @@ function parseCount(
 }
 
 function headTail(which: "head" | "tail"): CmdFn {
-  return (argv, sh, io) => {
+  return async (argv, sh, io) => {
     let count = { n: 10, plus: false, minus: false };
     let bytes = false;
     let quiet = false;
@@ -807,7 +805,7 @@ function headTail(which: "head" | "tail"): CmdFn {
     let firstOut = true;
     for (const name of names) {
       let text: string | null;
-      if (name === "-") text = io.in.readAll();
+      if (name === "-") text = await io.in.readAll();
       else {
         const f1 = lookup(sh, name);
         if (!isFound(f1)) {
@@ -824,7 +822,7 @@ function headTail(which: "head" | "tail"): CmdFn {
           }
           continue;
         }
-        const got = readPath(f1.abs, io);
+        const got = await readPath(f1.abs, io);
         if ("err" in got) {
           errOut(io, which, `cannot open ${q(name)} for reading: ${got.err}`);
           code = 1;
@@ -876,7 +874,7 @@ function slice(
 const head = headTail("head");
 const tail = headTail("tail");
 
-const wc: CmdFn = (argv, sh, io) => {
+const wc: CmdFn = async (argv, sh, io) => {
   const r = opts(io, "wc", argv, "lwcmL", {
     lines: ["l", false],
     words: ["w", false],
@@ -900,7 +898,7 @@ const wc: CmdFn = (argv, sh, io) => {
   for (const name of names) {
     let text: string;
     if (name === "-") {
-      text = io.in.readAll();
+      text = await io.in.readAll();
       wide = true;
     } else {
       const f1 = lookup(sh, name);
@@ -916,7 +914,7 @@ const wc: CmdFn = (argv, sh, io) => {
         code = 1;
         continue;
       }
-      const got = readPath(f1.abs, io);
+      const got = await readPath(f1.abs, io);
       if ("err" in got) {
         errOut(io, "wc", `${name}: ${got.err}`);
         code = 1;
@@ -1092,7 +1090,7 @@ function cmpBy(a: string, b: string, fl: string): number {
   return fl.includes("r") ? -c : c;
 }
 
-const sort: CmdFn = (argv, sh, io) => {
+const sort: CmdFn = async (argv, sh, io) => {
   const r = opts(
     io,
     "sort",
@@ -1159,7 +1157,7 @@ const sort: CmdFn = (argv, sh, io) => {
         continue;
       }
     }
-    const t = readFileArg(
+    const t = await readFileArg(
       "sort",
       sh,
       io,
@@ -1222,7 +1220,7 @@ const sort: CmdFn = (argv, sh, io) => {
   return code;
 };
 
-const uniq: CmdFn = (argv, sh, io) => {
+const uniq: CmdFn = async (argv, sh, io) => {
   const r = opts(io, "uniq", argv, "cdDuiszf:s:w:", {
     count: ["c", false],
     repeated: ["d", false],
@@ -1256,7 +1254,7 @@ const uniq: CmdFn = (argv, sh, io) => {
     return 1;
   }
   const inName = r.rest[0] ?? "-";
-  const text = readFileArg("uniq", sh, io, inName);
+  const text = await readFileArg("uniq", sh, io, inName);
   if (text === null) return 1;
   const ci = r.has("i");
   const key = (l: string): string => {
@@ -1395,7 +1393,7 @@ interface GrepSrc {
 }
 
 function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
-  return (argv0, sh, io) => {
+  return async (argv0, sh, io) => {
     let color: boolean | null = null;
     const includes: string[] = [];
     const excludes: string[] = [];
@@ -1469,7 +1467,7 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
         patterns.push(...(o.val ?? "").split("\n"));
         havePat = true;
       } else if (o.name === "f") {
-        const t = readFileArg(label, sh, io, o.val ?? "");
+        const t = await readFileArg(label, sh, io, o.val ?? "");
         if (t === null) return 2;
         patterns.push(...splitLines(t));
         havePat = true;
@@ -1555,7 +1553,7 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
     };
     for (const name of names) {
       if (name === "-") {
-        srcs.push({ name: "(standard input)", text: io.in.readAll() });
+        srcs.push({ name: "(standard input)", text: await io.in.readAll() });
         continue;
       }
       const f1 = lookup(sh, name);
@@ -1571,7 +1569,7 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
           code = 2;
         }
       } else if (f1.node.t === "f") {
-        const got = readPath(f1.abs, io);
+        const got = await readPath(f1.abs, io);
         if ("err" in got) {
           if (!silent) errOut(io, label, `${name}: ${got.err}`);
           code = 2;
@@ -1831,7 +1829,7 @@ const touch: CmdFn = (argv, sh, io) => {
     io.err.write(`touch: missing file operand\n${tryHelp("touch")}`);
     return 1;
   }
-  const now = Date.now();
+  const now = clockNow();
   let when = now;
   const dv = r.val("d");
   const tv = r.val("t");
@@ -2570,7 +2568,7 @@ const file: CmdFn = (argv, sh, io) => {
   return 0;
 };
 
-const od: CmdFn = (argv, sh, io) => {
+const od: CmdFn = async (argv, sh, io) => {
   const r = opts(io, "od", argv, "A:t:N:cbxdoj:v");
   if (typeof r === "number") return r;
   let type = r.has("c")
@@ -2588,7 +2586,7 @@ const od: CmdFn = (argv, sh, io) => {
   const addr = r.val("A") ?? "o";
   let text = "";
   for (const name of r.rest.length ? r.rest : ["-"]) {
-    const t = readFileArg("od", sh, io, name);
+    const t = await readFileArg("od", sh, io, name);
     if (t === null) return 1;
     text += t;
   }
@@ -2667,7 +2665,7 @@ function visibleEnv(ctx: Context): [string, string][] {
   return pairs;
 }
 
-const env: CmdFn = (argv, sh, io) => {
+const env: CmdFn = async (argv, sh, io) => {
   let i = 1;
   let clean = false;
   const unset: string[] = [];
@@ -2729,16 +2727,11 @@ const env: CmdFn = (argv, sh, io) => {
   });
   c.io = io;
   if (!rest.length) {
-    sh.ctx = c;
-    try {
-      io.out.write(
-        visibleEnv(c)
-          .map(([k, v]) => `${k}=${v}\n`)
-          .join(""),
-      );
-    } finally {
-      sh.ctx = saved;
-    }
+    io.out.write(
+      visibleEnv(c)
+        .map(([k, v]) => `${k}=${v}\n`)
+        .join(""),
+    );
     return 0;
   }
   const name = rest[0];
@@ -2749,12 +2742,13 @@ const env: CmdFn = (argv, sh, io) => {
     errOut(io, "env", `${qc(name)}: No such file or directory`);
     return 127;
   }
-  sh.ctx = c;
-  try {
-    return fn ? fn(rest, sh, io) : sh.runCommand(rest, io, { noFunc: true });
-  } finally {
-    sh.ctx = saved;
-  }
+  // The command runs in a child process with the changed environment (B2).
+  const child = sh.spawn(c);
+  return sh.within(child, async () =>
+    fn
+      ? await fn(rest, child, io)
+      : await child.runCommand(rest, io, { noFunc: true }),
+  );
 };
 
 const printenv: CmdFn = (argv, sh, io) => {
@@ -2787,7 +2781,7 @@ const yes: CmdFn = (argv, _sh, io) => {
   for (;;) io.out.write(text);
 };
 
-const sleep: CmdFn = (argv, sh, io) => {
+const sleep: CmdFn = async (argv, sh, io) => {
   // Run 2b makes `sleep` wait; in 2a it checks its input and returns.
   if (argv.length < 2) return missingOperand(io, "sleep");
   for (const a of argv.slice(1)) {
@@ -2797,7 +2791,7 @@ const sleep: CmdFn = (argv, sh, io) => {
     }
   }
   // Nothing runs at the same time in 2a, so a `>( )` consumer runs here.
-  sh.cleanProcs();
+  await sh.cleanProcs();
   return 0;
 };
 
@@ -2878,8 +2872,9 @@ const hint: CmdFn = (_argv, _sh, io) => {
   );
 };
 
-const clear: CmdFn = () => {
-  screen.cleared = true;
+const clear: CmdFn = (_argv, sh) => {
+  // B15: the terminal clears when it gets the event.
+  sh.out.clear();
   return 0;
 };
 
@@ -2974,7 +2969,7 @@ const ps: CmdFn = (argv, _sh, io) => {
   );
 };
 
-const clockText = (): string => new Date().toTimeString().slice(0, 8);
+const clockText = (): string => clockDate().toTimeString().slice(0, 8);
 
 const top: CmdFn = (_argv, _sh, io) => {
   const ps2 = S.procs.slice().sort((a, b) => b.cpu - a.cpu);
@@ -3082,7 +3077,7 @@ const uptime: CmdFn = (_a, _s, io) => {
 const bash: CmdFn = (argv, sh, io) => BUILTINS.bash(sh, argv, io);
 
 export function logStamp(): string {
-  const t = new Date();
+  const t = clockDate();
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(t.getDate())}/${MONTHS[t.getMonth()]}/${t.getFullYear()}:${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())} +0000`;
 }

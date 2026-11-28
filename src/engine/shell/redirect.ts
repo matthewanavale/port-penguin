@@ -1,6 +1,7 @@
 // Redirections, and the file helpers that the shell and the commands share:
 // permission rules, the storage cap (D21), and file times (D18). The file
 // system is shared by all contexts and is never copied (D13).
+import { clockNow } from "../clock";
 import { get, split } from "../paths";
 import { f, S } from "../state";
 import type { DirNode, FileNode } from "../state";
@@ -51,7 +52,7 @@ export type FsError =
   | "Not a directory";
 
 export function stamp(n: FileNode | DirNode): void {
-  (n as { mtime?: number }).mtime = Date.now();
+  (n as { mtime?: number }).mtime = clockNow();
 }
 
 /** Reads a file. Returns the text, or the Linux error text. */
@@ -64,11 +65,11 @@ export function readText(abs: string): { text: string } | { err: FsError } {
 }
 
 /** Reads a file for a command: `/dev/stdin` is the input, `/dev/null` is empty. */
-export function readPath(
+export async function readPath(
   abs: string,
   io: IO,
-): { text: string } | { err: FsError } {
-  if (abs === "/dev/stdin") return { text: io.in.readAll() };
+): Promise<{ text: string } | { err: FsError }> {
+  if (abs === "/dev/stdin") return { text: await io.in.readAll() };
   if (abs === "/dev/null") return { text: "" };
   return readText(abs);
 }
@@ -170,9 +171,9 @@ export class FileWriter implements Writer {
 export interface RedirHost {
   cwd: string;
   /** Expands a redirect target to exactly one word; null on "ambiguous redirect". */
-  expandTarget(w: Word): string | null;
-  expandHeredoc(w: Word): string;
-  expandText(w: Word): string;
+  expandTarget(w: Word): Promise<string | null>;
+  expandHeredoc(w: Word): Promise<string>;
+  expandText(w: Word): Promise<string>;
   /** Prints `bash: ...` (with the script prefix). */
   fail(msg: string): void;
 }
@@ -205,12 +206,12 @@ function device(abs: string): "null" | "stdin" | "stdout" | "stderr" | null {
  * Applies the redirects left to right on a copy of `io`. Returns null when one
  * fails (the error is already printed and the command must not run).
  */
-export function applyRedirs(
+export async function applyRedirs(
   redirs: Redir[],
   base: IO,
   host: RedirHost,
   live = false,
-): Applied | null {
+): Promise<Applied | null> {
   const fds = new Map<number, Writer | Input>(base.fds ?? []);
   fds.set(0, base.in);
   fds.set(1, base.out);
@@ -253,16 +254,16 @@ export function applyRedirs(
   for (const r of redirs) {
     const op = r.op;
     if (op === "<<") {
-      const body = r.heredoc ? host.expandHeredoc(r.heredoc.body) : "";
+      const body = r.heredoc ? await host.expandHeredoc(r.heredoc.body) : "";
       fds.set(r.fd ?? 0, new Input(body));
       continue;
     }
     if (op === "<<<") {
-      const t = host.expandText(r.target);
+      const t = await host.expandText(r.target);
       fds.set(r.fd ?? 0, new Input(t + "\n"));
       continue;
     }
-    const target = host.expandTarget(r.target);
+    const target = await host.expandTarget(r.target);
     if (target === null) {
       const raw = r.target.map((p) => (p.k === "lit" ? p.v : "")).join("");
       return fail(`${raw || "$"}: ambiguous redirect`);

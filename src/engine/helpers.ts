@@ -1,5 +1,6 @@
 // Shared helpers and the command result type. Ported from
 // index.html:410-436 at 5e96ce5.
+import { clockNow } from "./clock";
 import type { FsNode } from "./state";
 import { get } from "./paths";
 
@@ -88,7 +89,7 @@ export function longRow(n: FsNode, h: boolean): string {
 }
 
 export function ago(ts: number | undefined): string {
-  const s = Math.max(0, Math.floor((Date.now() - (ts as number)) / 1000));
+  const s = Math.max(0, Math.floor((clockNow() - (ts as number)) / 1000));
   if (s < 1) return "Less than a second";
   if (s < 60) return s + " seconds";
   const m = Math.floor(s / 60);

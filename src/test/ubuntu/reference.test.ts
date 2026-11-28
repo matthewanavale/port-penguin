@@ -4,19 +4,20 @@
 // through the one shared normalizer.
 //
 // Engine contract used here (src/engine/index.ts), new in this run:
-//   createEngine({ storage })           the width is 80 columns (D23)
+//   createEngine({ storage, clock })    the width is 80 columns (D23)
 //   engine.prompt(): Run[]              "> " while input is incomplete (AC1)
 //   engine.isComplete(text): boolean
 //   engine.cancelInput(): void          Ctrl-C at "> " (D6 of the Scope list)
-//   engine.execute(text).chunks         ordered { stream, text } (D24); the
+//   (await engine.execute(text)).chunks ordered { stream, text } (D24); the
 //                                       learner hints (D12) are not in them
 //   engine.state.lastCode               the exit code after the input
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { setClock } from "../../engine/clock";
 import { createEngine, SAVE_KEY } from "../../engine/index";
 import type { Engine } from "../../engine/index";
 import { fresh } from "../../engine/state";
 import type { DirNode, FileNode } from "../../engine/state";
-import { makeFakeDate, seededRandom, SEED, START_MS } from "../determinism";
+import { makeFakeClock, seededRandom, SEED, START_MS } from "../determinism";
 import { CASES, FEATURES, SCRIPT_PATH } from "./cases";
 import type { Case, PromptCase, ScriptCase } from "./cases";
 import { HOME_FILES } from "./home";
@@ -62,20 +63,20 @@ function referenceSave(scriptText?: string): string {
   return JSON.stringify(s);
 }
 
-function open(scriptText?: string): Engine {
-  const clock = makeFakeDate(START_MS);
-  vi.useFakeTimers({ toFake: ["Date"], now: clock.now() });
+async function open(scriptText?: string): Promise<Engine> {
+  const clock = makeFakeClock(START_MS);
   vi.spyOn(Math, "random").mockImplementation(seededRandom(SEED));
   const store = new Map<string, string>([
     [SAVE_KEY, referenceSave(scriptText)],
   ]);
   const engine = createEngine({
+    clock,
     storage: {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v),
     },
   });
-  engine.start();
+  await engine.start();
   return engine;
 }
 
@@ -86,8 +87,8 @@ const promptText = (e: Engine): string =>
     .join("");
 
 /** The simulator side of a prompt case, in the shape of the capture (D8). */
-function simulatePrompt(c: PromptCase): string {
-  const e = open();
+async function simulatePrompt(c: PromptCase): Promise<string> {
+  const e = await open();
   let t = promptText(e);
   let pending: string[] = [];
   for (const input of c.inputs) {
@@ -105,18 +106,15 @@ function simulatePrompt(c: PromptCase): string {
       continue;
     }
     pending = [];
-    t += e
-      .execute(text)
-      .chunks.map((k) => k.text)
-      .join("");
+    t += (await e.execute(text)).chunks.map((k) => k.text).join("");
     t += promptText(e);
   }
   return t;
 }
 
-function simulateScript(c: ScriptCase) {
-  const e = open(c.lines.join("\n") + "\n");
-  const r = e.execute(`bash ${SCRIPT_PATH}`);
+async function simulateScript(c: ScriptCase) {
+  const e = await open(c.lines.join("\n") + "\n");
+  const r = await e.execute(`bash ${SCRIPT_PATH}`);
   const part = (stream: "stdout" | "stderr") =>
     r.chunks
       .filter((k) => k.stream === stream)
@@ -132,6 +130,7 @@ function simulateScript(c: ScriptCase) {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  setClock();
 });
 
 describe("reference case list (AC2)", () => {
@@ -203,16 +202,16 @@ describe("shared normalizer (AC2)", () => {
 
 describe("simulator against Ubuntu 24.04 (AC2)", () => {
   for (const c of CASES as Case[]) {
-    it(`${c.id} (${c.feature})`, () => {
+    it(`${c.id} (${c.feature})`, async () => {
       const fx = fixtures.get(c.id);
       expect(fx, `no fixture for ${c.id}`).toBeDefined();
       if (!fx) return;
       if (c.kind === "prompt") {
-        expect(normalize(simulatePrompt(c))).toBe(
+        expect(normalize(await simulatePrompt(c))).toBe(
           normalize(fx.transcript as string),
         );
       } else {
-        const got = simulateScript(c);
+        const got = await simulateScript(c);
         expect({
           stdout: normalize(got.stdout),
           stderr: normalize(got.stderr),

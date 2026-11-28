@@ -3,7 +3,7 @@
 import { get } from "../paths";
 import { openForWrite, writeText } from "../shell/redirect";
 import type { CmdFn, IO } from "../shell/io";
-import type { Interp } from "../shell/interp";
+import type { Proc } from "../shell/proc";
 import { errOut, getopt, readOperand, splitLines } from "./text";
 
 class SedError extends Error {}
@@ -484,7 +484,7 @@ function runSed(
   startLine: number,
   io: IO,
   isLastFile: boolean,
-  sh: Interp,
+  sh: Proc,
 ): { out: string; exit: number | null; lines: number } {
   const nl = o.zero ? "\0" : "\n";
   const lines =
@@ -750,7 +750,7 @@ remaining arguments are names of input files; if no input files are
 specified, then the standard input is read.
 `;
 
-const sed: CmdFn = (argv, sh, io) => {
+const sed: CmdFn = async (argv, sh, io) => {
   // -i may carry a suffix glued to it (`-i.bak`), so it is read by hand.
   let inPlace: string | null = null;
   const args: string[] = [argv[0]];
@@ -787,7 +787,7 @@ const sed: CmdFn = (argv, sh, io) => {
     else if (x.name === "z") o.zero = true;
     else if (x.name === "e") scripts.push(x.val ?? "");
     else if (x.name === "f") {
-      const t = readOperand("sed", x.val ?? "", sh, io);
+      const t = await readOperand("sed", x.val ?? "", sh, io);
       if (t === null) return 1;
       scripts.push(t.replace(/\n$/, ""));
     }
@@ -849,7 +849,7 @@ const sed: CmdFn = (argv, sh, io) => {
     const texts: string[] = [];
     for (const f of names) {
       if (f === "-") {
-        texts.push(io.in.readAll());
+        texts.push(await io.in.readAll());
         continue;
       }
       const n = get(sh.abs(f));
@@ -858,7 +858,7 @@ const sed: CmdFn = (argv, sh, io) => {
         code = 4;
         continue;
       }
-      const t = n && n.t === "f" ? readOperand("sed", f, sh, io) : null;
+      const t = n && n.t === "f" ? await readOperand("sed", f, sh, io) : null;
       if (t === null) {
         if (!n) errOut(io, "sed", `can't read ${f}: No such file or directory`);
         code = 2;

@@ -1,5 +1,6 @@
 // D13, D14: a shell context. The prompt shell is backed by the saved state;
 // copies (subshells, $( ), pipeline stages, scripts) are plain objects.
+import { clockNow } from "../clock";
 import { nul } from "../nullmap";
 import { LimitStop, LIM } from "./limits";
 import type { IO } from "./io";
@@ -78,7 +79,7 @@ export class Context {
   loopDepth = 0;
   /** Depth of `source` in this context (`return` is allowed in it). */
   sourceDepth = 0;
-  seconds = Date.now();
+  seconds = clockNow();
 
   protected _cwd = HOME;
   protected _oldpwd = HOME;
@@ -212,7 +213,7 @@ export class Context {
       case "RANDOM":
         return String(Math.floor(Math.random() * 32768));
       case "SECONDS":
-        return String(Math.floor((Date.now() - this.seconds) / 1000));
+        return String(Math.floor((clockNow() - this.seconds) / 1000));
       case "FUNCNAME":
         return this.frames.length
           ? this.frames[this.frames.length - 1].name

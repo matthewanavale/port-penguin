@@ -1,6 +1,7 @@
 // AC4: `date`, its `-d` text parser, and the `touch -t` parser. The clock is
 // UTC (the TZ of the capture is UTC). `parseDate` and `parseTouchT` are
 // exported for `touch -d` and `touch -t` (item 12).
+import { clockNow } from "../clock";
 import type { CmdFn } from "../shell/io";
 import { errOut, getopt, tryHelp } from "./text";
 
@@ -524,11 +525,11 @@ const date: CmdFn = (argv, sh, io) => {
     io.err.write(p);
     return 1;
   }
-  let when = Date.now();
+  let when = clockNow();
   let fmt = "%a %b %e %H:%M:%S UTC %Y";
   for (const o of p.opts) {
     if (o.name === "d") {
-      const t = parseDate(o.val ?? "", Date.now());
+      const t = parseDate(o.val ?? "", clockNow());
       if (t === null) {
         errOut(io, "date", `invalid date ‘${o.val}’`);
         return 1;

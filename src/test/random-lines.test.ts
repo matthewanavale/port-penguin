@@ -63,9 +63,9 @@ const JS_ERROR =
   /TypeError|RangeError|ReferenceError|SyntaxError:|Cannot read prop|is not a function|\[object |undefined|NaN|at .*\.ts:\d+/;
 
 let sh: Shell;
-beforeEach(() => {
-  sh = openShell();
-  sh.run("mkdir -p /tmp/w && cd /tmp/w");
+beforeEach(async () => {
+  sh = await openShell();
+  await sh.run("mkdir -p /tmp/w && cd /tmp/w");
 });
 afterEach(restore);
 
@@ -75,12 +75,9 @@ describe("random command lines", () => {
   });
 
   for (const line of LINES) {
-    it(`does not throw or show a JavaScript error: ${line}`, () => {
-      let r;
-      expect(() => {
-        r = sh.run(line);
-      }).not.toThrow();
-      const got = r as unknown as { text: string; code: number };
+    it(`does not throw or show a JavaScript error: ${line}`, async () => {
+      // A throw from the engine rejects the promise and fails the test.
+      const got = await sh.run(line);
       expect(got.text).not.toMatch(JS_ERROR);
       expect(Number.isInteger(got.code)).toBe(true);
     });

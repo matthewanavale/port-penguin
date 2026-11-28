@@ -2,6 +2,7 @@
 // the same small HTML strings as index.html at 5e96ce5, and `htmlToRuns`
 // reads them back into runs. Only the fixed span classes the engine emits
 // are known. The terminal renderer turns runs into ANSI codes.
+import type { Chunk } from "./shell/io";
 
 /** A text style. The names are the CSS classes of the old page. */
 export type Style = "pu" | "pp" | "dir" | "exe" | "ok" | "err" | "dim" | "hl";
@@ -89,3 +90,38 @@ export const htmlLine = (html: string, cls?: string): OutLine =>
 /** The old `print(text, cls)`: plain text, one trailing line break removed. */
 export const textLine = (text: string, cls?: string): OutLine =>
   withClass([{ text: text.replace(/\n$/, "") }], cls);
+
+/**
+ * Output lines for a list of chunks: one line for each run of same-stream text
+ * (D24); engine HTML stays styled. For tests and tools that read `chunks`.
+ */
+export function chunkLines(chunks: Chunk[]): OutLine[] {
+  const out: OutLine[] = [];
+  let buf = "";
+  let stream: Chunk["stream"] | null = null;
+  const flush = () => {
+    if (stream !== null)
+      out.push(textLine(buf, stream === "stderr" ? "err" : undefined));
+    buf = "";
+    stream = null;
+  };
+  for (const c of chunks) {
+    if (c.html !== undefined) {
+      flush();
+      out.push(
+        htmlLine(
+          c.html.replace(/\n$/, ""),
+          c.stream === "stderr" ? "err" : undefined,
+        ),
+      );
+      continue;
+    }
+    if (stream !== c.stream) {
+      flush();
+      stream = c.stream;
+    }
+    buf += c.text;
+  }
+  flush();
+  return out;
+}

@@ -13,7 +13,7 @@ export interface PanelOptions {
   setLine(text: string): void;
   focusTerminal(): void;
   /** Starts a fresh game. */
-  resetAll(): void;
+  resetAll(): void | Promise<void>;
 }
 
 export interface Panel {
@@ -73,8 +73,8 @@ export function createPanel(opts: PanelOptions): Panel {
           h.hidden = !h.hidden;
           el("hintBtn").textContent = h.hidden ? "Show hint" : "Hide hint";
         };
-        el("skipBtn").onclick = () => {
-          const lines = engine.skip();
+        el("skipBtn").onclick = async () => {
+          const lines = await engine.skip();
           render();
           opts.print(lines);
           opts.focusTerminal();
@@ -85,10 +85,10 @@ export function createPanel(opts: PanelOptions): Panel {
           f.hidden = !f.hidden;
           if (!f.hidden) el("pw").focus();
         };
-        el<HTMLFormElement>("unlockForm").onsubmit = (e) => {
+        el<HTMLFormElement>("unlockForm").onsubmit = async (e) => {
           e.preventDefault();
           const pw = el<HTMLInputElement>("pw");
-          const lines = engine.unlock(pw.value);
+          const lines = await engine.unlock(pw.value);
           if (lines) {
             render();
             opts.print(lines);
@@ -131,7 +131,7 @@ export function createPanel(opts: PanelOptions): Panel {
   }
 
   const panelEl = document.querySelector<HTMLElement>(".panel");
-  panelEl?.addEventListener("click", (e) => {
+  panelEl?.addEventListener("click", async (e) => {
     const target = e.target as Element | null;
     const chip = target?.closest<HTMLElement>("[data-ins]");
     if (chip) {
@@ -141,14 +141,14 @@ export function createPanel(opts: PanelOptions): Panel {
     }
     const box = target?.closest<HTMLElement>("[data-go]");
     if (box && engine.state.unlocked) {
-      const lines = engine.jump(+(box.dataset.go ?? 0));
+      const lines = await engine.jump(+(box.dataset.go ?? 0));
       render();
       opts.print(lines);
     }
   });
 
-  el("lockBtn").onclick = () => {
-    const lines = engine.lock();
+  el("lockBtn").onclick = async () => {
+    const lines = await engine.lock();
     render();
     opts.print(lines);
   };
@@ -167,7 +167,7 @@ export function createPanel(opts: PanelOptions): Panel {
     clearTimeout(resetArmed);
     resetArmed = null;
     b.textContent = "Reset progress";
-    opts.resetAll();
+    void opts.resetAll();
   };
 
   return { render };

@@ -14,9 +14,9 @@ let original: Check;
 let seen: Ctx[];
 const TASK = 0;
 
-beforeEach(() => {
-  sh = openShell();
-  sh.run("mkdir -p /tmp/w && cd /tmp/w");
+beforeEach(async () => {
+  sh = await openShell();
+  await sh.run("mkdir -p /tmp/w && cd /tmp/w");
   original = M[TASK].check as Check;
   seen = [];
   M[TASK].check = (c: Ctx) => {
@@ -30,16 +30,16 @@ afterEach(() => {
   restore();
 });
 
-const ctxOf = (input: string): Ctx => {
+const ctxOf = async (input: string): Promise<Ctx> => {
   seen = [];
-  sh.run(input);
+  await sh.run(input);
   expect(seen.length).toBeGreaterThan(0);
   return seen[seen.length - 1];
 };
 
 describe("ctx rules (D10)", () => {
-  it("segs: one list per simple command that ended with 0, after expansion, in run order", () => {
-    const c = ctxOf(
+  it("segs: one list per simple command that ended with 0, after expansion, in run order", async () => {
+    const c = await ctxOf(
       [
         "n=2",
         "echo a $n | tr a b",
@@ -65,9 +65,9 @@ describe("ctx rules (D10)", () => {
     expect(c.segs).toContainEqual(["X=1"]);
   });
 
-  it("segs: includes commands inside scripts, loops, and conditions", () => {
-    sh.run("printf 'echo from-script\\n' > s.sh");
-    const c = ctxOf(
+  it("segs: includes commands inside scripts, loops, and conditions", async () => {
+    await sh.run("printf 'echo from-script\\n' > s.sh");
+    const c = await ctxOf(
       "bash s.sh; while false; do :; done; for i in 1; do echo loop; done",
     );
     const flat = c.segs.map((s) => s.join(" "));
@@ -75,14 +75,14 @@ describe("ctx rules (D10)", () => {
     expect(flat).toContain("echo loop");
   });
 
-  it("line: the full input, lines joined with a newline", () => {
-    const c = ctxOf("if true; then\necho x\nfi");
+  it("line: the full input, lines joined with a newline", async () => {
+    const c = await ctxOf("if true; then\necho x\nfi");
     expect(c.line).toBe("if true; then\necho x\nfi");
   });
 
-  it("allOut: stdout that reached the terminal, not piped, redirected, or captured", () => {
-    sh.run("printf 'echo script-out\\n' > s.sh");
-    const c = ctxOf(
+  it("allOut: stdout that reached the terminal, not piped, redirected, or captured", async () => {
+    await sh.run("printf 'echo script-out\\n' > s.sh");
+    const c = await ctxOf(
       "echo shown; echo piped | cat > /dev/null; echo redirected > f; x=$(echo captured); bash s.sh",
     );
     expect(c.allOut).toContain("shown");
@@ -92,13 +92,13 @@ describe("ctx rules (D10)", () => {
     expect(c.allOut).not.toContain("piped");
   });
 
-  it("ranExec: the basename of the last script run by its path; bash x and source x do not set it", () => {
-    sh.run("printf 'echo hi\\n' > x; chmod +x x");
-    expect(ctxOf("./x").ranExec).toBe("x");
-    expect(ctxOf("/tmp/w/x").ranExec).toBe("x");
-    expect(ctxOf("bash x").ranExec).toBeNull();
-    expect(ctxOf("source x").ranExec).toBeNull();
-    sh.run("printf 'echo hi\\n' > y; chmod +x y");
-    expect(ctxOf("./x; ./y").ranExec).toBe("y");
+  it("ranExec: the basename of the last script run by its path; bash x and source x do not set it", async () => {
+    await sh.run("printf 'echo hi\\n' > x; chmod +x x");
+    expect((await ctxOf("./x")).ranExec).toBe("x");
+    expect((await ctxOf("/tmp/w/x")).ranExec).toBe("x");
+    expect((await ctxOf("bash x")).ranExec).toBeNull();
+    expect((await ctxOf("source x")).ranExec).toBeNull();
+    await sh.run("printf 'echo hi\\n' > y; chmod +x y");
+    expect((await ctxOf("./x; ./y")).ranExec).toBe("y");
   });
 });

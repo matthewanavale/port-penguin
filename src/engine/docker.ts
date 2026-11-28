@@ -1,5 +1,6 @@
 // The Docker simulation. Ported from index.html:814-1160 at 5e96ce5. The
 // output text and the order of Math.random calls must not change.
+import { clockNow, clockDate } from "./clock";
 import { HELLO, NGINX_HTML, PG_ERR } from "./content";
 import { compose } from "./compose";
 import { ago, clone, E, pf, R, table } from "./helpers";
@@ -21,7 +22,7 @@ export const REG: Record<string, string> = {
 };
 
 const nowLog = () =>
-  new Date().toISOString().slice(0, 19).replace("T", " ").replace(/-/g, "/");
+  clockDate().toISOString().slice(0, 19).replace("T", " ").replace(/-/g, "/");
 
 interface Server {
   cmd: string;
@@ -344,8 +345,8 @@ export function makeContainer(o: MakeOptions): { c: Container; out: string } {
     aliases: o.service ? [o.service] : [],
     project: o.project || null,
     service: o.service || null,
-    created: Date.now(),
-    started: Date.now(),
+    created: clockNow(),
+    started: clockNow(),
     status: "running",
     exit: 0,
     logs: [],
@@ -354,7 +355,7 @@ export function makeContainer(o: MakeOptions): { c: Container; out: string } {
   const stop = (code: number) => {
     c.status = "exited";
     c.exit = code || 0;
-    c.stopped = Date.now();
+    c.stopped = clockNow();
   };
   const isServer = !o.cmd.length && (sv || img.server);
   let out: string;
@@ -396,13 +397,13 @@ export function makeContainer(o: MakeOptions): { c: Container; out: string } {
 export function startCt(c: Container): void {
   const img: Partial<Image> = findImg(c.image) || {};
   const sv = SERVERS[c.repo];
-  c.started = Date.now();
+  c.started = clockNow();
   for (const n in c.networks) c.networks[n] = ipFor(n);
   if (c.repo === "hello-world") {
     c.logs.push(...HELLO.split("\n"));
     c.status = "exited";
     c.exit = 0;
-    c.stopped = Date.now();
+    c.stopped = clockNow();
     return;
   }
   if (
@@ -416,7 +417,7 @@ export function startCt(c: Container): void {
     c.logs.push(...PG_ERR.split("\n"));
     c.status = "exited";
     c.exit = 1;
-    c.stopped = Date.now();
+    c.stopped = clockNow();
     return;
   }
   if (sv || img.server) {
@@ -426,7 +427,7 @@ export function startCt(c: Container): void {
   }
   c.status = "exited";
   c.exit = 0;
-  c.stopped = Date.now();
+  c.stopped = clockNow();
 }
 
 export function portsText(c: Container): string {
@@ -640,7 +641,7 @@ Management commands:
           if (c.status === "running") {
             c.status = "exited";
             c.exit = sub === "kill" ? 137 : 0;
-            c.stopped = Date.now();
+            c.stopped = clockNow();
           }
         } else {
           const hp = c.ports
@@ -944,7 +945,7 @@ function volume(a: string[]): Res {
   if (sub === "create") {
     const n = rest.find((x) => x[0] !== "-") || hex(32);
     if (!S.dk.volumes.some((v) => v.name === n))
-      S.dk.volumes.push({ name: n, created: Date.now() });
+      S.dk.volumes.push({ name: n, created: clockNow() });
     return R(n);
   }
   if (sub === "ls" || sub === "list")
@@ -1250,7 +1251,7 @@ function dockerRun(a: string[]): Res {
   }
   mts.forEach((m) => {
     if (m.type === "volume" && !S.dk.volumes.some((v) => v.name === m.name))
-      S.dk.volumes.push({ name: m.name as string, created: Date.now() });
+      S.dk.volumes.push({ name: m.name as string, created: clockNow() });
   });
   const { c, out } = makeContainer({
     img: img as Image,
@@ -1375,7 +1376,7 @@ export function buildImage(
     tag: t,
     id: hex(12),
     size: "156MB",
-    created: Date.now(),
+    created: clockNow(),
     cmd: cmd,
     server: !!exp,
     expose: exp,

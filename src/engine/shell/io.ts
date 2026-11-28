@@ -2,9 +2,11 @@
 // terminal both go to one ordered list of chunks, so the order of writing is
 // kept. A pipe or `$( )` collects text. A redirect writes to a file.
 import { LIM, LimitStop } from "./limits";
-import type { Interp } from "./interp";
+import type { Proc } from "./proc";
 
 export type Stream = "stdout" | "stderr";
+
+const NL = String.fromCharCode(10);
 
 /** One piece of output that reached the terminal. */
 export interface Chunk {
@@ -13,6 +15,9 @@ export interface Chunk {
   /** The styled form of `text` (engine HTML), when a command has one. */
   html?: string;
 }
+
+/** What the engine sends out while an input runs (B15). */
+export type OutputEvent = { kind: "chunk"; chunk: Chunk } | { kind: "clear" };
 
 /** What task checks read (D10). */
 export interface TaskCtx {
@@ -48,12 +53,19 @@ export class Meter {
   }
 }
 
+/** Where the terminal output of one input goes (B15): the `Run` of the input. */
+export interface OutSink {
+  emit(chunk: Chunk): void;
+  /** The `clear` command (or Ctrl-L) from any process. */
+  clear(): void;
+}
+
 /** The terminal side: ordered chunks, the meter, and `allOut`. */
 export class TermWriter implements Writer {
   readonly tty = true;
   constructor(
     private stream: Stream,
-    private sink: Chunk[],
+    private sink: OutSink,
     private meter: Meter,
     private task: TaskCtx | null,
   ) {}
@@ -62,7 +74,7 @@ export class TermWriter implements Writer {
     this.meter.add(text);
     const c: Chunk = { stream: this.stream, text };
     if (html !== undefined) c.html = html;
-    this.sink.push(c);
+    this.sink.emit(c);
     if (this.stream === "stdout" && this.task) this.task.allOut += text;
   }
 }
@@ -95,7 +107,11 @@ export class AliasWriter implements Writer {
   }
 }
 
-/** Standard input: a text with a read position. Shared by reference. */
+/**
+ * Standard input: a text with a read position. Shared by reference. The reads
+ * are async (B26); in this phase every source is a whole text, so they
+ * resolve at once.
+ */
 export class Input {
   pos = 0;
   /** True once a command read from the terminal input (the D22 hint). */
@@ -107,33 +123,44 @@ export class Input {
     /** True when it is the terminal (empty in 2a, D22). */
     public tty = false,
   ) {}
-  /** Reads the rest. */
-  readAll(): string {
+  private touch(): void {
     if (this.tty && this.counts()) this.used = true;
+  }
+  /** Reads the rest. */
+  readAll(): Promise<string> {
+    return Promise.resolve(this.takeAll());
+  }
+  /**
+   * The rest, at once, with no wait. For the places that need a plain text
+   * (`/dev/stdin` as a file name). It is only right for a text source.
+   */
+  takeAll(): string {
+    this.touch();
     const r = this.text.slice(this.pos);
     this.pos = this.text.length;
     return r;
   }
   /** One line without its newline, and whether the newline was there. */
-  readLine(): { line: string; nl: boolean } | null {
-    if (this.tty && this.counts()) this.used = true;
-    if (this.pos >= this.text.length) return null;
-    const i = this.text.indexOf("\n", this.pos);
+  readLine(): Promise<{ line: string; nl: boolean } | null> {
+    this.touch();
+    if (this.pos >= this.text.length) return Promise.resolve(null);
+    const i = this.text.indexOf(NL, this.pos);
     if (i < 0) {
       const line = this.text.slice(this.pos);
       this.pos = this.text.length;
-      return { line, nl: false };
+      return Promise.resolve({ line, nl: false });
     }
     const line = this.text.slice(this.pos, i);
     this.pos = i + 1;
-    return { line, nl: true };
+    return Promise.resolve({ line, nl: true });
   }
-  readChars(n: number): string | null {
-    if (this.tty && this.counts()) this.used = true;
-    if (this.pos >= this.text.length) return null;
-    const r = this.text.slice(this.pos, this.pos + n);
+  /** Up to `max` characters (all that is ready when there is no limit), or null at the end. */
+  readChunk(max = Infinity): Promise<string | null> {
+    this.touch();
+    if (this.pos >= this.text.length) return Promise.resolve(null);
+    const r = this.text.slice(this.pos, this.pos + max);
     this.pos += r.length;
-    return r;
+    return Promise.resolve(r);
   }
   get eof(): boolean {
     return this.pos >= this.text.length;
@@ -149,7 +176,11 @@ export interface IO {
 }
 
 /** A command of the table: `argv[0]` is the name. It returns the exit code. */
-export type CmdFn = (argv: string[], sh: Interp, io: IO) => number;
+export type CmdFn = (
+  argv: string[],
+  sh: Proc,
+  io: IO,
+) => number | Promise<number>;
 
 /** What the interpreter needs from the game around it. */
 export interface Host {

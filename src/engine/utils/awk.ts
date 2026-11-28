@@ -1,11 +1,12 @@
 // AC4: `awk` (mawk 1.3.4 behavior, the awk of Ubuntu 24.04). A lexer, a
 // parser, and a tree-walking interpreter. Not supported: `| getline`,
 // `system()`, and pipes to commands that are not in the command table.
+import { clockNow } from "../clock";
 import { get } from "../paths";
 import { writeText } from "../shell/redirect";
 import { Input } from "../shell/io";
-import type { CmdFn, IO } from "../shell/io";
-import type { Interp } from "../shell/interp";
+import type { CmdFn, IO, Writer } from "../shell/io";
+import type { Proc } from "../shell/proc";
 import { toJsRegex } from "./sed";
 import { readOperand } from "./text";
 
@@ -1002,6 +1003,30 @@ class Parser {
 type AwkArray = Map<string, Val>;
 type Frame = Map<string, Val | AwkArray>;
 
+/** B19: one step that the engine replays after the program ends. */
+type AwkStep =
+  | { k: "out"; text: string }
+  | { k: "err"; text: string }
+  | { k: "pipe"; argv: string[]; text: string };
+
+/** A writer that records its text as steps, in the order of writing. */
+class StepWriter implements Writer {
+  readonly tty = false;
+  constructor(
+    private steps: AwkStep[],
+    private k: "out" | "err",
+  ) {}
+  write(text: string): void {
+    if (text === "") return;
+    const last = this.steps[this.steps.length - 1];
+    if (last && last.k === this.k) last.text += text;
+    else
+      this.steps.push(
+        this.k === "out" ? { k: "out", text } : { k: "err", text },
+      );
+  }
+}
+
 class Runtime {
   globals = new Map<string, Val>();
   arrays = new Map<string, AwkArray>();
@@ -1024,10 +1049,12 @@ class Runtime {
   exitCode = 0;
   stdinUsed = false;
   depth = 0;
+  /** B19: what the program wrote, and the pipe commands it closed, in order. */
+  steps: AwkStep[] = [];
 
   constructor(
     readonly prog: Parser,
-    readonly sh: Interp,
+    readonly sh: Proc,
     readonly io: IO,
   ) {
     for (const [k, v] of Object.entries({
@@ -1484,7 +1511,7 @@ class Runtime {
         return this.rand();
       case "srand": {
         const prev = this.seed;
-        this.seed = a.length ? n(0) : Math.floor(Date.now() / 1000);
+        this.seed = a.length ? n(0) : Math.floor(clockNow() / 1000);
         this.srandInit();
         return prev;
       }
@@ -1545,7 +1572,7 @@ class Runtime {
       let f = this.getFiles.get(name);
       if (f === undefined) {
         const r =
-          name === "-" ? { text: this.io.in.readAll() } : this.readFile(name);
+          name === "-" ? { text: this.io.in.takeAll() } : this.readFile(name);
         f = r ? { text: r.text, pos: 0 } : null;
         this.getFiles.set(name, f);
       }
@@ -1590,7 +1617,7 @@ class Runtime {
         }
       } else this.stdinUsed = true;
       let text: string;
-      if (name === "-") text = this.io.in.readAll();
+      if (name === "-") text = this.io.in.takeAll();
       else {
         const n = get(this.sh.abs(name));
         if (!n) {
@@ -1683,7 +1710,8 @@ class Runtime {
           out: this.io.out,
           err: this.io.err,
         };
-        this.sh.runCommand(argv, child, {});
+        void child;
+        this.steps.push({ k: "pipe", argv, text: f.text });
       } else {
         const err = writeText(this.sh.abs(name), f.text, f.append);
         if (err) this.io.err.write(`awk: cannot open "${name}" for output\n`);
@@ -1867,7 +1895,21 @@ class Runtime {
   }
 }
 
-const awk: CmdFn = (argv, sh, io) => {
+/** B19: writes the recorded steps in order; a pipe step runs its command. */
+async function replay(steps: AwkStep[], sh: Proc, io: IO): Promise<void> {
+  for (const st of steps) {
+    if (st.k === "out") io.out.write(st.text);
+    else if (st.k === "err") io.err.write(st.text);
+    else
+      await sh.runCommand(
+        st.argv,
+        { in: new Input(st.text), out: io.out, err: io.err },
+        {},
+      );
+  }
+}
+
+const awk: CmdFn = async (argv, sh, io) => {
   let fs: string | null = null;
   const assigns: [string, string][] = [];
   const progFiles: string[] = [];
@@ -1902,7 +1944,8 @@ const awk: CmdFn = (argv, sh, io) => {
   if (progFiles.length) {
     const parts: string[] = [];
     for (const f of progFiles) {
-      const t = f === "-" ? io.in.readAll() : readOperand("awk", f, sh, io);
+      const t =
+        f === "-" ? await io.in.readAll() : await readOperand("awk", f, sh, io);
       if (t === null) return 2;
       parts.push(t);
     }
@@ -1931,22 +1974,44 @@ const awk: CmdFn = (argv, sh, io) => {
     }
     throw e;
   }
-  const rt = new Runtime(parser, sh, io);
-  rt.files = argv.slice(i);
+  const files = argv.slice(i);
+  // The core is synchronous (B19, B26): it gets the whole of stdin before it runs.
+  const needsRecords = parser.rules.some(
+    (r) => r.kind === "main" || r.kind === "end",
+  );
+  const readsStdin =
+    (needsRecords && (files.length === 0 || files.includes("-"))) ||
+    (/getline/.test(src) && src.includes('"-"'));
+  const stdinText = readsStdin ? await io.in.readAll() : "";
+  const steps: AwkStep[] = [];
+  const rio: IO = {
+    in: new Input(stdinText),
+    out: new StepWriter(steps, "out"),
+    err: new StepWriter(steps, "err"),
+  };
+  const rt = new Runtime(parser, sh, rio);
+  rt.steps = steps;
+  rt.files = files;
   if (fs !== null) {
     rt.globals.set("FS", fs === "t" ? "\t" : unescape(fs));
   }
   for (const [k, v] of assigns) rt.globals.set(k, mkStrnum(unescape(v)));
+  let code = 0;
+  let thrown: unknown = null;
   try {
-    return rt.run();
+    code = rt.run();
   } catch (e) {
     if (e instanceof AwkError) {
       rt.flushAll();
-      io.err.write(`awk: run time error: ${e.message}\n`);
-      return 2;
-    }
-    throw e;
+      rio.err.write(`awk: run time error: ${e.message}\n`);
+      code = 2;
+    } else thrown = e;
   }
+  // The visible order is the order of the steps (B19). A limit that the
+  // replay hits (10 000 lines) comes before an error of the program.
+  await replay(steps, sh, io);
+  if (thrown !== null) throw thrown;
+  return code;
 };
 
 export const AWK_CMDS: Record<string, CmdFn> = { awk };

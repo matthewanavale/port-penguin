@@ -22,13 +22,14 @@ import {
 import { CMDS, createHost, EXTERNAL } from "./linux";
 import { Context } from "./shell/context";
 import { Interp } from "./shell/interp";
+import type { Proc } from "./shell/proc";
 import { fresh, setState } from "./state";
 import type { DirNode, FileNode } from "./state";
 
 const NL = String.fromCharCode(10);
 const file = (x: string, m = "rw-r--r--"): FileNode => ({ t: "f", x, m });
 
-function open(script?: string): Interp {
+function open(script?: string): Proc {
   const clock = makeFakeDate(START_MS);
   vi.useFakeTimers({ toFake: ["Date"], now: clock.now() });
   vi.spyOn(Math, "random").mockImplementation(seededRandom(SEED));
@@ -42,12 +43,12 @@ function open(script?: string): Interp {
   setState(s);
   const ctx = new Context();
   ctx.cwd = "/home/cadet";
-  return new Interp(createHost({ history: () => [] }), ctx);
+  return new Interp(createHost({ history: () => [] })).proc(ctx);
 }
 
-function run(sh: Interp, text: string) {
+async function run(sh: Proc, text: string) {
   sh.begin({ line: text, segs: [], ranExec: null, allOut: "" });
-  const code = sh.runLine(text);
+  const code = await sh.runLine(text);
   const part = (st: string) =>
     sh.chunks
       .filter((c) => c.stream === st)
@@ -78,11 +79,11 @@ for (const f of Object.values(files)) for (const c of f.cases) fx.set(c.id, c);
 
 describe("host table against the script fixtures", () => {
   for (const c of CASES.filter((x) => x.kind === "script") as ScriptCase[]) {
-    it(c.id, () => {
+    it(c.id, async () => {
       const want = fx.get(c.id);
       if (!want) return;
       const sh = open(c.lines.join("\n") + "\n");
-      const r = run(sh, `bash ${SCRIPT_PATH}`);
+      const r = await run(sh, `bash ${SCRIPT_PATH}`);
       expect({
         stdout: normalize(r.out),
         stderr: normalize(r.err),
@@ -100,12 +101,12 @@ describe("prompt cases of the skel home", () => {
   for (const c of CASES.filter(
     (x) => x.kind === "prompt" && x.id.startsWith("skel-"),
   ) as PromptCase[]) {
-    it(c.id, () => {
+    it(c.id, async () => {
       const want = fx.get(c.id) as unknown as { transcript: string };
       const sh = open();
       sh.ctx.interactive = true;
       sh.ctx.exported.add("LS_COLORS");
-      expect(sh.runRc(SKEL_BASHRC)).toBeNull();
+      expect(await sh.runRc(SKEL_BASHRC)).toBeNull();
       const disp = () =>
         "cadet@port-penguin:" +
         (sh.ctx.cwd === "/home/cadet" ? "~" : sh.ctx.cwd) +
@@ -114,7 +115,7 @@ describe("prompt cases of the skel home", () => {
       for (const input of c.inputs) {
         t += input + NL;
         sh.begin({ line: input, segs: [], ranExec: null, allOut: "" });
-        sh.runLine(input);
+        await sh.runLine(input);
         t += sh.chunks.map((k) => k.text).join("");
         t += disp();
       }
@@ -135,84 +136,88 @@ describe("table contents", () => {
     expect(SKEL_BASH_LOGOUT).toBe(home.SKEL_BASH_LOGOUT);
   });
 
-  it("runs a command by its /usr/bin path", () => {
+  it("runs a command by its /usr/bin path", async () => {
     const sh = open();
-    expect(run(sh, "/usr/bin/printenv HOME").out).toBe("/home/cadet\n");
+    expect((await run(sh, "/usr/bin/printenv HOME")).out).toBe("/home/cadet\n");
   });
 
-  it("resolves relative paths against the cwd of a subshell", () => {
+  it("resolves relative paths against the cwd of a subshell", async () => {
     const sh = open();
-    expect(run(sh, "mkdir /tmp/w; (cd /tmp/w; touch a; ls)").out).toBe("a\n");
+    expect((await run(sh, "mkdir /tmp/w; (cd /tmp/w; touch a; ls)")).out).toBe(
+      "a\n",
+    );
   });
 });
 
 describe("commands beyond the fixtures", () => {
-  const out = (sh: Interp, t: string) => run(sh, t).out;
+  const out = async (sh: Proc, t: string) => (await run(sh, t)).out;
 
-  it("grep: context, count, -o, -r, and exit codes", () => {
+  it("grep: context, count, -o, -r, and exit codes", async () => {
     const sh = open();
-    run(
+    await run(
       sh,
       "printf 'a\nb\nc\nb\nd\n' > /tmp/f; mkdir /tmp/d; echo b > /tmp/d/x",
     );
-    expect(out(sh, "grep -n b /tmp/f")).toBe("2:b\n4:b\n");
-    expect(out(sh, "grep -c b /tmp/f")).toBe("2\n");
-    expect(out(sh, "grep -A1 a /tmp/f")).toBe("a\nb\n");
-    expect(out(sh, String.raw`grep -o 'b\|c' /tmp/f`)).toBe("b\nc\nb\n");
-    expect(out(sh, "grep -r b /tmp/d")).toBe("/tmp/d/x:b\n");
-    expect(run(sh, "grep zzz /tmp/f").code).toBe(1);
-    expect(run(sh, "grep zzz /tmp/nofile").code).toBe(2);
+    expect(await out(sh, "grep -n b /tmp/f")).toBe("2:b\n4:b\n");
+    expect(await out(sh, "grep -c b /tmp/f")).toBe("2\n");
+    expect(await out(sh, "grep -A1 a /tmp/f")).toBe("a\nb\n");
+    expect(await out(sh, String.raw`grep -o 'b\|c' /tmp/f`)).toBe("b\nc\nb\n");
+    expect(await out(sh, "grep -r b /tmp/d")).toBe("/tmp/d/x:b\n");
+    expect((await run(sh, "grep zzz /tmp/f")).code).toBe(1);
+    expect((await run(sh, "grep zzz /tmp/nofile")).code).toBe(2);
   });
 
-  it("sort: keys, numbers, and unique", () => {
+  it("sort: keys, numbers, and unique", async () => {
     const sh = open();
-    expect(out(sh, "printf 'b 2\na 10\nc 1\n' | sort -k2 -n")).toBe(
+    expect(await out(sh, "printf 'b 2\na 10\nc 1\n' | sort -k2 -n")).toBe(
       "c 1\nb 2\na 10\n",
     );
-    expect(out(sh, "printf 'b\na\nb\n' | sort -u")).toBe("a\nb\n");
+    expect(await out(sh, "printf 'b\na\nb\n' | sort -u")).toBe("a\nb\n");
   });
 
-  it("wc: pads like GNU wc", () => {
+  it("wc: pads like GNU wc", async () => {
     const sh = open();
-    expect(out(sh, "echo hi | wc")).toBe("      1       1       3\n");
-    expect(out(sh, "echo hi | wc -l")).toBe("1\n");
+    expect(await out(sh, "echo hi | wc")).toBe("      1       1       3\n");
+    expect(await out(sh, "echo hi | wc -l")).toBe("1\n");
   });
 
-  it("rm and mkdir refuse outside the writable folders", () => {
+  it("rm and mkdir refuse outside the writable folders", async () => {
     const sh = open();
-    expect(run(sh, "rm -rf /").err).toContain("dangerous");
-    expect(run(sh, "mkdir /etc/x").err).toBe(
+    expect((await run(sh, "rm -rf /")).err).toContain("dangerous");
+    expect((await run(sh, "mkdir /etc/x")).err).toBe(
       "mkdir: cannot create directory ‘/etc/x’: Permission denied\n",
     );
-    expect(run(sh, "rm /etc/hostname").err).toBe(
+    expect((await run(sh, "rm /etc/hostname")).err).toBe(
       "rm: cannot remove '/etc/hostname': Permission denied\n",
     );
   });
 
-  it("cp, mv, and chmod follow the GNU messages", () => {
+  it("cp, mv, and chmod follow the GNU messages", async () => {
     const sh = open();
-    run(sh, "echo x > /tmp/a; mkdir /tmp/d");
-    expect(run(sh, "cp /tmp/d /tmp/e").err).toBe(
+    await run(sh, "echo x > /tmp/a; mkdir /tmp/d");
+    expect((await run(sh, "cp /tmp/d /tmp/e")).err).toBe(
       "cp: -r not specified; omitting directory '/tmp/d'\n",
     );
-    expect(run(sh, "mv /tmp/nothing /tmp/e").err).toBe(
+    expect((await run(sh, "mv /tmp/nothing /tmp/e")).err).toBe(
       "mv: cannot stat '/tmp/nothing': No such file or directory\n",
     );
-    run(sh, "chmod u=rwx,go=rx /tmp/a");
-    expect(out(sh, "stat -c %A /tmp/a")).toBe("-rwxr-xr-x\n");
-    expect(run(sh, "chmod zz /tmp/a").err).toContain("invalid mode: ‘zz’");
+    await run(sh, "chmod u=rwx,go=rx /tmp/a");
+    expect(await out(sh, "stat -c %A /tmp/a")).toBe("-rwxr-xr-x\n");
+    expect((await run(sh, "chmod zz /tmp/a")).err).toContain(
+      "invalid mode: ‘zz’",
+    );
   });
 
-  it("ls: quotes odd names on a terminal and lists in columns", () => {
+  it("ls: quotes odd names on a terminal and lists in columns", async () => {
     const sh = open();
-    run(sh, "mkdir /tmp/w; cd /tmp/w; touch 'a b' c");
-    expect(out(sh, "ls")).toBe("'a b'   c\n");
-    expect(out(sh, "ls | cat")).toBe("a b\nc\n");
+    await run(sh, "mkdir /tmp/w; cd /tmp/w; touch 'a b' c");
+    expect(await out(sh, "ls")).toBe("'a b'   c\n");
+    expect(await out(sh, "ls | cat")).toBe("a b\nc\n");
   });
 
-  it("env -i and -u hide variables from the command they run", () => {
+  it("env -i and -u hide variables from the command they run", async () => {
     const sh = open();
-    expect(out(sh, "env -i A=1 env")).toBe("A=1\n");
-    expect(out(sh, "env -u HOME printenv HOME")).toBe("");
+    expect(await out(sh, "env -i A=1 env")).toBe("A=1\n");
+    expect(await out(sh, "env -u HOME printenv HOME")).toBe("");
   });
 });

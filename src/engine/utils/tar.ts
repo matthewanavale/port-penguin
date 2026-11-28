@@ -3,6 +3,7 @@
 // magic bytes right after "PPTAR", so `file` can tell it and the task check
 // (the text starts with PPTAR) still holds. Archives that run 1 wrote (a
 // tree under `node`) still open.
+import { clockNow } from "../clock";
 import { get, split } from "../paths";
 import { byteSize, size } from "../helpers";
 import { d as mkDir, f as mkFile } from "../state";
@@ -68,7 +69,7 @@ const isoMin = (ms: number): string => {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 };
 
-const tar: CmdFn = (argv, sh, io) => {
+const tar: CmdFn = async (argv, sh, io) => {
   let mode: "c" | "x" | "t" | null = null;
   let file: string | null = null;
   let dir: string | null = null;
@@ -239,7 +240,7 @@ const tar: CmdFn = (argv, sh, io) => {
 
   // -t and -x read an archive
   let text: string;
-  if (toStdio) text = io.in.readAll();
+  if (toStdio) text = await io.in.readAll();
   else {
     const an = get(sh.abs(arch as string));
     if (!an) return fatal(`${arch}: Cannot open: No such file or directory`);
@@ -280,7 +281,7 @@ const tar: CmdFn = (argv, sh, io) => {
     for (const m of members) {
       if (verbose) {
         const sz = m.t === "d" ? 0 : (m.sz ?? byteSize(m.x ?? ""));
-        out += `${m.t === "d" ? "d" : "-"}${m.m} cadet/cadet ${String(sz).padStart(7)} ${isoMin(m.mt || Date.now())} ${m.p}\n`;
+        out += `${m.t === "d" ? "d" : "-"}${m.m} cadet/cadet ${String(sz).padStart(7)} ${isoMin(m.mt || clockNow())} ${m.p}\n`;
       } else out += m.p + "\n";
     }
     io.out.write(out);

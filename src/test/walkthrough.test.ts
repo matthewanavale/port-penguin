@@ -16,10 +16,10 @@ describe("walkthrough (AC7)", () => {
     expect(SOLUTIONS.map((s) => s.task)).toEqual(M.map((_, i) => i + 1));
   });
 
-  it("completes all 70 tasks in order", () => {
-    const sh = openShell();
+  it("completes all 70 tasks in order", async () => {
+    const sh = await openShell();
     for (const sol of SOLUTIONS) {
-      for (const cmd of sol.commands) sh.run(cmd);
+      for (const cmd of sol.commands) await sh.run(cmd);
       expect(sh.engine.state.done, `task ${sol.task}: ${sol.title}`).toContain(
         sol.task - 1,
       );
@@ -28,9 +28,10 @@ describe("walkthrough (AC7)", () => {
     expect(sh.engine.state.cur).toBe(70);
   });
 
-  it("ends with the same done and cur as the run-1 save", () => {
-    const sh = openShell();
-    for (const sol of SOLUTIONS) for (const cmd of sol.commands) sh.run(cmd);
+  it("ends with the same done and cur as the run-1 save", async () => {
+    const sh = await openShell();
+    for (const sol of SOLUTIONS)
+      for (const cmd of sol.commands) await sh.run(cmd);
     const s = sh.engine.state;
     expect(s.done).toEqual(run1End.done);
     expect(s.cur).toBe(run1End.cur);

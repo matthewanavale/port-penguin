@@ -6,11 +6,23 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import type { Engine, ExecResult } from "../engine/index";
 import type { OutLine } from "../engine/output";
-import { renderLines, renderRuns, themeFromCss } from "./ansi";
+import type { OutputEvent } from "../engine/shell/io";
+import {
+  createChunkRenderer,
+  renderLines,
+  renderRuns,
+  themeFromCss,
+} from "./ansi";
 import { createLineEditor } from "./lineEditor";
 import type { EditorAction } from "./lineEditor";
 
 export interface GameTerminal {
+  /**
+   * Command output from the engine (B15): `main.ts` connects this to the
+   * `onOutput` of `createEngine`. A chunk is written at once; `clear` clears
+   * the screen.
+   */
+  output(event: OutputEvent): void;
   /** Writes lines above the prompt (panel messages). */
   print(lines: OutLine[]): void;
   /** Clears the screen and keeps the line being typed. */
@@ -236,42 +248,70 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
   /** Lines of an input that is not complete yet (shown with `> `). */
   let kept: string[] = [];
 
-  function run(actions: EditorAction[]): string {
-    let out = "";
-    for (const a of actions) {
-      if (a.type === "submit") {
-        out += endInput(a.line);
-        kept.push(a.line);
-        const text = kept.join("\n");
-        if (!engine.isComplete(text)) {
-          // Draw `> ` at once, so a pasted multi-line input keeps its order.
-          out += renderRuns(engine.prompt());
-          continue;
-        }
-        kept = [];
-        engine.setColumns(term.cols);
-        const res = engine.execute(text);
-        if (res.cleared) out += CLEAR;
-        out += renderLines(res.lines);
-        opts.onResult(res);
-      } else if (a.type === "interrupt") {
-        out += endInput(a.line, "^C");
-        kept = [];
-        engine.cancelInput();
-      } else if (a.type === "clear") {
-        out += CLEAR;
-        rowsAbove = 0;
-      } else {
-        out += endInput(a.line);
-        out += renderLines([
-          { style: "dim", runs: [{ text: a.items.join("  ") }] },
-        ]);
-      }
+  const chunks = createChunkRenderer();
+
+  /** One action that does not run a command (the listing, Ctrl-C, Ctrl-L). */
+  function runOne(a: EditorAction): string {
+    if (a.type === "interrupt") {
+      const out = endInput(a.line, "^C");
+      kept = [];
+      engine.cancelInput();
+      return out;
     }
+    if (a.type === "clear") {
+      rowsAbove = 0;
+      return CLEAR;
+    }
+    if (a.type === "submit") return "";
+    let out = endInput(a.line);
+    out += renderLines([
+      { style: "dim", runs: [{ text: a.items.join("  ") }] },
+    ]);
     return out;
   }
 
-  term.onData((data) => {
+  /** The editor actions that do not run a command, as one string. */
+  const run = (actions: EditorAction[]): string =>
+    actions.map((a) => runOne(a)).join("");
+
+  /** True while an input runs: keys that arrive then wait (B15, this phase has no keyboard reads). */
+  let running = false;
+  const waiting: string[] = [];
+
+  /**
+   * Runs the editor actions in order. A complete input goes to the engine; its
+   * output is written as it comes (`output`), then its game lines.
+   */
+  async function perform(actions: EditorAction[]): Promise<void> {
+    let out = "";
+    for (const a of actions) {
+      if (a.type !== "submit") {
+        out += runOne(a);
+        continue;
+      }
+      out += endInput(a.line);
+      kept.push(a.line);
+      const text = kept.join("\n");
+      if (!engine.isComplete(text)) {
+        // Draw `> ` at once, so a pasted multi-line input keeps its order.
+        out += renderRuns(engine.prompt());
+        continue;
+      }
+      kept = [];
+      engine.setColumns(term.cols);
+      term.write(out);
+      out = "";
+      chunks.reset();
+      const res = await engine.execute(text);
+      out += chunks.finish();
+      out += renderLines(res.lines);
+      opts.onResult(res);
+    }
+    if (out) term.write(out);
+  }
+
+  /** Handles one piece of typed or pasted text. */
+  async function handle(data: string): Promise<void> {
     const before = editor.line,
       beforeCursor = editor.cursor;
     const actions = editor.input(data);
@@ -290,7 +330,27 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       term.write(typed.out);
       return;
     }
-    term.write(run(actions) + draw(editor.line, editor.cursor));
+    if (!actions.some((a) => a.type === "submit")) {
+      term.write(run(actions) + draw(editor.line, editor.cursor));
+      return;
+    }
+    running = true;
+    try {
+      await perform(actions);
+    } finally {
+      running = false;
+    }
+    term.write(draw(editor.line, editor.cursor));
+    const next = waiting.shift();
+    if (next !== undefined) await handle(next);
+  }
+
+  term.onData((data) => {
+    if (running) {
+      waiting.push(data);
+      return;
+    }
+    void handle(data);
   });
 
   function focusNext(): void {
@@ -388,6 +448,16 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
     });
 
   return {
+    output(event) {
+      if (event.kind === "clear") {
+        chunks.reset();
+        rowsAbove = 0;
+        term.write(CLEAR);
+        return;
+      }
+      const text = chunks.push(event.chunk);
+      if (text) term.write(text);
+    },
     print(lines) {
       let out = rowsAbove > 0 ? `\x1b[${rowsAbove}A` : "";
       out += "\r\x1b[J" + renderLines(lines);

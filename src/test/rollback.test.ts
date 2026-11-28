@@ -76,14 +76,14 @@ describe("every golden script (AC8)", () => {
 });
 
 describe("new optional fields (D11, AC8)", () => {
-  it("an engine that uses them still saves a file the run-1 load() accepts", () => {
-    const sh = openShell();
-    sh.run("mkdir -p /tmp/w && cd /tmp/w");
-    sh.run("export E1=1; a=(1 2 3); declare -A m=([k]=v); readonly R=1");
-    sh.run(
+  it("an engine that uses them still saves a file the run-1 load() accepts", async () => {
+    const sh = await openShell();
+    await sh.run("mkdir -p /tmp/w && cd /tmp/w");
+    await sh.run("export E1=1; a=(1 2 3); declare -A m=([k]=v); readonly R=1");
+    await sh.run(
       "f() { echo fn; }; alias zz='echo zz'; shopt -s extglob; set -o pipefail",
     );
-    sh.run("printf '* * * * * echo hi\\n' > c; crontab c; echo x > g");
+    await sh.run("printf '* * * * * echo hi\\n' > c; crontab c; echo x > g");
     const loaded = run1Load(sh.store.get(SAVE_KEY) as string);
     expect(loaded).not.toBeNull();
     const save = loaded as Record<string, unknown>;
@@ -101,9 +101,9 @@ describe("new optional fields (D11, AC8)", () => {
       expect(typeof v).toBe("string");
   });
 
-  it("keeps env as plain strings, so a run-1 build can read it", () => {
-    const sh = openShell();
-    sh.run("s=text; a=(1 2); export e=1");
+  it("keeps env as plain strings, so a run-1 build can read it", async () => {
+    const sh = await openShell();
+    await sh.run("s=text; a=(1 2); export e=1");
     const env = (
       JSON.parse(sh.store.get(SAVE_KEY) as string) as {
         env: Record<string, unknown>;
@@ -116,8 +116,8 @@ describe("new optional fields (D11, AC8)", () => {
     );
   });
 
-  it("accepts a hand-made save with all new fields and keeps playing", () => {
-    const sh = openShell();
+  it("accepts a hand-made save with all new fields and keeps playing", async () => {
+    const sh = await openShell();
     const base = JSON.parse(sh.store.get(SAVE_KEY) as string) as Record<
       string,
       unknown
@@ -143,16 +143,19 @@ describe("new optional fields (D11, AC8)", () => {
       crontab: "* * * * * echo hi\n",
     };
     expect(run1Load(JSON.stringify(withNew))).not.toBeNull();
-    const again = openShell({ saved: JSON.stringify(withNew) });
-    expect(again.run("echo ok").out).toBe("ok\n");
-    expect(again.run("stat -c %Y stamped.txt").out).toBe("1705314600\n");
+    const again = await openShell({ saved: JSON.stringify(withNew) });
+    expect((await again.run("echo ok")).out).toBe("ok\n");
+    expect((await again.run("stat -c %Y stamped.txt")).out).toBe(
+      "1705314600\n",
+    );
   });
 });
 
 describe("save compatibility with the last task", () => {
-  it("plays the whole walkthrough and still passes the run-1 load()", () => {
-    const sh = openShell();
-    for (const sol of SOLUTIONS) for (const cmd of sol.commands) sh.run(cmd);
+  it("plays the whole walkthrough and still passes the run-1 load()", async () => {
+    const sh = await openShell();
+    for (const sol of SOLUTIONS)
+      for (const cmd of sol.commands) await sh.run(cmd);
     expect(run1Load(sh.store.get(SAVE_KEY) ?? null)).not.toBeNull();
   });
 });

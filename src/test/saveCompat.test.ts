@@ -65,9 +65,9 @@ describe("loading a run-1 save (AC7)", () => {
   });
 
   for (const name of saveNames) {
-    it(`${name}: continues at the same task with the same state`, () => {
+    it(`${name}: continues at the same task with the same state`, async () => {
       const old = JSON.parse(fixture(name)) as Record<string, any>;
-      const sh = openShell({ saved: fixture(name) });
+      const sh = await openShell({ saved: fixture(name) });
       expect(sh.engine.resumed).toBe(true);
       const s = sh.engine.state as unknown as Record<string, any>;
       expect(s.cur).toBe(old.cur);
@@ -83,9 +83,9 @@ describe("loading a run-1 save (AC7)", () => {
     });
   }
 
-  it("the first save ignores ~/.bashrc and mtime, and writes every run-1 field back", () => {
+  it("the first save ignores ~/.bashrc and mtime, and writes every run-1 field back", async () => {
     const old = JSON.parse(fixture("task58.json")) as Record<string, any>;
-    const sh = openShell({ saved: fixture("task58.json") });
+    const sh = await openShell({ saved: fixture("task58.json") });
     const mine = JSON.parse(sh.store.get(SAVE_KEY) as string) as Record<
       string,
       any
@@ -96,21 +96,21 @@ describe("loading a run-1 save (AC7)", () => {
     }
   });
 
-  it("plays the next task from the loaded state", () => {
-    const sh = openShell({ saved: fixture("task58.json") });
-    for (const cmd of SOLUTIONS[58].commands) sh.run(cmd);
+  it("plays the next task from the loaded state", async () => {
+    const sh = await openShell({ saved: fixture("task58.json") });
+    for (const cmd of SOLUTIONS[58].commands) await sh.run(cmd);
     expect(sh.engine.state.done).toContain(58);
     expect(sh.engine.state.cur).toBe(59);
   });
 
-  it("gives the run-1 hint text after loading an unlocked save", () => {
-    const sh = openShell({ saved: fixture("task20-unlocked.json") });
+  it("gives the run-1 hint text after loading an unlocked save", async () => {
+    const sh = await openShell({ saved: fixture("task20-unlocked.json") });
     const hint = fixture("hint-task20.txt").trimEnd();
     expect(hint.startsWith("Hint: ")).toBe(true);
-    expect(sh.run("hint").text).toBe(hint);
+    expect((await sh.run("hint")).text).toBe(hint);
   });
 
-  it("runs the setup of the current task when the save has not run it yet", () => {
+  it("runs the setup of the current task when the save has not run it yet", async () => {
     const original = JSON.parse(fixture("task35.json")) as Record<string, any>;
     const old = JSON.parse(fixture("task35.json")) as Record<string, any>;
     expect(old.cur).toBe(35);
@@ -118,7 +118,7 @@ describe("loading a run-1 save (AC7)", () => {
     old.procs = (old.procs as { cmd: string }[]).filter(
       (p) => !p.cmd.startsWith("fog-horn"),
     );
-    const sh = openShell({ saved: JSON.stringify(old) });
+    const sh = await openShell({ saved: JSON.stringify(old) });
     expect(sh.startText).toContain("fog-horn");
     expect(sh.engine.state.procs).toEqual(original.procs);
     expect(sh.engine.state.setup).toEqual(original.setup);
@@ -129,8 +129,8 @@ describe("loading a run-1 save (AC7)", () => {
     ["missing dk", '{"fs":{},"procs":[],"done":[]}'],
     ["done is not a list", '{"fs":{},"dk":{},"procs":[],"done":1}'],
   ] as const) {
-    it(`starts a fresh game when the save is ${label}`, () => {
-      const sh = openShell({ saved: text });
+    it(`starts a fresh game when the save is ${label}`, async () => {
+      const sh = await openShell({ saved: text });
       expect(sh.engine.resumed).toBe(false);
       expect(sh.engine.state.cur).toBe(0);
       expect(sh.engine.state.done).toEqual([]);

@@ -2,12 +2,13 @@
 // seq, basename, dirname, xargs, diff, md5sum, sha256sum. Each one is a
 // `CmdFn`: `(argv, sh, io) => code`. Error lines have the form `NAME: text`
 // and go to `io.err`; they never go through `sh.fail` (that adds `bash:`).
+import { clockNow } from "../clock";
 import { get } from "../paths";
 import { sha256 } from "../sha256";
 import { readPath, writeText } from "../shell/redirect";
 import type { CmdFn, IO } from "../shell/io";
 import { Input } from "../shell/io";
-import type { Interp } from "../shell/interp";
+import type { Proc } from "../shell/proc";
 
 /* ---------- shared helpers ---------- */
 
@@ -102,14 +103,14 @@ export function getopt(
 }
 
 /** Reads one operand: `-` is stdin. Writes the error line and returns null on failure. */
-export function readOperand(
+export async function readOperand(
   cmd: string,
   name: string,
-  sh: Interp,
+  sh: Proc,
   io: IO,
-): string | null {
-  if (name === "-") return io.in.readAll();
-  const r = readPath(sh.abs(name), io);
+): Promise<string | null> {
+  if (name === "-") return await io.in.readAll();
+  const r = await readPath(sh.abs(name), io);
   if ("err" in r) {
     errOut(io, cmd, `${name}: ${r.err}`);
     return null;
@@ -144,7 +145,7 @@ function parseList(list: string): Range[] | null {
 const inRanges = (rs: Range[], n: number): boolean =>
   rs.some(([a, b]) => n >= a && n <= b);
 
-const cut: CmdFn = (argv, sh, io) => {
+const cut: CmdFn = async (argv, sh, io) => {
   const p = getopt("cut", argv, "b:c:f:d:sz", {
     bytes: ["b", true],
     characters: ["c", true],
@@ -199,7 +200,7 @@ const cut: CmdFn = (argv, sh, io) => {
   const files = p.rest.length ? p.rest : ["-"];
   let code = 0;
   for (const name of files) {
-    const text = readOperand("cut", name, sh, io);
+    const text = await readOperand("cut", name, sh, io);
     if (text === null) {
       code = 1;
       continue;
@@ -301,7 +302,7 @@ function trSet(s: string): string[] | null {
   return items;
 }
 
-const tr: CmdFn = (argv, sh, io) => {
+const tr: CmdFn = async (argv, sh, io) => {
   const p = getopt("tr", argv, "cCdst", {
     complement: ["c", false],
     delete: ["d", false],
@@ -347,7 +348,7 @@ const tr: CmdFn = (argv, sh, io) => {
       if (!inSet.has(ch)) s1.push(ch);
     }
   }
-  const text = io.in.readAll();
+  const text = await io.in.readAll();
   const set1 = new Set(s1);
   let out = "";
   if (del && !squeeze) {
@@ -397,7 +398,7 @@ const tr: CmdFn = (argv, sh, io) => {
 
 /* ---------- paste ---------- */
 
-const paste: CmdFn = (argv, sh, io) => {
+const paste: CmdFn = async (argv, sh, io) => {
   const p = getopt("paste", argv, "d:sz", {
     delimiters: ["d", true],
     serial: ["s", false],
@@ -425,7 +426,7 @@ const paste: CmdFn = (argv, sh, io) => {
   const files = p.rest.length ? p.rest : ["-"];
   const data: string[][] = [];
   for (const f of files) {
-    const t = readOperand("paste", f, sh, io);
+    const t = await readOperand("paste", f, sh, io);
     if (t === null) return 1;
     data.push(splitLines(t));
   }
@@ -454,7 +455,7 @@ const paste: CmdFn = (argv, sh, io) => {
 
 /* ---------- tee ---------- */
 
-const tee: CmdFn = (argv, sh, io) => {
+const tee: CmdFn = async (argv, sh, io) => {
   const p = getopt("tee", argv, "aip", {
     append: ["a", false],
     "ignore-interrupts": ["i", false],
@@ -464,7 +465,7 @@ const tee: CmdFn = (argv, sh, io) => {
     return 1;
   }
   const append = p.opts.some((o) => o.name === "a");
-  const text = io.in.readAll();
+  const text = await io.in.readAll();
   io.out.write(text);
   let code = 0;
   for (const name of p.rest) {
@@ -667,7 +668,7 @@ function xargsWords(text: string): string[] | string {
   return words;
 }
 
-const xargs: CmdFn = (argv, sh, io) => {
+const xargs: CmdFn = async (argv, sh, io) => {
   // The command and its arguments start at the first operand.
   let i = 1;
   let perCall = 0;
@@ -716,7 +717,7 @@ const xargs: CmdFn = (argv, sh, io) => {
   }
   const cmd = argv.slice(i);
   if (cmd.length === 0) cmd.push("echo");
-  const text = io.in.readAll();
+  const text = await io.in.readAll();
   let items: string[];
   if (repl !== null) {
     items = text
@@ -759,7 +760,7 @@ const xargs: CmdFn = (argv, sh, io) => {
       return 127;
     }
     const child: IO = { in: new Input(""), out: io.out, err: io.err };
-    const r = sh.runCommand(args, child, {});
+    const r = await sh.runCommand(args, child, {});
     if (r === 255) return 124;
     if (r === 127) code = Math.max(code, 127);
     else if (r !== 0 && code < 123) code = 123;
@@ -837,7 +838,7 @@ function isoTime(ms: number): string {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}.${p(d.getUTCMilliseconds(), 3)}000000 +0000`;
 }
 
-const diff: CmdFn = (argv, sh, io) => {
+const diff: CmdFn = async (argv, sh, io) => {
   const p = getopt("diff", argv, "uqUc:", {
     unified: ["u", false],
     brief: ["q", false],
@@ -856,11 +857,11 @@ const diff: CmdFn = (argv, sh, io) => {
   const texts: string[] = [];
   const mt: number[] = [];
   for (const n of [n1, n2]) {
-    const t = readOperand("diff", n, sh, io);
+    const t = await readOperand("diff", n, sh, io);
     if (t === null) return 2;
     texts.push(t);
     const node = n === "-" ? null : get(sh.abs(n));
-    mt.push(node ? mtimeOf(node) || Date.now() : Date.now());
+    mt.push(node ? mtimeOf(node) || clockNow() : clockNow());
   }
   if (texts[0] === texts[1]) return 0;
   if (brief) {
@@ -995,7 +996,7 @@ export function md5(str: string): string {
 }
 
 function sumCmd(name: string, hash: (s: string) => string): CmdFn {
-  return (argv, sh, io) => {
+  return async (argv, sh, io) => {
     const p = getopt(name, argv, "cbt", {
       check: ["c", false],
       binary: ["b", false],
@@ -1010,7 +1011,7 @@ function sumCmd(name: string, hash: (s: string) => string): CmdFn {
     let code = 0;
     if (!check) {
       for (const f of files) {
-        const t = readOperand(name, f, sh, io);
+        const t = await readOperand(name, f, sh, io);
         if (t === null) {
           code = 1;
           continue;
@@ -1022,7 +1023,7 @@ function sumCmd(name: string, hash: (s: string) => string): CmdFn {
     let bad = 0;
     let unread = 0;
     for (const f of files) {
-      const text = readOperand(name, f, sh, io);
+      const text = await readOperand(name, f, sh, io);
       if (text === null) {
         code = 1;
         continue;
@@ -1030,7 +1031,7 @@ function sumCmd(name: string, hash: (s: string) => string): CmdFn {
       for (const line of splitLines(text)) {
         const m = /^([0-9a-fA-F]+)  ?\*?(.*)$/.exec(line);
         if (!m) continue;
-        const r = readPath(sh.abs(m[2]), io);
+        const r = await readPath(sh.abs(m[2]), io);
         if ("err" in r) {
           errOut(io, name, `${m[2]}: ${r.err}`);
           io.out.write(`${m[2]}: FAILED open or read\n`);

@@ -90,7 +90,7 @@ function check(text: string): [number, string] | null {
   return null;
 }
 
-const crontab: CmdFn = (argv, sh, io) => {
+const crontab: CmdFn = async (argv, sh, io) => {
   let op: "replace" | "l" | "r" | "e" = "replace";
   let dry = false;
   let file: string | null = null;
@@ -144,14 +144,14 @@ const crontab: CmdFn = (argv, sh, io) => {
   }
   if (file === null) file = "-";
   let text: string;
-  if (file === "-") text = io.in.readAll();
+  if (file === "-") text = await io.in.readAll();
   else {
     const n = get(sh.abs(file));
     if (!n || n.t !== "f") {
       io.err.write(`${file}: No such file or directory\n`);
       return 1;
     }
-    const t = readOperand("crontab", file, sh, io);
+    const t = await readOperand("crontab", file, sh, io);
     if (t === null) return 1;
     text = t;
   }

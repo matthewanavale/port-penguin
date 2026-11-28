@@ -3,7 +3,9 @@
 // src/engine/shell (D3); the prompt shell is backed by the saved state (D13).
 import { imgName, REG } from "./docker";
 import { esc } from "./helpers";
-import { CMDS, createHost, screen } from "./linux";
+import { setClock } from "./clock";
+import type { Clock } from "./clock";
+import { createHost } from "./linux";
 import { CH, M, rankFor } from "./missions";
 import { htmlLine, textLine } from "./output";
 import type { OutLine, Run } from "./output";
@@ -20,7 +22,8 @@ import {
   termCols,
 } from "./shell/context";
 import { Interp } from "./shell/interp";
-import type { Chunk, CmdFn, Ctx } from "./shell/io";
+import { Run as InputRun } from "./shell/proc";
+import type { Chunk, Ctx, OutputEvent } from "./shell/io";
 import { parseFull } from "./shell/parser";
 import { readText } from "./shell/redirect";
 import { nul } from "./nullmap";
@@ -32,7 +35,8 @@ export type { Chapter, Mission } from "./missions";
 export { sha256 } from "./sha256";
 export { RC_KEY, SAVE_KEY } from "./state";
 export type { SaveStorage, State } from "./state";
-export type { Chunk } from "./shell/io";
+export type { Chunk, OutputEvent } from "./shell/io";
+export type { Clock } from "./clock";
 
 /* ============================================================
    INSTRUCTOR PASSWORD for hints, skipping and jumping.
@@ -51,16 +55,36 @@ export type EngineEvent =
   | { type: "finished" };
 
 export interface ExecResult {
-  /** Output after the command, without the echoed prompt line. */
+  /**
+   * The game's own lines after the command (learner hints, limit and nesting
+   * notes, `.bashrc` notes, task, promotion, and chapter lines). Command
+   * output is not here: it comes through `onOutput` (B15).
+   */
   lines: OutLine[];
   /**
-   * What the input wrote, in order, each piece marked stdout or stderr
-   * (D24). The learner hints and the game notes (D12) are not in it.
+   * What the foreground of the input wrote, in order, each piece marked stdout
+   * or stderr (D24), up to the first 1 MB of text. The learner hints and the
+   * game notes (D12) are not in it.
    */
   chunks: Chunk[];
-  /** True when the command cleared the screen; `lines` is then only what came after. */
-  cleared: boolean;
   events: EngineEvent[];
+}
+
+/** What the engine asks the terminal for while a command reads the keyboard (B4, B15). */
+export interface ReadRequest {
+  mode: "line" | "char";
+  count?: number;
+  echo: boolean;
+}
+
+export interface EngineOptions {
+  storage: SaveStorage;
+  /** The engine clock (B5). The default reads `Date.now()` and `setTimeout`. */
+  clock?: Clock;
+  /** Command output reaches the terminal only through this (B15). */
+  onOutput?: (event: OutputEvent) => void;
+  /** Asks for keyboard input; resolves to the typed text, or null at end of input (B15). */
+  onRead?: (req: ReadRequest) => Promise<string | null>;
 }
 
 export interface Completion {
@@ -76,9 +100,9 @@ export interface Engine {
   /** True when the state came from a save. */
   readonly resumed: boolean;
   /** Sets up the current task, then saves. Gives the setup alert, if any. */
-  start(): OutLine[];
+  start(): Promise<OutLine[]>;
   /** Runs one complete input. An incomplete input runs nothing and keeps the `> ` prompt. */
-  execute(line: string): ExecResult;
+  execute(line: string): Promise<ExecResult>;
   /** True when `text` is a whole input; false when bash would show `> ` (AC1). */
   isComplete(text: string): boolean;
   /** Ctrl-C at the prompt or at `> `: drops the kept input and sets `$?` to 130. */
@@ -88,13 +112,13 @@ export interface Engine {
   complete(value: string, cursor: number): Completion;
   /** The prompt, as runs: `> ` while an input is incomplete. */
   prompt(): Run[];
-  skip(): OutLine[];
-  jump(index: number): OutLine[];
+  skip(): Promise<OutLine[]>;
+  jump(index: number): Promise<OutLine[]>;
   /** Unlocks hints when the password is right; null when it is wrong. */
-  unlock(password: string): OutLine[] | null;
-  lock(): OutLine[];
+  unlock(password: string): Promise<OutLine[] | null>;
+  lock(): Promise<OutLine[]>;
   /** Starts a fresh game and saves it. */
-  reset(): void;
+  reset(): Promise<void>;
 }
 
 const DSUB = [
@@ -175,64 +199,26 @@ function historyText(text: string): string {
   return out;
 }
 
-/** Output lines: one for each run of same-stream text (D24); engine HTML stays styled. */
-function chunkLines(chunks: Chunk[]): OutLine[] {
-  const out: OutLine[] = [];
-  let buf = "";
-  let stream: Chunk["stream"] | null = null;
-  const flush = () => {
-    if (stream !== null)
-      out.push(textLine(buf, stream === "stderr" ? "err" : undefined));
-    buf = "";
-    stream = null;
-  };
-  for (const c of chunks) {
-    if (c.html !== undefined) {
-      flush();
-      out.push(
-        htmlLine(
-          c.html.replace(/\n$/, ""),
-          c.stream === "stderr" ? "err" : undefined,
-        ),
-      );
-      continue;
-    }
-    if (stream !== c.stream) {
-      flush();
-      stream = c.stream;
-    }
-    buf += c.text;
-  }
-  flush();
-  return out;
-}
-
-export function createEngine(opts: { storage: SaveStorage }): Engine {
+export function createEngine(opts: EngineOptions): Engine {
   const storage = opts.storage;
+  setClock(opts.clock);
   const loaded = load(storage);
   let s: State = loaded || fresh();
   const use = () => setState(s);
   use();
   termCols.cols = 80;
 
-  /** Where the last `clear` stood in the chunk list of the input. */
-  let clearAt = 0;
   const host = createHost({
     history: () => s.hist,
     clearHistory: () => {
       s.hist.length = 0;
     },
   });
-  const clearCmd: CmdFn = (argv, sh, io) => {
-    const code = CMDS.clear(argv, sh, io);
-    clearAt = sh.chunks.length;
-    return code;
-  };
-  for (const k of ["clear", "/usr/bin/clear", "/bin/clear"])
-    host.commands[k] = clearCmd;
-
   const pctx = new PromptContext(() => s);
-  const interp = new Interp(host, pctx);
+  const blank = (): Ctx => ({ line: "", segs: [], ranExec: null, allOut: "" });
+  const interp = new Interp(host);
+  /** The prompt shell: the root process. Its output run changes with each input. */
+  const shell = interp.proc(pctx, new InputRun(blank()));
   /** Variables that `~/.bashrc` set. They are not saved: it sets them again at start. */
   let rcOwned: Record<string, string> = nul();
   let rcDone = false;
@@ -259,7 +245,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
 
   /** Writes the shell variables back to the state, which task checks read. */
   function syncOut(): void {
-    const c = interp.ctx;
+    const c = pctx;
     const env: Record<string, string> = nul();
     for (const [k, v] of Object.entries(c.env))
       if (rcOwned[k] !== v) env[k] = v;
@@ -271,13 +257,11 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
     s.options = nul(c.options);
   }
 
-  const blank = (): Ctx => ({ line: "", segs: [], ranExec: null, allOut: "" });
-
   /** Runs `~/.bashrc` silently under the D19 guard. Gives the dim line, if any. */
-  function runRc(): OutLine[] {
+  async function runRc(): Promise<OutLine[]> {
     rcDone = true;
-    interp.ctx = pctx;
-    interp.begin(blank());
+    // Its output is discarded: this run has no `onOutput`.
+    shell.attach(new InputRun(blank()));
     const before = nul(pctx.env);
     const text = readText(HOME + "/.bashrc");
     let reason: string | null = null;
@@ -303,17 +287,16 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
     } else if ("text" in text) {
       setMark(true);
       try {
-        reason = interp.runRc(text.text);
+        reason = await shell.runRc(text.text);
       } catch (e) {
         reason = e instanceof Error ? e.message : "error";
       }
       setMark(false);
     }
-    interp.ctx = pctx;
     rcOwned = nul();
     for (const [k, v] of Object.entries(pctx.env))
       if (before[k] === undefined) rcOwned[k] = v;
-    interp.begin(blank());
+    shell.attach(new InputRun(blank()));
     return reason === null
       ? []
       : [
@@ -325,7 +308,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
   }
 
   /** Builds the prompt shell again from the state, then runs `~/.bashrc`. */
-  function newShell(keep?: Set<string>): OutLine[] {
+  async function newShell(keep?: Set<string>): Promise<OutLine[]> {
     const old = pctx.env;
     hydrate(pctx);
     if (keep) {
@@ -341,7 +324,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
       pctx.cwd = HOME;
     }
     pending = false;
-    return runRc();
+    return await runRc();
   }
 
   const persist = (): string | null => {
@@ -444,11 +427,11 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
     },
     resumed: loaded !== null,
 
-    start() {
+    async start() {
       use();
       const out: OutLine[] = [];
       activate(out);
-      if (!rcDone) out.push(...runRc());
+      if (!rcDone) out.push(...(await runRc()));
       // A failed save is reported by the first command, not here.
       persist();
       return out;
@@ -466,18 +449,18 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
       termCols.cols = Math.max(1, Math.floor(cols) || 80);
     },
 
-    execute(lineText: string): ExecResult {
+    async execute(lineText: string): Promise<ExecResult> {
       use();
       const events: EngineEvent[] = [];
-      let lines: OutLine[] = [];
-      if (!rcDone) lines.push(...runRc());
+      const lines: OutLine[] = [];
+      if (!rcDone) lines.push(...(await runRc()));
       if (!lineText.trim()) {
         pending = false;
-        return { lines, chunks: [], cleared: false, events };
+        return { lines, chunks: [], events };
       }
       if (!isComplete(lineText)) {
         // Nothing runs; the terminal draws `> ` and waits for more.
-        return { lines, chunks: [], cleared: false, events };
+        return { lines, chunks: [], events };
       }
       const control = String(pctx.get("HISTCONTROL") ?? "");
       const entry = historyText(lineText);
@@ -495,26 +478,18 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
         ranExec: null,
         allOut: "",
       };
-      interp.ctx = pctx;
-      interp.begin(task);
-      screen.cleared = false;
-      clearAt = 0;
+      const run = new InputRun(task, opts.onOutput);
+      shell.attach(run);
       let crashed: string | null = null;
       try {
-        interp.runLine(lineText);
+        await shell.runLine(lineText);
       } catch (e) {
         crashed = e instanceof Error ? e.message : "error";
         // The detail goes to the browser console, not to the learner.
         console.error("port-penguin: simulator error:", e);
         pctx.lastCode = 1;
       }
-      interp.ctx = pctx;
-      const chunks = interp.chunks.slice();
-      const cleared = screen.cleared;
-      screen.cleared = false;
-      lines = chunkLines(cleared ? chunks.slice(clearAt) : chunks).concat(
-        lines,
-      );
+      const chunks = run.chunks.slice();
       if (crashed !== null)
         lines.push(
           textLine(
@@ -522,17 +497,17 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
             "err",
           ),
         );
-      for (const n of interp.notes)
+      for (const n of run.notes)
         lines.push(textLine(n.text, n.dim ? "dim" : undefined));
-      const seen = interp.events;
+      const seen = run.events;
       if (seen.some((e) => e.kind === "notfound"))
         lines.push(textLine(NOT_FOUND_HINT, "dim"));
       if (seen.some((e) => e.kind === "stdin"))
         lines.push(textLine(KEYBOARD_HINT, "dim"));
-      if (interp.exited !== null) {
-        const code = interp.exited;
+      if (run.exited !== null) {
+        const code = run.exited;
         syncOut();
-        lines.push(...newShell(new Set(pctx.exported)));
+        lines.push(...(await newShell(new Set(pctx.exported))));
         pctx.lastCode = code;
       }
       syncOut();
@@ -548,7 +523,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
           ),
         );
       }
-      return { lines, chunks, cleared, events };
+      return { lines, chunks, events };
     },
 
     complete(v: string, pos: number): Completion {
@@ -680,7 +655,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
       ];
     },
 
-    skip() {
+    async skip() {
       use();
       const out: OutLine[] = [];
       s.cur++;
@@ -695,7 +670,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
       return out;
     },
 
-    jump(index: number) {
+    async jump(index: number) {
       use();
       const out: OutLine[] = [];
       s.cur = index;
@@ -707,7 +682,7 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
       return out;
     },
 
-    unlock(password: string) {
+    async unlock(password: string) {
       use();
       if (sha256(password) !== HINT_HASH) return null;
       s.unlocked = true;
@@ -720,17 +695,17 @@ export function createEngine(opts: { storage: SaveStorage }): Engine {
       ];
     },
 
-    lock() {
+    async lock() {
       use();
       s.unlocked = false;
       persist();
       return [textLine("Hints locked again.", "dim")];
     },
 
-    reset() {
+    async reset() {
       s = fresh();
       use();
-      newShell();
+      await newShell();
       persist();
     },
   };

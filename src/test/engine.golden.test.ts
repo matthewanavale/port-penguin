@@ -8,16 +8,19 @@
 //
 // Engine contract used here (src/engine/index.ts):
 //   createEngine({ storage }) -> Engine
-//   engine.start(): OutLine[]           set up the current task, then save
-//   engine.execute(line): { lines, cleared }
-//       `lines` is the output after the command (no echoed prompt). When
-//       `cleared` is true, `lines` is only the output after the last clear.
+//   engine.start(): Promise<OutLine[]>  set up the current task, then save
+//   engine.execute(line): Promise<{ lines, chunks }>
+//       Command output comes through `onOutput` (B15); `lines` holds the game
+//       lines. The harness (engineHarness.ts `collector`) builds the plain
+//       text of the old `lines`: the output after the last `clear`, then the
+//       game lines; and `cleared`, true when the input ran `clear`.
 //   engine.complete(value, cursor): { value, cursor, listing: string[] }
 //   engine.state                        the live game state (S)
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEngine, SAVE_KEY } from "../engine/index";
-import type { OutLine } from "../engine/output";
-import { makeFakeDate, seededRandom, SEED, START_MS } from "./determinism";
+import { setClock } from "../engine/clock";
+import { makeFakeClock, seededRandom, SEED, START_MS } from "./determinism";
+import { collector } from "./engineHarness";
 import type { Golden, GoldenStep } from "./golden";
 import "./golden.record";
 import { SCRIPTS } from "./scripts";
@@ -29,14 +32,9 @@ const goldens = import.meta.glob<Golden>("./golden/*.json", {
 const goldenFor = (name: string): Golden | undefined =>
   goldens[`./golden/${name}.json`];
 
-/** Plain text of output lines, with every style removed. */
-const plain = (lines: OutLine[]): string =>
-  lines.map((l) => l.runs.map((r) => r.text).join("")).join("\n");
-
 /** A fresh engine with the same clock and random source as the recording (D15b). */
-function openEngine(saved?: string) {
-  const clock = makeFakeDate(START_MS);
-  vi.useFakeTimers({ toFake: ["Date"], now: clock.now() });
+async function openEngine(saved?: string) {
+  const clock = makeFakeClock(START_MS);
   vi.spyOn(Math, "random").mockImplementation(seededRandom(SEED));
   const store = new Map<string, string>();
   if (saved !== undefined) store.set(SAVE_KEY, saved);
@@ -46,21 +44,21 @@ function openEngine(saved?: string) {
       store.set(k, v);
     },
   };
-  const engine = createEngine({ storage });
-  engine.start();
+  const col = collector();
+  const engine = createEngine({ storage, clock, onOutput: col.onOutput });
+  await engine.start();
   return {
     engine,
+    col,
     saved: () => store.get(SAVE_KEY) ?? null,
-    advance(ms: number) {
-      clock.advance(ms);
-      vi.setSystemTime(clock.now());
-    },
+    advance: (ms: number) => clock.advance(ms),
   };
 }
 
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  setClock();
 });
 
 describe("golden transcripts on the ported engine (AC3, AC5b)", () => {
@@ -71,15 +69,17 @@ describe("golden transcripts on the ported engine (AC3, AC5b)", () => {
   });
 
   for (const script of SCRIPTS) {
-    it(`"${script.name}" gives the same transcript and the same saved JSON`, () => {
+    it(`"${script.name}" gives the same transcript and the same saved JSON`, async () => {
       const golden = goldenFor(script.name);
       expect(golden, `missing golden file for ${script.name}`).toBeDefined();
       const g = golden as Golden;
-      const { engine, saved, advance } = openEngine();
+      const { engine, col, saved, advance } = await openEngine();
 
-      g.steps.forEach((step: GoldenStep, i) => {
+      for (const [i, step] of g.steps.entries() as IterableIterator<
+        [number, GoldenStep]
+      >) {
         if ("advanceMs" in step) {
-          advance(step.advanceMs);
+          await advance(step.advanceMs);
         } else if ("tab" in step) {
           const r = engine.complete(step.tab, step.cursor);
           expect(
@@ -95,12 +95,14 @@ describe("golden transcripts on the ported engine (AC3, AC5b)", () => {
             listing: step.listing,
           });
         } else {
-          const r = engine.execute(step.input);
+          col.reset();
+          const r = await engine.execute(step.input);
           const s = engine.state;
+          const shown = col.take(r);
           expect(
             {
-              text: plain(r.lines),
-              cleared: r.cleared,
+              text: shown.text,
+              cleared: shown.cleared,
               code: s.lastCode,
               cwd: s.cwd,
               cur: s.cur,
@@ -114,7 +116,7 @@ describe("golden transcripts on the ported engine (AC3, AC5b)", () => {
             cur: step.cur,
           });
         }
-      });
+      }
 
       const mine = saved();
       expect(mine).not.toBeNull();

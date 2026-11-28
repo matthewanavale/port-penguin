@@ -14,6 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../engine/index";
 import type { Engine } from "../engine/index";
+import type { GameTerminal } from "./terminal";
 import {
   appendTyped,
   bindExtraKeys,
@@ -92,19 +93,30 @@ function memoryStorage() {
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
-function setup(
+/** Sends typed text to the terminal and lets the engine finish an input it starts. */
+const send = async (x: { dataHandler?: (d: string) => void }, data: string) => {
+  x.dataHandler?.(data);
+  await flush();
+};
+
+async function setup(
   fonts: { ready: Promise<unknown> } = { ready: Promise.resolve() },
 ) {
   document.body.innerHTML = `
     <section class="term"><div id="term"></div></section>
     <button id="after" type="button">After</button>`;
   (document as unknown as { fonts: unknown }).fonts = fonts;
-  const engine: Engine = createEngine({ storage: memoryStorage() });
-  engine.start();
+  const sink: { term?: GameTerminal } = {};
+  const engine: Engine = createEngine({
+    storage: memoryStorage(),
+    onOutput: (e) => sink.term?.output(e),
+  });
+  await engine.start();
   const container = document.getElementById("term") as HTMLElement;
   const onResult = vi.fn();
   const execute = vi.spyOn(engine, "execute");
   const t = createTerminal({ container, engine, intro: [], onResult });
+  sink.term = t;
   const x = FakeTerminal.all[FakeTerminal.all.length - 1] as Fake;
   return { engine, container, onResult, execute, t, x };
 }
@@ -300,68 +312,100 @@ describe("cursorRow: the row recompute after a resize", () => {
 });
 
 describe("createTerminal (AC8, AC9)", () => {
-  it("runs xterm.js with screenReaderMode on", () => {
-    const { x } = setup();
+  it("runs xterm.js with screenReaderMode on", async () => {
+    const { x } = await setup();
     expect(x.options.screenReaderMode).toBe(true);
   });
 
   it("opens in #term after the fonts load", async () => {
-    const { x, container } = setup();
+    const { x, container } = await setup();
     await flush();
     expect(x.element).toBeDefined();
     expect(container.contains(x.element as HTMLElement)).toBe(true);
   });
 
   it("runs a typed line through the engine on Enter", async () => {
-    const { x, execute, onResult } = setup();
-    x.dataHandler?.("pwd\r");
+    const { x, execute, onResult } = await setup();
+    await send(x, "pwd\r");
     expect(execute).toHaveBeenCalledWith("pwd");
     expect(onResult).toHaveBeenCalledTimes(1);
   });
 
-  it("extra key Tab completes the line", () => {
-    const { x, t, execute } = setup();
-    x.dataHandler?.("pw");
+  it("writes the output of a command as the engine sends it (B15)", async () => {
+    const { x } = await setup();
+    await send(x, "echo hello\r");
+    // eslint-disable-next-line no-control-regex
+    const shown = x.written.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+    expect(shown).toContain("hello\r\n");
+    expect(shown.lastIndexOf("hello")).toBeGreaterThan(
+      shown.indexOf("echo hello"),
+    );
+  });
+
+  it("clears the screen when the engine sends a clear event", async () => {
+    const { x } = await setup();
+    await send(x, "echo before; clear; echo after\r");
+    const at = x.written.lastIndexOf("\x1b[H\x1b[2J\x1b[3J");
+    expect(at).toBeGreaterThan(-1);
+    expect(x.written.slice(at)).toContain("after");
+    expect(x.written.slice(at)).not.toContain("before");
+  });
+
+  it("keeps keys typed while an input runs and acts on them after it", async () => {
+    const { x, execute } = await setup();
+    x.dataHandler?.("echo one\r");
+    x.dataHandler?.("echo two\r");
+    await flush();
+    await flush();
+    expect(execute.mock.calls.map((c) => c[0])).toEqual([
+      "echo one",
+      "echo two",
+    ]);
+  });
+
+  it("extra key Tab completes the line", async () => {
+    const { x, t, execute } = await setup();
+    await send(x, "pw");
     t.key("tab");
-    x.dataHandler?.("\r");
+    await send(x, "\r");
     expect(execute).toHaveBeenLastCalledWith("pwd ");
   });
 
-  it("extra keys Up and Down move through the history", () => {
-    const { x, t, execute } = setup();
-    x.dataHandler?.("pwd\r");
-    x.dataHandler?.("ls\r");
+  it("extra keys Up and Down move through the history", async () => {
+    const { x, t, execute } = await setup();
+    await send(x, "pwd\r");
+    await send(x, "ls\r");
     t.key("up");
     t.key("up");
     t.key("down");
-    x.dataHandler?.("\r");
+    await send(x, "\r");
     expect(execute).toHaveBeenLastCalledWith("ls");
   });
 
-  it("extra keys for symbols insert their text at the cursor", () => {
-    const { x, t, execute } = setup();
-    x.dataHandler?.("ls ");
+  it("extra keys for symbols insert their text at the cursor", async () => {
+    const { x, t, execute } = await setup();
+    await send(x, "ls ");
     for (const k of ["-", "/", "~", "|", ">", "$"]) t.key(k);
-    x.dataHandler?.("\r");
+    await send(x, "\r");
     expect(execute).toHaveBeenLastCalledWith("ls -/~|>$");
   });
 
-  it("Esc moves focus to the next control after the terminal", () => {
-    const { x } = setup();
+  it("Esc moves focus to the next control after the terminal", async () => {
+    const { x } = await setup();
     const ev = keydown({ key: "Escape" });
     expect(x.keyHandler?.(ev)).toBe(false);
     expect(document.activeElement?.id).toBe("after");
   });
 
-  it("Esc with a modifier stays in the terminal", () => {
-    const { x } = setup();
+  it("Esc with a modifier stays in the terminal", async () => {
+    const { x } = await setup();
     expect(x.keyHandler?.(keydown({ key: "Escape", shiftKey: true }))).toBe(
       true,
     );
   });
 
-  it("Ctrl-C with a selection copies it and does not interrupt", () => {
-    const { x, execute } = setup();
+  it("Ctrl-C with a selection copies it and does not interrupt", async () => {
+    const { x, execute } = await setup();
     const exec = vi.fn(() => true);
     (document as unknown as { execCommand: unknown }).execCommand = exec;
     x.selection = "hello";
@@ -371,14 +415,14 @@ describe("createTerminal (AC8, AC9)", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("Ctrl-C with no selection goes to the line editor", () => {
-    const { x } = setup();
+  it("Ctrl-C with no selection goes to the line editor", async () => {
+    const { x } = await setup();
     expect(x.keyHandler?.(keydown({ key: "c", ctrlKey: true }))).toBe(true);
   });
 
   it("opens even when the web font never loads (G-UX-4)", async () => {
     vi.useFakeTimers();
-    const { x } = setup({ ready: new Promise(() => {}) });
+    const { x } = await setup({ ready: new Promise(() => {}) });
     await vi.advanceTimersByTimeAsync(FONT_WAIT_MS - 1);
     expect(x.element).toBeUndefined();
     await vi.advanceTimersByTimeAsync(1);
@@ -388,7 +432,7 @@ describe("createTerminal (AC8, AC9)", () => {
   it("shows a message in #term when xterm.js cannot start (G-UX-1)", async () => {
     FakeTerminal.openError = new Error("no canvas");
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const { container } = setup();
+    const { container } = await setup();
     await flush();
     const msg = container.querySelector('[role="alert"]');
     expect(msg).not.toBeNull();
@@ -451,11 +495,11 @@ describe("continuation input (AC1, AC10)", () => {
     // eslint-disable-next-line no-control-regex
     x.written.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
 
-  it("shows > twice for an if over three lines, then the output", () => {
-    const { x, execute } = setup();
-    x.dataHandler?.("if true; then\r");
-    x.dataHandler?.("echo seen\r");
-    x.dataHandler?.("fi\r");
+  it("shows > twice for an if over three lines, then the output", async () => {
+    const { x, execute } = await setup();
+    await send(x, "if true; then\r");
+    await send(x, "echo seen\r");
+    await send(x, "fi\r");
     const shown = plainWritten(x);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith("if true; then\necho seen\nfi");
@@ -465,58 +509,59 @@ describe("continuation input (AC1, AC10)", () => {
     expect(tail.lastIndexOf("seen")).toBeGreaterThan(tail.lastIndexOf("> "));
   });
 
-  it("does not call execute while the input is incomplete", () => {
-    const { x, execute } = setup();
-    x.dataHandler?.("echo 'open\r");
-    x.dataHandler?.("close'\r");
+  it("does not call execute while the input is incomplete", async () => {
+    const { x, execute } = await setup();
+    await send(x, "echo 'open\r");
+    await send(x, "close'\r");
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith("echo 'open\nclose'");
   });
 
-  it("Ctrl-C at > drops the lines, prints ^C, and sets $? to 130", () => {
-    const { x, engine, execute } = setup();
+  it("Ctrl-C at > drops the lines, prints ^C, and sets $? to 130", async () => {
+    const { x, engine, execute } = await setup();
     const cancel = vi.spyOn(engine, "cancelInput");
-    x.dataHandler?.("if true; then\r");
-    x.dataHandler?.("\x03");
+    await send(x, "if true; then\r");
+    await send(x, "\x03");
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(plainWritten(x)).toContain("^C");
     expect(engine.state.lastCode).toBe(130);
-    x.dataHandler?.("echo $?\r");
+    await send(x, "echo $?\r");
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith("echo $?");
   });
 
-  it("Ctrl-C at the main prompt prints ^C and sets $? to 130", () => {
-    const { x, engine } = setup();
-    x.dataHandler?.("\x03");
+  it("Ctrl-C at the main prompt prints ^C and sets $? to 130", async () => {
+    const { x, engine } = await setup();
+    await send(x, "\x03");
     expect(plainWritten(x)).toContain("^C");
     expect(engine.state.lastCode).toBe(130);
   });
 
-  it("drops the kept lines when the game restarts (G-COR-7)", () => {
-    const { x, engine, execute, t } = setup();
-    x.dataHandler?.("if true; then" + "\r");
-    engine.reset();
+  it("drops the kept lines when the game restarts (G-COR-7)", async () => {
+    const { x, engine, execute, t } = await setup();
+    await send(x, "if true; then" + "\r");
+    await engine.reset();
     t.restart([]);
-    x.dataHandler?.("echo fresh" + "\r");
+    await send(x, "echo fresh" + "\r");
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith("echo fresh");
   });
 
-  it("passes the column count to the engine as COLUMNS", () => {
-    const { x, engine } = setup();
+  it("passes the column count to the engine as COLUMNS", async () => {
+    const { x, engine } = await setup();
     x.cols = 40;
-    const res = engine.execute("echo $COLUMNS");
+    const res = await engine.execute("echo $COLUMNS");
     expect(res.chunks.map((c) => c.text).join("")).toBe("80\n");
-    x.dataHandler?.("echo $COLUMNS\r");
+    await send(x, "echo $COLUMNS\r");
     expect(plainWritten(x)).toContain("40");
   });
 
-  it("shows the save-failure line once when save() fails", () => {
+  it("shows the save-failure line once when save() fails", async () => {
     document.body.innerHTML = `<section class="term"><div id="term"></div></section>`;
     (document as unknown as { fonts: unknown }).fonts = {
       ready: Promise.resolve(),
     };
+    const sink: { term?: GameTerminal } = {};
     const engine = createEngine({
       storage: {
         getItem: () => null,
@@ -524,16 +569,17 @@ describe("continuation input (AC1, AC10)", () => {
           throw new Error("quota full");
         },
       },
+      onOutput: (e) => sink.term?.output(e),
     });
-    engine.start();
-    createTerminal({
+    await engine.start();
+    sink.term = createTerminal({
       container: document.getElementById("term") as HTMLElement,
       engine,
       intro: [],
       onResult: vi.fn(),
     });
     const x = FakeTerminal.all[FakeTerminal.all.length - 1] as Fake;
-    x.dataHandler?.("pwd\r");
+    await send(x, "pwd\r");
     expect(plainWritten(x).match(/progress could not be saved/g)?.length).toBe(
       1,
     );

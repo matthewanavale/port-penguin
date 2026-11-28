@@ -6,8 +6,8 @@ import { openShell, restore } from "../../test/engineHarness";
 import type { Shell } from "../../test/engineHarness";
 
 let sh: Shell;
-beforeEach(() => {
-  sh = openShell();
+beforeEach(async () => {
+  sh = await openShell();
 });
 afterEach(restore);
 
@@ -50,20 +50,20 @@ describe("command names in new positions", () => {
 });
 
 describe("variable names after $", () => {
-  it("completes an exported or shell variable", () => {
-    sh.run("export FOOBAR=1");
+  it("completes an exported or shell variable", async () => {
+    await sh.run("export FOOBAR=1");
     const r = tab("echo $FOOB");
     expect(r.value.startsWith("echo $FOOBAR")).toBe(true);
   });
 
-  it("completes after ${ and inside double quotes", () => {
-    sh.run("MYVAR_X=1");
+  it("completes after ${ and inside double quotes", async () => {
+    await sh.run("MYVAR_X=1");
     expect(tab("echo ${MYVAR").value.startsWith("echo ${MYVAR_X")).toBe(true);
     expect(tab('echo "$MYVAR').value.startsWith('echo "$MYVAR_X')).toBe(true);
   });
 
-  it("lists variables that share the prefix", () => {
-    sh.run("AAA1=1; AAA2=2");
+  it("lists variables that share the prefix", async () => {
+    await sh.run("AAA1=1; AAA2=2");
     const r = tab("echo $AAA");
     expect(r.listing).toEqual(expect.arrayContaining(["AAA1", "AAA2"]));
   });

@@ -2,7 +2,9 @@
 // tokens (AC7, D17). Each style uses one of the 16 theme colors; the theme
 // gives that slot the token color.
 import type { ITheme } from "@xterm/xterm";
+import { htmlLine } from "../engine/output";
 import type { Block, OutLine, Run, Style } from "../engine/output";
+import type { Chunk } from "../engine/shell/io";
 
 /** SGR codes per style. Bold follows the old CSS font-weight: 700. */
 const SGR: Record<Style, string> = {
@@ -127,5 +129,52 @@ export function themeFromCss(style: CssSource): ITheme {
     brightMagenta: hl,
     brightCyan: ok,
     brightWhite: ink,
+  };
+}
+
+/**
+ * Turns streamed output chunks (B15) into ANSI text. Each stream's text goes
+ * out as it comes, with a line break turned into CR LF. A change of stream in
+ * the middle of a line, and an engine-HTML chunk, start a new line, as the
+ * line-by-line output of run 1 did. `finish()` ends a last line that has no
+ * line break, so the prompt starts on its own line.
+ */
+export function createChunkRenderer() {
+  let atStart = true;
+  let stream: Chunk["stream"] | null = null;
+  return {
+    push(c: Chunk): string {
+      const style: Style | undefined =
+        c.stream === "stderr" ? "err" : undefined;
+      let out = "";
+      if (c.html !== undefined) {
+        if (!atStart) out += "\r\n";
+        out += renderLines([htmlLine(c.html.replace(/\n$/, ""), style)]);
+        atStart = true;
+        stream = c.stream;
+        return out;
+      }
+      if (c.text === "") return "";
+      if (stream !== null && stream !== c.stream && !atStart) out += "\r\n";
+      stream = c.stream;
+      c.text.split("\n").forEach((part, i) => {
+        if (i > 0) out += "\r\n";
+        out += renderRuns([{ text: part }], style);
+      });
+      atStart = c.text.endsWith("\n");
+      return out;
+    },
+    /** The line break that a last line without one still needs. */
+    finish(): string {
+      const out = atStart ? "" : "\r\n";
+      atStart = true;
+      stream = null;
+      return out;
+    },
+    /** The screen was cleared: the next chunk starts at the top. */
+    reset(): void {
+      atStart = true;
+      stream = null;
+    },
   };
 }

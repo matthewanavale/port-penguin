@@ -4,7 +4,7 @@
 import "@xterm/xterm/css/xterm.css";
 import "./styles.css";
 import { createEngine, M, rankFor, sha256 } from "./engine/index";
-import type { Mission, State } from "./engine/index";
+import type { Mission, OutputEvent, State } from "./engine/index";
 import { htmlLine } from "./engine/output";
 import type { OutLine } from "./engine/output";
 import { bindExtraKeys, createTerminal } from "./term/terminal";
@@ -24,11 +24,16 @@ declare global {
 const esc = (s: unknown): string =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// The terminal sink exists before the engine, so the engine can write output
+// from its first input; `createTerminal` connects it below (B15).
+let sink: (event: OutputEvent) => void = () => undefined;
+
 const engine = createEngine({
   storage: {
     getItem: (k) => localStorage.getItem(k),
     setItem: (k, v) => localStorage.setItem(k, v),
   },
+  onOutput: (event) => sink(event),
 });
 
 function intro(isNew: boolean): OutLine[] {
@@ -60,7 +65,7 @@ const $ = (id: string) => document.getElementById(id) as HTMLElement;
 
 // Old order: intro, then the task setup (its alert), then save.
 const first = intro(!engine.resumed);
-first.push(...engine.start());
+first.push(...(await engine.start()));
 
 const panel = createPanel({
   engine,
@@ -81,8 +86,8 @@ const terminal = createTerminal({
   },
 });
 
-function resetAll(): void {
-  engine.reset();
+async function resetAll(): Promise<void> {
+  await engine.reset();
   terminal.restart(intro(true));
   panel.render();
   terminal.focus();
@@ -94,6 +99,8 @@ $("clearBtn").onclick = () => {
   terminal.clear();
   terminal.focus();
 };
+
+sink = (event) => terminal.output(event);
 
 bindExtraKeys($("keys"), terminal);
 

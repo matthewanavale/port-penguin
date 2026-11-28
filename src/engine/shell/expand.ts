@@ -30,9 +30,9 @@ export class ExpError extends Error {
 export interface ExpEnv {
   ctx: Context;
   /** Runs a command substitution and returns its stdout. */
-  cmdSubst(script: Script): string;
+  cmdSubst(script: Script): Promise<string>;
   /** Runs `<( )` or `>( )` and returns the path of the file. */
-  procSubst(dir: "<" | ">", script: Script): string;
+  procSubst(dir: "<" | ">", script: Script): Promise<string>;
   /** Prints an error line with the script prefix. */
   fail(msg: string): void;
   /** Counts one step against the D5 meter (long pattern work). */
@@ -88,18 +88,18 @@ export class Expander {
   /* ---------- entry points ---------- */
 
   /** Full expansion of command words: the list of arguments. */
-  words(ws: Word[]): string[] {
+  async words(ws: Word[]): Promise<string[]> {
     const out: string[] = [];
-    for (const w of ws) for (const s of this.word(w)) out.push(s);
+    for (const w of ws) for (const s of await this.word(w)) out.push(s);
     return out;
   }
 
   /** One word to its fields. */
-  word(w: Word): string[] {
+  async word(w: Word): Promise<string[]> {
     const out: string[] = [];
     for (const b of this.braces(w)) {
       const F = new Fields(false);
-      this.partsInto(this.tilde(b), false, F);
+      await this.partsInto(this.tilde(b), false, F);
       for (const fld of F.list) {
         if (!fld.segs.length && !fld.forced) continue;
         const raw = fld.segs.map((s) => s.t).join("");
@@ -128,48 +128,48 @@ export class Expander {
   }
 
   /** An assignment value, a here-string, a `case` word: no split, no glob. */
-  text(w: Word): string {
+  async text(w: Word): Promise<string> {
     const F = new Fields(true);
-    this.partsInto(this.tilde(w), true, F);
+    await this.partsInto(this.tilde(w), true, F);
     return F.list[0].segs.map((s) => s.t).join("");
   }
 
   /** The value of an assignment: tilde also after `:`. */
-  assignText(w: Word): string {
-    return this.text(this.assignTilde(w));
+  async assignText(w: Word): Promise<string> {
+    return await this.text(this.assignTilde(w));
   }
 
   /** A pattern (`case`, `[[ == ]]`, `${x#p}`): quoted text is escaped. */
-  pattern(w: Word): string {
+  async pattern(w: Word): Promise<string> {
     const F = new Fields(true);
-    this.partsInto(this.tilde(w), false, F);
+    await this.partsInto(this.tilde(w), false, F);
     return F.list[0].segs.map((s) => (s.q ? quotePattern(s.t) : s.t)).join("");
   }
 
   /** A regular expression of `[[ x =~ re ]]`: quoted text is escaped. */
-  regex(w: Word): string {
+  async regex(w: Word): Promise<string> {
     const F = new Fields(true);
-    this.partsInto(this.tilde(w), false, F);
+    await this.partsInto(this.tilde(w), false, F);
     return F.list[0].segs
       .map((s) => (s.q ? s.t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : s.t))
       .join("");
   }
 
   /** An arithmetic word: `(( ))`, `for ((;;))`. */
-  arithWord(w: Word): string {
-    return this.arith(this.partsText(w));
+  async arithWord(w: Word): Promise<string> {
+    return this.arith(await this.partsText(w));
   }
 
   /** A here-document body (unquoted delimiter). */
-  heredoc(w: Word): string {
+  async heredoc(w: Word): Promise<string> {
     const F = new Fields(true);
-    this.partsInto(w, true, F);
+    await this.partsInto(w, true, F);
     return F.list[0].segs.map((s) => s.t).join("");
   }
 
   /** A redirect target: exactly one word, or null. */
-  target(w: Word): string | null {
-    const r = this.word(w);
+  async target(w: Word): Promise<string | null> {
+    const r = await this.word(w);
     return r.length === 1 ? r[0] : null;
   }
 
@@ -360,7 +360,7 @@ export class Expander {
 
   /* ---------- parts ---------- */
 
-  private partsInto(parts: Word, dq: boolean, F: Fields): void {
+  private async partsInto(parts: Word, dq: boolean, F: Fields): Promise<void> {
     for (const p of parts) {
       switch (p.k) {
         case "lit":
@@ -384,22 +384,22 @@ export class Expander {
           )
             break;
           F.add("", true);
-          this.partsInto(p.parts, true, F);
+          await this.partsInto(p.parts, true, F);
           break;
         }
         case "param":
-          this.paramInto(p, dq, F);
+          await this.paramInto(p, dq, F);
           break;
         case "cmd": {
-          const out = this.env.cmdSubst(p.script).replace(/\n+$/, "");
+          const out = (await this.env.cmdSubst(p.script)).replace(/\n+$/, "");
           this.valueInto(out, dq, F);
           break;
         }
         case "arith":
-          this.valueInto(this.arith(this.partsText(p.expr)), dq, F);
+          this.valueInto(this.arith(await this.partsText(p.expr)), dq, F);
           break;
         case "proc":
-          this.valueInto(this.env.procSubst(p.dir, p.script), true, F);
+          this.valueInto(await this.env.procSubst(p.dir, p.script), true, F);
           break;
         case "arr":
           break;
@@ -407,9 +407,9 @@ export class Expander {
     }
   }
 
-  private partsText(w: Word): string {
+  private async partsText(w: Word): Promise<string> {
     const F = new Fields(true);
-    this.partsInto(w, true, F);
+    await this.partsInto(w, true, F);
     return F.list[0].segs.map((s) => s.t).join("");
   }
 
@@ -479,8 +479,8 @@ export class Expander {
     }
   }
 
-  private arithNum(w: Word): number {
-    return Number(this.arith(this.partsText(w)));
+  private async arithNum(w: Word): Promise<number> {
+    return Number(this.arith(await this.partsText(w)));
   }
 
   /* ---------- parameters ---------- */
@@ -500,28 +500,28 @@ export class Expander {
     return p.name === "@" || p.name === "*" || p.idx === "@" || p.idx === "*";
   }
 
-  private subscript(p: ParamPart, w: Word): string {
+  private async subscript(p: ParamPart, w: Word): Promise<string> {
     const c = this.ctx;
     const m = c.array(p.name);
-    const text = this.partsText(w);
+    const text = await this.partsText(w);
     if (m && m.type === "assoc") return text;
     return this.arith(text);
   }
 
   /** The scalar value of a reference, or undefined when unset. */
-  private scalar(p: ParamPart): string | undefined {
+  private async scalar(p: ParamPart): Promise<string | undefined> {
     const c = this.ctx;
     const n = p.name;
     if (n === "PIPESTATUS") {
       const k =
         p.idx !== undefined && p.idx !== "@" && p.idx !== "*"
-          ? Number(this.subscript(p, p.idx))
+          ? Number(await this.subscript(p, p.idx))
           : 0;
       const v = c.pipestatus[k < 0 ? c.pipestatus.length + k : k];
       return v === undefined ? undefined : String(v);
     }
     if (p.idx !== undefined && p.idx !== "@" && p.idx !== "*")
-      return c.elem(n, this.subscript(p, p.idx));
+      return c.elem(n, await this.subscript(p, p.idx));
     if (/^[0-9]+$/.test(n)) {
       const k = Number(n);
       return k === 0 ? c.arg0 : c.params[k - 1];
@@ -549,7 +549,7 @@ export class Expander {
     throw new ExpError(1, true);
   }
 
-  private paramInto(p: ParamPart, dq: boolean, F: Fields): void {
+  private async paramInto(p: ParamPart, dq: boolean, F: Fields): Promise<void> {
     const c = this.ctx;
     const star = p.name === "*" || p.idx === "*";
     // ${!name}: the name is in the value; ${!a[@]}: the keys.
@@ -558,7 +558,7 @@ export class Expander {
         this.listInto(c.keys(p.name), star, dq, F);
         return;
       }
-      const ref = this.scalar({ ...p, bang: false });
+      const ref = await this.scalar({ ...p, bang: false });
       if (ref === undefined) {
         if (this.opt("nounset")) this.unbound(p);
         return;
@@ -577,9 +577,9 @@ export class Expander {
     if (p.len) {
       let n: number;
       if (this.isListRef(p)) n = this.baseList(p).length;
-      else n = [...(this.scalar(p) ?? "")].length;
+      else n = [...((await this.scalar(p)) ?? "")].length;
       if (
-        this.scalar(p) === undefined &&
+        (await this.scalar(p)) === undefined &&
         !this.isListRef(p) &&
         this.opt("nounset")
       )
@@ -590,7 +590,7 @@ export class Expander {
     const op = p.op;
     const isList = this.isListRef(p);
     const items = isList ? this.baseList(p) : null;
-    const sc = isList ? undefined : this.scalar(p);
+    const sc = isList ? undefined : await this.scalar(p);
     const unset = isList ? items!.length === 0 : sc === undefined;
     const colon = op !== undefined && op.startsWith(":") && op.length === 2;
     const isNull = isList
@@ -607,7 +607,7 @@ export class Expander {
       case "-":
       case ":-":
         if (missing) {
-          this.partsInto(arg, dq, F);
+          await this.partsInto(arg, dq, F);
           return;
         }
         break;
@@ -618,10 +618,10 @@ export class Expander {
             this.env.fail(`$${p.name}: cannot assign in this way`);
             throw new ExpError(1, false);
           }
-          const v = this.partsText(arg);
+          const v = await this.partsText(arg);
           const err =
             p.idx !== undefined && p.idx !== "@" && p.idx !== "*"
-              ? c.setElem(p.name, this.subscript(p, p.idx), v)
+              ? c.setElem(p.name, await this.subscript(p, p.idx), v)
               : c.set(p.name, v);
           if (err) {
             this.env.fail(err);
@@ -634,7 +634,7 @@ export class Expander {
       case "?":
       case ":?":
         if (missing) {
-          const m = this.partsText(arg);
+          const m = await this.partsText(arg);
           this.env.fail(
             `${p.name}: ${m || (colon ? "parameter null or not set" : "parameter not set")}`,
           );
@@ -643,7 +643,7 @@ export class Expander {
         break;
       case "+":
       case ":+":
-        if (!missing) this.partsInto(arg, dq, F);
+        if (!missing) await this.partsInto(arg, dq, F);
         return;
       default:
         break;
@@ -662,13 +662,13 @@ export class Expander {
       return;
     }
     // Transformations: on each item of a list, or on the scalar.
-    const run = (s: string): string => this.transform(p, s);
+    const run = (s: string): Promise<string> => this.transform(p, s);
     if (op === ":") {
       if (isList) {
         const start = p.name === "@" || p.name === "*" ? 1 : 0;
         const all = start === 1 ? [c.arg0, ...items!] : items!;
-        const off = this.arithNum(arg);
-        const len = p.arg2 ? this.arithNum(p.arg2) : undefined;
+        const off = await this.arithNum(arg);
+        const len = p.arg2 ? await this.arithNum(p.arg2) : undefined;
         let from = off < 0 ? all.length + off : off;
         if (from < 0) from = 0;
         const to =
@@ -682,8 +682,8 @@ export class Expander {
       }
       const s = sc ?? "";
       const chars = [...s];
-      const off = this.arithNum(arg);
-      const len = p.arg2 ? this.arithNum(p.arg2) : undefined;
+      const off = await this.arithNum(arg);
+      const len = p.arg2 ? await this.arithNum(p.arg2) : undefined;
       const from = off < 0 ? chars.length + off : off;
       if (from < 0 || from > chars.length) {
         this.valueInto("", dq, F);
@@ -707,8 +707,11 @@ export class Expander {
       this.valueInto(chars.slice(from, to).join(""), dq, F);
       return;
     }
-    if (isList) this.listInto(items!.map(run), star, dq, F);
-    else this.valueInto(run(sc ?? ""), dq, F);
+    if (isList) {
+      const done: string[] = [];
+      for (const it of items!) done.push(await run(it));
+      this.listInto(done, star, dq, F);
+    } else this.valueInto(await run(sc ?? ""), dq, F);
   }
 
   private listInto(
@@ -745,28 +748,28 @@ export class Expander {
   }
 
   /** `# ## % %% / // /# /% ^ ^^ , ,, @` on one string. */
-  private transform(p: ParamPart, s: string): string {
+  private async transform(p: ParamPart, s: string): Promise<string> {
     const op = p.op as string;
     const ext = this.opt("extglob");
     const arg = p.arg ?? [];
     switch (op) {
       case "#":
       case "##": {
-        const n = prefixMatch(s, this.pattern(arg), op === "##", ext);
+        const n = prefixMatch(s, await this.pattern(arg), op === "##", ext);
         return n < 0 ? s : s.slice(n);
       }
       case "%":
       case "%%": {
-        const n = suffixMatch(s, this.pattern(arg), op === "%%", ext);
+        const n = suffixMatch(s, await this.pattern(arg), op === "%%", ext);
         return n < 0 ? s : s.slice(0, n);
       }
       case "/":
       case "//":
       case "/#":
       case "/%": {
-        const pat = this.pattern(arg);
+        const pat = await this.pattern(arg);
         const F = new Fields(true);
-        if (p.arg2) this.partsInto(p.arg2, false, F);
+        if (p.arg2) await this.partsInto(p.arg2, false, F);
         // bash 5.2 `patsub_replacement`: an unquoted `&` stands for the matched text.
         const rep: (string | null)[] = [];
         for (const g of F.list[0].segs) {
@@ -783,7 +786,7 @@ export class Expander {
       case "^^":
       case ",":
       case ",,": {
-        const pat = p.arg && p.arg.length ? this.pattern(arg) : "";
+        const pat = p.arg && p.arg.length ? await this.pattern(arg) : "";
         const up = op[0] === "^";
         const all = op.length === 2;
         let done = false;
@@ -804,7 +807,7 @@ export class Expander {
         return out;
       }
       case "@": {
-        const k = this.partsText(arg);
+        const k = await this.partsText(arg);
         switch (k) {
           case "U":
             return s.toUpperCase();

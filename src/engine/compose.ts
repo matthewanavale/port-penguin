@@ -1,5 +1,6 @@
 // The Docker Compose simulation and its small YAML reader. Ported from
 // index.html:1162-1242 at 5e96ce5.
+import { clockNow } from "./clock";
 import {
   buildImage,
   cmdText,
@@ -152,7 +153,7 @@ export function compose(a: string[]): Res {
       for (const v of Object.keys(conf.volumes)) {
         const vn = proj + "_" + v;
         if (!S.dk.volumes.some((x) => x.name === vn)) {
-          S.dk.volumes.push({ name: vn, created: Date.now() });
+          S.dk.volumes.push({ name: vn, created: clockNow() });
           out.push(` ✔ Volume "${vn}"  Created`);
         }
       }
@@ -264,7 +265,7 @@ export function compose(a: string[]): Res {
         if (c.status === "running") {
           c.status = "exited";
           c.exit = 0;
-          c.stopped = Date.now();
+          c.stopped = clockNow();
         }
       });
     }
@@ -308,7 +309,7 @@ export function compose(a: string[]): Res {
         if (c.status === "running") {
           c.status = "exited";
           c.exit = 0;
-          c.stopped = Date.now();
+          c.stopped = clockNow();
         }
       } else startCt(c);
     });

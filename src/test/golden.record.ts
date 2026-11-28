@@ -5,9 +5,11 @@
 // the `reason` and `replaces` of every step, because they are written on the
 // step in src/test/scripts.ts and copied here.
 import { expect, it, vi } from "vitest";
+import { setClock } from "../engine/clock";
 import { createEngine, SAVE_KEY } from "../engine/index";
 import type { OutLine } from "../engine/output";
-import { makeFakeDate, seededRandom, SEED, START_MS } from "./determinism";
+import { makeFakeClock, seededRandom, SEED, START_MS } from "./determinism";
+import { collector } from "./engineHarness";
 import type { Golden, GoldenStep } from "./golden";
 import { lineOf, SCRIPTS } from "./scripts";
 import type { GoldenScript } from "./scripts";
@@ -17,19 +19,21 @@ export const plain = (lines: OutLine[]): string =>
   lines.map((l) => l.runs.map((r) => r.text).join("")).join("\n");
 
 /** Runs one golden script on a fresh engine and records every step. */
-export function recordGolden(script: GoldenScript): Golden {
-  const clock = makeFakeDate(START_MS);
-  vi.useFakeTimers({ toFake: ["Date"], now: clock.now() });
+export async function recordGolden(script: GoldenScript): Promise<Golden> {
+  const clock = makeFakeClock(START_MS);
   vi.spyOn(Math, "random").mockImplementation(seededRandom(SEED));
   const store = new Map<string, string>();
   try {
+    const col = collector();
     const engine = createEngine({
+      clock,
+      onOutput: col.onOutput,
       storage: {
         getItem: (k: string) => store.get(k) ?? null,
         setItem: (k: string, v: string) => void store.set(k, v),
       },
     });
-    engine.start();
+    await engine.start();
     const steps: GoldenStep[] = [];
     for (const step of script.steps) {
       const line = lineOf(step);
@@ -43,20 +47,21 @@ export function recordGolden(script: GoldenScript): Golden {
                   : {}),
               }
             : {};
-        const r = engine.execute(line);
+        col.reset();
+        const r = await engine.execute(line);
         const s = engine.state;
+        const shown = col.take(r);
         steps.push({
           input: line,
-          text: plain(r.lines),
-          cleared: r.cleared,
+          text: shown.text,
+          cleared: shown.cleared,
           code: s.lastCode,
           cwd: s.cwd,
           cur: s.cur,
           ...note,
         });
       } else if (typeof step === "object" && "advanceMs" in step) {
-        clock.advance(step.advanceMs);
-        vi.setSystemTime(clock.now());
+        await clock.advance(step.advanceMs);
         steps.push({ advanceMs: step.advanceMs });
       } else if (typeof step === "object" && "tab" in step) {
         const cursor = step.cursor ?? step.tab.length;
@@ -75,6 +80,7 @@ export function recordGolden(script: GoldenScript): Golden {
   } finally {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    setClock();
   }
 }
 
@@ -94,7 +100,7 @@ for (const script of SCRIPTS) {
   it(`records "${script.name}"`, async (ctx) => {
     if (!recording()) ctx.skip();
     process.env.RECORD = "1";
-    const g = recordGolden(script);
+    const g = await recordGolden(script);
     await expect(JSON.stringify(g, null, 2) + "\n").toMatchFileSnapshot(
       `./golden/${script.name}.json`,
     );

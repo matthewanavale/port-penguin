@@ -1,5 +1,6 @@
 // AC4: `find`. Expression tree with -o, -a, !, parentheses; tests, actions,
 // and the global options. Messages follow GNU findutils 4.9.
+import { clockNow } from "../clock";
 import { get, split } from "../paths";
 import { size } from "../helpers";
 import type { FsNode } from "../state";
@@ -7,7 +8,7 @@ import { canWrite } from "../shell/redirect";
 import { matchPattern } from "../shell/glob";
 import { Input } from "../shell/io";
 import type { CmdFn, IO } from "../shell/io";
-import type { Interp } from "../shell/interp";
+import type { Proc } from "../shell/proc";
 import { mtimeOf } from "./text";
 
 interface Ent {
@@ -22,10 +23,10 @@ type Expr =
   | { k: "or" | "and"; a: Expr; b: Expr }
   | { k: "not"; a: Expr }
   | { k: "test"; fn: (e: Ent, st: Run) => boolean }
-  | { k: "act"; fn: (e: Ent, st: Run) => boolean };
+  | { k: "act"; fn: (e: Ent, st: Run) => boolean | Promise<boolean> };
 
 interface Run {
-  sh: Interp;
+  sh: Proc;
   io: IO;
   code: number;
   prune: boolean;
@@ -58,7 +59,7 @@ function permBits(m: string): number {
   return n;
 }
 
-function parse(args: string[], sh: Interp, now: number) {
+function parse(args: string[], sh: Proc, now: number) {
   let i = 0;
   let maxdepth = Infinity;
   let mindepth = 0;
@@ -271,11 +272,11 @@ function parse(args: string[], sh: Interp, now: number) {
         }
         return {
           k: "act",
-          fn: (e, st) =>
-            runCmd(
+          fn: async (e, st) =>
+            (await runCmd(
               st,
               cmd.map((c) => c.split("{}").join(e.path)),
-            ) === 0,
+            )) === 0,
         };
       }
       default:
@@ -317,29 +318,29 @@ function parse(args: string[], sh: Interp, now: number) {
   return { expr, maxdepth, mindepth, depthOpt, hasAction };
 }
 
-function runCmd(st: Run, argv: string[]): number {
+async function runCmd(st: Run, argv: string[]): Promise<number> {
   if (!argv[0].includes("/") && !st.sh.lookup(argv[0])) {
     st.io.err.write(`find: ‘${argv[0]}’: No such file or directory\n`);
     return 1;
   }
   const child: IO = { in: new Input(""), out: st.io.out, err: st.io.err };
-  return st.sh.runCommand(argv, child, {});
+  return await st.sh.runCommand(argv, child, {});
 }
 
-function evalExpr(e: Expr, ent: Ent, st: Run): boolean {
+async function evalExpr(e: Expr, ent: Ent, st: Run): Promise<boolean> {
   switch (e.k) {
     case "or":
-      return evalExpr(e.a, ent, st) || evalExpr(e.b, ent, st);
+      return (await evalExpr(e.a, ent, st)) || (await evalExpr(e.b, ent, st));
     case "and":
-      return evalExpr(e.a, ent, st) && evalExpr(e.b, ent, st);
+      return (await evalExpr(e.a, ent, st)) && (await evalExpr(e.b, ent, st));
     case "not":
-      return !evalExpr(e.a, ent, st);
+      return !(await evalExpr(e.a, ent, st));
     default:
       return e.fn(ent, st);
   }
 }
 
-const find: CmdFn = (argv, sh, io) => {
+const find: CmdFn = async (argv, sh, io) => {
   const rest = argv.slice(1);
   let n = 0;
   while (
@@ -351,7 +352,7 @@ const find: CmdFn = (argv, sh, io) => {
     n++;
   const starts = n ? rest.slice(0, n) : ["."];
   let p: ReturnType<typeof parse>;
-  const now = Date.now();
+  const now = clockNow();
   try {
     p = parse(rest.slice(n), sh, now);
   } catch (e) {
@@ -380,23 +381,23 @@ const find: CmdFn = (argv, sh, io) => {
     plus: [],
     depthFirst: p.depthOpt,
   };
-  const visit = (
+  const visit = async (
     path: string,
     abs: string,
     node: FsNode,
     depth: number,
-  ): void => {
+  ): Promise<void> => {
     const trimmed = path.replace(/\/+$/, "") || "/";
     const name =
       trimmed === "/" ? "/" : trimmed.slice(trimmed.lastIndexOf("/") + 1);
     const ent: Ent = { path, abs, node, depth, name };
-    const run = (): void => {
+    const run = async (): Promise<void> => {
       if (depth < p.mindepth || !expr) return;
       st.prune = false;
-      evalExpr(expr, ent, st);
+      await evalExpr(expr, ent, st);
     };
     if (!p.depthOpt) {
-      run();
+      await run();
       if (st.prune) {
         st.prune = false;
         return;
@@ -406,14 +407,14 @@ const find: CmdFn = (argv, sh, io) => {
       for (const k of Object.keys(node.c)) {
         if (!(k in node.c)) continue;
         const child = path.endsWith("/") ? path + k : path + "/" + k;
-        visit(
+        await visit(
           child,
           abs === "/" ? "/" + k : abs + "/" + k,
           node.c[k],
           depth + 1,
         );
       }
-    if (p.depthOpt) run();
+    if (p.depthOpt) await run();
   };
   for (const s of starts) {
     const abs = sh.abs(s);
@@ -423,10 +424,10 @@ const find: CmdFn = (argv, sh, io) => {
       st.code = 1;
       continue;
     }
-    visit(s, abs, node, 0);
+    await visit(s, abs, node, 0);
   }
   for (const g of st.plus) {
-    if (runCmd(st, g.args.concat(g.files)) !== 0) st.code = 1;
+    if ((await runCmd(st, g.args.concat(g.files))) !== 0) st.code = 1;
   }
   return st.code;
 };

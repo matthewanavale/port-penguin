@@ -7,95 +7,99 @@ import type { Shell } from "./engineHarness";
 
 let sh: Shell;
 let before: string[];
-beforeEach(() => {
+beforeEach(async () => {
   before = Object.getOwnPropertyNames(Object.prototype).sort();
-  sh = openShell();
-  sh.run("mkdir -p /tmp/w && cd /tmp/w");
+  sh = await openShell();
+  await sh.run("mkdir -p /tmp/w && cd /tmp/w");
 });
 afterEach(restore);
 
 const protoKeys = () => Object.getOwnPropertyNames(Object.prototype).sort();
 
 describe("prototype names", () => {
-  it("makes readonly __proto__ a plain variable", () => {
-    sh.run("readonly __proto__");
-    sh.run("readonly __proto__=1; declare -r __proto__; export __proto__");
+  it("makes readonly __proto__ a plain variable", async () => {
+    await sh.run("readonly __proto__");
+    await sh.run(
+      "readonly __proto__=1; declare -r __proto__; export __proto__",
+    );
     expect(protoKeys()).toEqual(before);
     expect(({} as Record<string, unknown>).attrs).toBeUndefined();
-    expect(sh.run("echo ok").out).toBe("ok\n");
+    expect((await sh.run("echo ok")).out).toBe("ok\n");
   });
 
-  it("makes declare -i/-l/-u __proto__ plain", () => {
-    sh.run("declare -i __proto__; declare -l __proto__; declare -u __proto__");
+  it("makes declare -i/-l/-u __proto__ plain", async () => {
+    await sh.run(
+      "declare -i __proto__; declare -l __proto__; declare -u __proto__",
+    );
     expect(protoKeys()).toEqual(before);
     expect(({} as Record<string, unknown>).attrs).toBeUndefined();
   });
 
-  it("keeps other variables unset-able after a reload", () => {
-    sh.run("readonly __proto__=1; v=1");
-    const again = openShell({ saved: sh.store.get(SAVE_KEY) as string });
-    expect(again.run("unset v; echo [$v]").out).toBe("[]\n");
-    expect(again.run("unset v").err).toBe("");
+  it("keeps other variables unset-able after a reload", async () => {
+    await sh.run("readonly __proto__=1; v=1");
+    const again = await openShell({ saved: sh.store.get(SAVE_KEY) as string });
+    expect((await again.run("unset v; echo [$v]")).out).toBe("[]\n");
+    expect((await again.run("unset v")).err).toBe("");
   });
 
-  it("expands $constructor and $toString as empty", () => {
-    const r = sh.run(
+  it("expands $constructor and $toString as empty", async () => {
+    const r = await sh.run(
       "echo [$constructor][$toString][$__proto__][$hasOwnProperty]",
     );
     expect(r.out).toBe("[][][][]\n");
     expect(r.text).not.toMatch(/TypeError|undefined/);
   });
 
-  it("accepts alias constructor and toString", () => {
-    const r = sh.run(
+  it("accepts alias constructor and toString", async () => {
+    const r = await sh.run(
       "alias constructor='echo c'; alias toString='echo t'; constructor; toString",
     );
     expect(r.out).toBe("c\nt\n");
     expect(r.text).not.toMatch(/TypeError/);
   });
 
-  it("reports an unknown alias, function and command named like Object members", () => {
+  it("reports an unknown alias, function and command named like Object members", async () => {
     for (const n of [
       "constructor",
       "toString",
       "__proto__",
       "hasOwnProperty",
     ]) {
-      const r = sh.run(n);
+      const r = await sh.run(n);
       expect(r.err, n).toBe(`bash: ${n}: command not found\n`);
       expect(r.code, n).toBe(127);
-      expect(sh.run(`type ${n}`).code, n).toBe(1);
-      expect(sh.run(`unalias ${n}`).err, n).toContain("not found");
+      expect((await sh.run(`type ${n}`)).code, n).toBe(1);
+      expect((await sh.run(`unalias ${n}`)).err, n).toContain("not found");
     }
   });
 
-  it("stores associative keys named __proto__ and constructor", () => {
-    const r = sh.run(
+  it("stores associative keys named __proto__ and constructor", async () => {
+    const r = await sh.run(
       "declare -A m; m[__proto__]=a; m[constructor]=b; echo ${m[__proto__]} ${m[constructor]} ${#m[@]}",
     );
     expect(r.out).toBe("a b 2\n");
     expect(protoKeys()).toEqual(before);
   });
 
-  it("unpacks a tar member named __proto__ as a file", () => {
-    sh.run("mkdir d; echo hi > d/__proto__; echo yo > d/constructor");
-    sh.run("tar -cf a.tar d; rm -r d; tar -xf a.tar");
-    expect(sh.run("cat d/__proto__").out).toBe("hi\n");
-    expect(sh.run("ls d").out).toContain("constructor");
+  it("unpacks a tar member named __proto__ as a file", async () => {
+    await sh.run("mkdir d; echo hi > d/__proto__; echo yo > d/constructor");
+    await sh.run("tar -cf a.tar d; rm -r d; tar -xf a.tar");
+    expect((await sh.run("cat d/__proto__")).out).toBe("hi\n");
+    expect((await sh.run("ls d")).out).toContain("constructor");
     expect(protoKeys()).toEqual(before);
   });
 
-  it("does not find a file named like an Object member", () => {
-    expect(sh.run("ls constructor").code).toBe(2);
-    expect(sh.run("cat toString").err).toBe(
+  it("does not find a file named like an Object member", async () => {
+    expect((await sh.run("ls constructor")).code).toBe(2);
+    expect((await sh.run("cat toString")).err).toBe(
       "cat: toString: No such file or directory\n",
     );
-    expect(sh.run("cd __proto__").code).toBe(1);
+    expect((await sh.run("cd __proto__")).code).toBe(1);
   });
 
-  it("does not find a file in a saved game either", () => {
-    const again = openShell({ saved: sh.store.get(SAVE_KEY) as string });
-    expect(again.run("ls constructor").code).toBe(2);
-    expect(again.run("cd __proto__").code).toBe(1);
+  it("does not find a file in a saved game either", async () => {
+    const again = await openShell({ saved: sh.store.get(SAVE_KEY) as string });
+    expect((await again.run("ls constructor")).code).toBe(2);
+    expect((await again.run("cd __proto__")).code).toBe(1);
   });
 });

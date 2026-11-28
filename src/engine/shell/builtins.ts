@@ -5,14 +5,14 @@ import { nul } from "../nullmap";
 import { get } from "../paths";
 import { ExpError } from "./expand";
 import type { Context } from "./context";
-import { ExitSig, BreakSig, ContinueSig, ReturnSig, AbortLine } from "./interp";
-import type { Interp } from "./interp";
+import { ExitSig, BreakSig, ContinueSig, ReturnSig, AbortLine } from "./proc";
+import type { Proc } from "./proc";
 import type { CmdFn, IO } from "./io";
 import { LIM, NestStop } from "./limits";
 import { parseFull } from "./parser";
 import { readText } from "./redirect";
 
-type Builtin = (sh: Interp, argv: string[], io: IO) => number;
+type Builtin = (sh: Proc, argv: string[], io: IO) => number | Promise<number>;
 
 export const KEYWORDS = new Set([
   "if",
@@ -188,7 +188,7 @@ function shellQuote(s: string): string {
 }
 
 function numArg(
-  sh: Interp,
+  sh: Proc,
   name: string,
   a: string | undefined,
   bad: { v: boolean },
@@ -205,7 +205,7 @@ function numArg(
 
 /** The text that a printf format makes from its arguments; `used` says how many it took. */
 function formatOnce(
-  sh: Interp,
+  sh: Proc,
   fmt: string,
   args: string[],
   bad: { v: boolean },
@@ -436,7 +436,7 @@ const printf: Builtin = (sh, argv, io) => {
 
 /* ---------- test and [ ---------- */
 
-export function unaryTest(sh: Interp, flag: string, a: string): boolean {
+export function unaryTest(sh: Proc, flag: string, a: string): boolean {
   if (flag === "-nt" || flag === "-ot" || flag === "-ef") {
     const [l, r] = a.split("\0");
     const x = get(sh.abs(l));
@@ -492,7 +492,7 @@ export function unaryTest(sh: Interp, flag: string, a: string): boolean {
 }
 
 export function intCompare(
-  sh: Interp,
+  sh: Proc,
   cmp: string,
   l: string,
   r: string,
@@ -537,7 +537,7 @@ const BINARY = new Set([
 
 class TestError extends Error {}
 
-function evalTest(sh: Interp, name: string, args: string[]): boolean {
+function evalTest(sh: Proc, name: string, args: string[]): boolean {
   let p = 0;
   const fail = (m: string): never => {
     sh.fail(`${name}: ${m}`);
@@ -772,7 +772,7 @@ function allNames(ctx: Context): string[] {
 }
 
 function declare(
-  sh: Interp,
+  sh: Proc,
   argv: string[],
   io: IO,
   mode: "declare" | "local" | "export" | "readonly",
@@ -1076,7 +1076,7 @@ for (const n of "checkwinsize cmdhist complete_fullquote extquote force_fignore 
 ))
   SHOPTS[n] = true;
 
-function shoptOn(sh: Interp, n: string): boolean {
+function shoptOn(sh: Proc, n: string): boolean {
   const v = sh.ctx.options[n];
   if (v !== undefined) return v;
   if (n === "expand_aliases") return sh.ctx.interactive;
@@ -1155,7 +1155,7 @@ const shopt: Builtin = (sh, argv, io) => {
 const code255 = (n: number) => ((n % 256) + 256) % 256;
 
 function parseCode(
-  sh: Interp,
+  sh: Proc,
   name: string,
   a: string | undefined,
   dflt: number,
@@ -1224,7 +1224,7 @@ const shift: Builtin = (sh, argv) => {
   return 0;
 };
 
-const source: Builtin = (sh, argv) => {
+const source: Builtin = async (sh, argv) => {
   const name = argv[0];
   if (argv.length < 2) {
     sh.fail(`${name}: filename argument required`);
@@ -1249,7 +1249,7 @@ const source: Builtin = (sh, argv) => {
   ctx.sourceDepth++;
   let code: number;
   try {
-    code = sh.runSourceText(t.text, ctx.src);
+    code = await sh.runSourceText(t.text, ctx.src);
   } catch (e) {
     if (e instanceof ReturnSig) code = e.code;
     else throw e;
@@ -1264,7 +1264,7 @@ const source: Builtin = (sh, argv) => {
   return code;
 };
 
-const evalCmd: Builtin = (sh, argv) => {
+const evalCmd: Builtin = async (sh, argv) => {
   const text = argv.slice(1).join(" ");
   if (text.trim() === "") return 0;
   if (sh.depth >= LIM.depth) throw new NestStop("eval", LIM.depth);
@@ -1288,25 +1288,25 @@ const evalCmd: Builtin = (sh, argv) => {
   sh.depth++;
   sh.nest++;
   try {
-    return sh.runList(r.ast.items);
+    return await sh.runList(r.ast.items);
   } finally {
     sh.depth--;
     sh.nest--;
   }
 };
 
-const execCmd: Builtin = (sh, argv, io) => {
+const execCmd: Builtin = async (sh, argv, io) => {
   let i = 1;
   while (argv[i] && /^-[cl]$/.test(argv[i])) i++;
   if (argv[i] === "-a") i += 2;
   if (i >= argv.length) return 0;
   const rest = argv.slice(i);
-  const code = sh.runCommand(rest, io, {});
+  const code = await sh.runCommand(rest, io, {});
   throw new ExitSig(code);
 };
 
 /** `bash` and `sh`: run a script file or `-c` text in a context of its own (D13). */
-const bash: Builtin = (sh, argv, io) => {
+const bash: Builtin = async (sh, argv, io) => {
   const name = argv[0];
   const opts: Record<string, boolean> = nul<boolean>();
   let i = 1;
@@ -1347,7 +1347,7 @@ const bash: Builtin = (sh, argv, io) => {
     c.src = { kind: "c" };
     c.arg0 = argv[i] ?? name;
     c.params = argv.slice(i + 1);
-    return sh.runInChild(c, text, name);
+    return await sh.runInChild(c, text, name);
   }
   if (i >= argv.length) {
     if (sh.ctx.src.kind !== "prompt") {
@@ -1355,7 +1355,7 @@ const bash: Builtin = (sh, argv, io) => {
       const c = mk();
       c.src = { kind: "c" };
       c.arg0 = name;
-      return sh.runInChild(c, io.in.readAll(), name);
+      return await sh.runInChild(c, await io.in.readAll(), name);
     }
     sh.err.write(
       "bash: this sandbox can’t open a nested shell. Try: bash script.sh\n",
@@ -1377,12 +1377,12 @@ const bash: Builtin = (sh, argv, io) => {
   c.arg0 = path;
   c.params = argv.slice(i);
   c.src = { kind: "file", path };
-  return sh.runInChild(c, t.text, path);
+  return await sh.runInChild(c, t.text, path);
 };
 
 /* ---------- read ---------- */
 
-const read: Builtin = (sh, argv, io) => {
+const read: Builtin = async (sh, argv, io) => {
   const ctx = sh.ctx;
   let raw = false;
   let arr: string | null = null;
@@ -1440,7 +1440,7 @@ const read: Builtin = (sh, argv, io) => {
   let eof = false;
   let gotAny = false;
   if (nchars >= 0) {
-    const s = src.readChars(nchars);
+    const s = await src.readChunk(nchars);
     if (s === null) eof = true;
     else {
       line = s;
@@ -1450,7 +1450,7 @@ const read: Builtin = (sh, argv, io) => {
   } else {
     for (;;) {
       if (delim === "\n") {
-        const l = src.readLine();
+        const l = await src.readLine();
         if (l === null) {
           eof = true;
           break;
@@ -1466,7 +1466,7 @@ const read: Builtin = (sh, argv, io) => {
         if (!l.nl) eof = true;
         break;
       }
-      const ch = src.readChars(1);
+      const ch = await src.readChunk(1);
       if (ch === null) {
         eof = true;
         break;
@@ -1540,14 +1540,14 @@ const read: Builtin = (sh, argv, io) => {
   return eof || !gotAny ? 1 : 0;
 };
 
-const mapfile: Builtin = (sh, argv, io) => {
+const mapfile: Builtin = async (sh, argv, io) => {
   let strip = false;
   let name = "MAPFILE";
   for (const a of argv.slice(1)) {
     if (a === "-t") strip = true;
     else if (!a.startsWith("-")) name = a;
   }
-  const text = io.in.readAll();
+  const text = await io.in.readAll();
   const lines = text === "" ? [] : text.split(/(?<=\n)/);
   const items = lines.map((l) => ({ value: strip ? l.replace(/\n$/, "") : l }));
   sh.ctx.setArray(name, items, "array", false);
@@ -1556,13 +1556,13 @@ const mapfile: Builtin = (sh, argv, io) => {
 
 /* ---------- type, command, alias ---------- */
 
-function funcText(sh: Interp, name: string): string {
+function funcText(sh: Proc, name: string): string {
   const src = sh.functionSource(name) ?? "";
   return `${name} is a function\n${src.endsWith("\n") ? src : src + "\n"}`;
 }
 
 function describe(
-  sh: Interp,
+  sh: Proc,
   name: string,
   io: IO,
   mode: "type" | "t" | "p" | "V",
@@ -1597,7 +1597,7 @@ const typeCmd: Builtin = (sh, argv, io) => {
   return code;
 };
 
-const command: Builtin = (sh, argv, io) => {
+const command: Builtin = async (sh, argv, io) => {
   let i = 1;
   let v = false;
   let V = false;
@@ -1625,12 +1625,12 @@ const command: Builtin = (sh, argv, io) => {
     }
     return code;
   }
-  return sh.runCommand(rest, io, { noFunc: true });
+  return await sh.runCommand(rest, io, { noFunc: true });
 };
 
-const builtinCmd: Builtin = (sh, argv, io) => {
+const builtinCmd: Builtin = async (sh, argv, io) => {
   if (argv.length < 2) return 0;
-  return sh.runCommand(argv.slice(1), io, { builtinOnly: true });
+  return await sh.runCommand(argv.slice(1), io, { builtinOnly: true });
 };
 
 const aliasCmd: Builtin = (sh, argv, io) => {
