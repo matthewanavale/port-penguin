@@ -7,8 +7,8 @@
 // committed. Tests do not need Docker: they read fixtures/*.json.
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { CASES, SCRIPT_PATH } from "./cases.ts";
-import type { Case, PromptCase, ScriptCase } from "./cases.ts";
+import { ASYNC_CASES, CASES, SCRIPT_PATH, promptStep } from "./cases.ts";
+import type { Case, PromptCase, PromptStep, ScriptCase } from "./cases.ts";
 import {
   CAPTURE_ENV,
   HOME_FILES,
@@ -138,22 +138,54 @@ const AT_PROMPT = /(cadet@port-penguin:[^\n]*\$ |\n> |^> )$/;
 const QUIET_MS = 120;
 const STEP_TIMEOUT_MS = 20000;
 
+/** The bytes a step sends to the terminal; null for a step that only waits. */
+function stepBytes(step: PromptStep): string | null {
+  switch (step.kind) {
+    case "line":
+      return step.text + "\n";
+    case "ctrl-c-at-prompt":
+      return "\x03";
+    case "type":
+      return step.text + "\n";
+    case "raw":
+      return step.text;
+    case "key":
+      return step.byte;
+    case "wait":
+      return null;
+  }
+}
+
+/** True for the B20 steps that go to a running command: they do not wait for a prompt. */
+const needsNoPrompt = (step: PromptStep): boolean =>
+  step.kind === "type" ||
+  step.kind === "raw" ||
+  step.kind === "key" ||
+  step.kind === "wait";
+
 function runPrompt(c: PromptCase, n: number): Promise<string> {
   return new Promise((resolve, reject) => {
+    const steps = c.inputs.map(promptStep);
     const inner = ["script", "-qfc", "bash -i", "/dev/null"];
     const name = `pp-cap-${n}`;
     const p = spawn("docker", dockerArgs(name, inner));
     let all = "";
     let sentAt = 0;
     let idx = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    /** The quiet period after a prompt, and the pause before a step that needs no prompt. */
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    /** The time of an `@wait` step. */
+    let pause: ReturnType<typeof setTimeout> | undefined;
     let guard: ReturnType<typeof setTimeout> | undefined;
     let done = false;
+    /** True while the next step waits for a prompt. */
+    let promptWait = true;
 
     const finish = (err?: Error) => {
       if (done) return;
       done = true;
-      clearTimeout(timer);
+      clearTimeout(quiet);
+      clearTimeout(pause);
       clearTimeout(guard);
       spawnSync("docker", ["rm", "-f", name], { stdio: "ignore" });
       if (err) reject(err);
@@ -171,23 +203,48 @@ function runPrompt(c: PromptCase, n: number): Promise<string> {
         STEP_TIMEOUT_MS,
       );
     };
+    /** True when the output after the last send ends at a prompt. */
+    const atPrompt = (): boolean => {
+      // Only look for the prompt in what came after the last send.
+      const fresh = all.slice(sentAt);
+      return idx === 0
+        ? AT_PROMPT.test(all)
+        : AT_PROMPT.test(fresh) && fresh.length > 0;
+    };
+    /** Starts the quiet period when the output ends at a prompt; new output restarts it. */
+    const watchPrompt = () => {
+      clearTimeout(quiet);
+      if (atPrompt()) quiet = setTimeout(next, QUIET_MS);
+    };
+    /** Plans the step that follows a send or a wait. */
+    const proceed = () => {
+      const upcoming = steps[idx];
+      if (upcoming && needsNoPrompt(upcoming)) {
+        promptWait = false;
+        quiet = setTimeout(next, QUIET_MS);
+      } else {
+        promptWait = true;
+        watchPrompt();
+      }
+    };
     const next = () => {
-      if (idx >= c.inputs.length) return finish();
-      const line = c.inputs[idx++];
-      sentAt = all.length;
+      promptWait = false;
+      if (idx >= steps.length) return finish();
+      const step = steps[idx++];
       arm();
-      p.stdin.write(line === "^C" ? "\x03" : line + "\n");
+      const bytes = stepBytes(step);
+      if (bytes === null) {
+        // `@wait N`: the time passes with the command running.
+        pause = setTimeout(proceed, step.kind === "wait" ? step.ms : 0);
+        return;
+      }
+      sentAt = all.length;
+      p.stdin.write(bytes);
+      proceed();
     };
     p.stdout.on("data", (d: Buffer) => {
       all += d.toString("utf8");
-      clearTimeout(timer);
-      // Only look for the prompt in what came after the last input.
-      const fresh = all.slice(sentAt);
-      const ready =
-        idx === 0
-          ? AT_PROMPT.test(all)
-          : AT_PROMPT.test(fresh) && fresh.length > 0;
-      if (ready) timer = setTimeout(next, QUIET_MS);
+      if (promptWait) watchPrompt();
     });
     p.stderr.on("data", () => {});
     p.on("error", finish);
@@ -233,7 +290,8 @@ async function capture(c: Case, n: number): Promise<Fixture> {
 
 async function main(): Promise<void> {
   const only = process.argv.slice(2);
-  const cases = CASES.filter(
+  // The run-2b cases (group "async") are captured with the rest (B20).
+  const cases = [...CASES, ...ASYNC_CASES].filter(
     (c) => only.length === 0 || only.includes(c.group),
   );
   if (cases.length === 0) throw new Error("no case matches " + only.join(","));

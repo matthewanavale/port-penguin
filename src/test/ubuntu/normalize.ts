@@ -69,6 +69,16 @@ export function stripAnsi(text: string): string {
 
 /* eslint-enable no-control-regex */
 
+/**
+ * B20: job process ids. A real PID depends on the host, so two lines carry a
+ * fixed token: the `[N] PID` line that `CMD &` prints, and the PID column of
+ * `jobs -l` (`[N]+  PID Running ...`). A case that needs a PID elsewhere
+ * (`$!`, `jobs -p`) tests it without printing it, for example
+ * `test $! -gt 0 && echo bang-ok`.
+ */
+const JOB_START = /^(\[\d+\]) \d+$/;
+const JOB_LONG = /^(\[\d+\][+-]?\s+)\d+( )/;
+
 /** The shared normalizer. */
 export function normalize(text: string): string {
   let t = stripAnsi(text.replace(/\r/g, ""));
@@ -80,7 +90,9 @@ export function normalize(text: string): string {
       // `df` sizes vary by host; the column widths vary with them.
       if (DF_HEADER.test(line)) return line.replace(/\s+/g, " ");
       const m = DF_ROW.exec(line);
-      return m ? `${m[1]} <SIZE> <SIZE> <SIZE> <PCT> ${m[2]}` : line;
+      if (m) return `${m[1]} <SIZE> <SIZE> <SIZE> <PCT> ${m[2]}`;
+      // A prompt line may carry the echoed command before it: only a line that starts with `[N]` counts.
+      return line.replace(JOB_START, "$1 <PID>").replace(JOB_LONG, "$1<PID>$2");
     })
     .join("\n");
 }

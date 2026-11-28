@@ -14,8 +14,61 @@ export interface PromptCase {
   group: string;
   /** The AC3 or AC4 item this case covers; must be an entry of FEATURES. */
   feature: string;
-  /** One line each. The special input "^C" sends Control-C. */
+  /**
+   * One step each, in the forms of `promptStep` below. A plain line waits for
+   * the prompt and is sent with a newline; "^C" sends Control-C at a prompt;
+   * the B20 forms "@type", "@raw", "@key", and "@wait" do not wait for a prompt.
+   */
   inputs: string[];
+}
+
+/**
+ * One step of a prompt case (B20). The forms, as written in `inputs`:
+ *   `text`         wait for the prompt, then send `text` and a newline
+ *   `^C`           wait for the prompt, then send Control-C (2a, at `> `)
+ *   `@type TEXT`   send `TEXT` and a newline to the running command, with no prompt
+ *   `@raw "JSON"`  send exactly the characters of the JSON string, with no prompt
+ *   `@key ^C`      send a control key (`^C`, `^Z`, `^D`, `^\`) to the running command
+ *   `@wait N`      wait N ms, then go on
+ */
+export type PromptStep =
+  | { kind: "line"; text: string }
+  | { kind: "ctrl-c-at-prompt" }
+  | { kind: "type"; text: string }
+  | { kind: "raw"; text: string }
+  | { kind: "key"; key: string; byte: string }
+  | { kind: "wait"; ms: number };
+
+/** The control keys of the `@key` step, with the byte the terminal sends. */
+export const CONTROL_KEYS: Record<string, string> = {
+  "^C": "\x03",
+  "^Z": "\x1a",
+  "^D": "\x04",
+  "^\\": "\x1c",
+};
+
+/** Reads one entry of `inputs` (B20). Throws on a malformed step, so a typo does not become a line. */
+export function promptStep(input: string): PromptStep {
+  if (input === "^C") return { kind: "ctrl-c-at-prompt" };
+  if (!input.startsWith("@")) return { kind: "line", text: input };
+  const m = /^@(type|raw|key|wait)(?: (.*))?$/s.exec(input);
+  if (!m) throw new Error(`unknown step ${JSON.stringify(input)}`);
+  const arg = m[2] ?? "";
+  if (m[1] === "type") return { kind: "type", text: arg };
+  if (m[1] === "raw") {
+    const text: unknown = JSON.parse(arg);
+    if (typeof text !== "string")
+      throw new Error(`@raw needs a string: ${input}`);
+    return { kind: "raw", text };
+  }
+  if (m[1] === "key") {
+    const byte = CONTROL_KEYS[arg];
+    if (byte === undefined) throw new Error(`unknown control key ${arg}`);
+    return { kind: "key", key: arg, byte };
+  }
+  const ms = Number(arg);
+  if (!Number.isInteger(ms) || ms < 0) throw new Error(`bad wait ${input}`);
+  return { kind: "wait", ms };
 }
 
 /** A script case: `bash /tmp/case.sh`, stdout, stderr, and exit code apart. */
@@ -2671,6 +2724,335 @@ const utils: Case[] = [
     "printf 'x * * * * echo\\n' > bad8",
     "crontab bad8",
     "crontab -l",
+  ),
+];
+
+/**
+ * B20: the cases for the run-2b features (AC3 to AC8, AC14). They wait for a
+ * capture on Ubuntu 24.04 (`capture.ts async`, needs Docker): until their
+ * fixtures exist they are not in `CASES`, so the suite stays green. After the
+ * capture, add them to `CASES` and `ASYNC_FEATURES` to `FEATURES`, and teach
+ * `simulatePrompt` in reference.test.ts the steps of `promptStep`.
+ * Background timing uses `sleep` values at least 0.5 s apart, so the order of
+ * events cannot change.
+ */
+export const ASYNC_FEATURES: string[] = [
+  "pipe: SIGPIPE",
+  "pipe: PIPESTATUS 141",
+  "pipe: streams",
+  "keyboard: read",
+  "keyboard: read -n",
+  "keyboard: read -s",
+  "keyboard: read -p",
+  "keyboard: read -t",
+  "keyboard: select",
+  "keyboard: cat and Ctrl-D",
+  "keyboard: wc -l",
+  "keyboard: Ctrl-C in read",
+  "signal: Ctrl-C in sleep",
+  "signal: trap INT",
+  "signal: trap '' INT",
+  "signal: Ctrl-\\ (SIGQUIT)",
+  "job: &",
+  "job: jobs -l",
+  "job: Done notice",
+  "job: fg",
+  "job: Ctrl-Z, bg",
+  "job: wait",
+  "job: wait -n",
+  "job: kill",
+  "job: kill -STOP and -CONT",
+  "job: disown",
+  "job: specs",
+  "job: exit with stopped jobs",
+  "nested: SHLVL",
+  "nested: exit N",
+  "nested: state",
+  "awk: output pipe order",
+];
+
+const AS = "async";
+
+/** The cases that wait for a capture (see `ASYNC_FEATURES`). */
+export const ASYNC_CASES: Case[] = [
+  // AC3: pipes
+  s(AS, "pipe-sigpipe", "pipe: SIGPIPE", "yes | head -1", "echo $?"),
+  s(
+    AS,
+    "pipe-pipestatus-141",
+    "pipe: PIPESTATUS 141",
+    'yes | head -1; echo "${PIPESTATUS[@]}"',
+  ),
+  s(
+    AS,
+    "pipe-head-c-wc",
+    "pipe: SIGPIPE",
+    "yes | head -c 100000 | wc -c",
+    "seq 1 200000 | grep -c 7",
+  ),
+  s(
+    AS,
+    "pipe-streams",
+    "pipe: streams",
+    "(echo a; sleep 1; echo b) | cat",
+    "(echo c; sleep 1; echo d) | while read l; do echo got-$l; done",
+  ),
+  // AC4: the keyboard
+  p(AS, "read-v", "keyboard: read", "read v", "@type hello", 'echo "[$v]"'),
+  p(
+    AS,
+    "read-n1",
+    "keyboard: read -n",
+    "read -n 1 c",
+    '@raw "x"',
+    'echo "[$c]"',
+  ),
+  p(
+    AS,
+    "read-s",
+    "keyboard: read -s",
+    "read -s v",
+    "@type secret",
+    'echo "[$v]"',
+  ),
+  p(
+    AS,
+    "read-p",
+    "keyboard: read -p",
+    "read -p 'name: ' v",
+    "@type bob",
+    'echo "[$v]"',
+  ),
+  p(
+    AS,
+    "read-t",
+    "keyboard: read -t",
+    "read -t 1 v; echo code=$?",
+    "echo next",
+  ),
+  p(
+    AS,
+    "select-menu",
+    "keyboard: select",
+    'select x in a b c; do echo "[$x]"; break; done',
+    "@type 2",
+    "echo done",
+  ),
+  p(
+    AS,
+    "cat-ctrl-d",
+    "keyboard: cat and Ctrl-D",
+    "cat",
+    "@type hello",
+    "@key ^D",
+    "echo code=$?",
+  ),
+  p(
+    AS,
+    "wc-l-keyboard",
+    "keyboard: wc -l",
+    "wc -l",
+    "@type one",
+    "@type two",
+    "@key ^D",
+  ),
+  p(
+    AS,
+    "read-ctrl-c",
+    "keyboard: Ctrl-C in read",
+    "read v",
+    "@wait 300",
+    "@key ^C",
+    "echo code=$?",
+  ),
+  // AC5: time and signals
+  p(
+    AS,
+    "sleep-ctrl-c",
+    "signal: Ctrl-C in sleep",
+    "sleep 100",
+    "@wait 500",
+    "@key ^C",
+    "echo code=$?",
+  ),
+  p(
+    AS,
+    "trap-int",
+    "signal: trap INT",
+    "trap 'echo caught' INT; sleep 100; echo after",
+    "@wait 500",
+    "@key ^C",
+    "echo code=$?",
+  ),
+  p(
+    AS,
+    "trap-int-ignore",
+    "signal: trap '' INT",
+    "trap '' INT; sleep 2; echo after",
+    "@wait 500",
+    "@key ^C",
+    "echo code=$?",
+  ),
+  p(
+    AS,
+    "sleep-quit",
+    "signal: Ctrl-\\ (SIGQUIT)",
+    "sleep 100",
+    "@wait 500",
+    "@key ^\\",
+    "echo code=$?",
+  ),
+  // AC7: jobs
+  p(
+    AS,
+    "job-start-list",
+    "job: &",
+    "sleep 100 &",
+    "echo $?",
+    "test $! -gt 0 && echo bang-ok",
+    "jobs",
+    "kill %1",
+    "echo x",
+    "jobs",
+  ),
+  p(
+    AS,
+    "job-list-long",
+    "job: jobs -l",
+    "sleep 100 &",
+    "sleep 101 &",
+    "jobs -l",
+    "jobs -p | wc -l",
+    "jobs -r",
+    "jobs -s",
+    "kill %1 %2",
+    "echo x",
+  ),
+  p(
+    AS,
+    "job-done-notice",
+    "job: Done notice",
+    "sleep 1 &",
+    "@wait 1500",
+    "echo next",
+    "jobs",
+  ),
+  p(AS, "job-fg", "job: fg", "sleep 1 &", "fg %1", "echo code=$?"),
+  p(
+    AS,
+    "job-ctrl-z-bg",
+    "job: Ctrl-Z, bg",
+    "sleep 100",
+    "@wait 500",
+    "@key ^Z",
+    "echo code=$?",
+    "jobs",
+    "bg",
+    "jobs",
+    "kill %1",
+    "echo end",
+  ),
+  p(AS, "job-wait", "job: wait", "sleep 1 &", "wait", "echo code=$?"),
+  p(
+    AS,
+    "job-wait-n",
+    "job: wait -n",
+    "sleep 2 &",
+    "sleep 1 &",
+    "wait -n; echo code=$?",
+    "jobs",
+    "wait",
+  ),
+  p(
+    AS,
+    "job-kill-signals",
+    "job: kill",
+    "sleep 100 &",
+    "kill -9 %1",
+    "echo x",
+    "sleep 100 &",
+    "kill -TERM %1",
+    "echo y",
+    "kill %9",
+    "echo code=$?",
+  ),
+  p(
+    AS,
+    "job-stop-cont",
+    "job: kill -STOP and -CONT",
+    "sleep 100 &",
+    "kill -STOP %1",
+    "echo x",
+    "jobs",
+    "kill -CONT %1",
+    "jobs",
+    "kill %1",
+    "echo y",
+  ),
+  p(
+    AS,
+    "job-disown",
+    "job: disown",
+    "sleep 100 &",
+    "disown %1",
+    "jobs",
+    "echo x",
+  ),
+  p(
+    AS,
+    "job-specs",
+    "job: specs",
+    "sleep 100 &",
+    "sleep 101 &",
+    "jobs %1",
+    "jobs %+",
+    "jobs %-",
+    "jobs %%",
+    "jobs %sleep",
+    "jobs %?101",
+    "kill %1 %2",
+    "echo x",
+  ),
+  p(
+    AS,
+    "exit-stopped-jobs",
+    "job: exit with stopped jobs",
+    "sleep 100",
+    "@wait 500",
+    "@key ^Z",
+    "exit",
+    "jobs",
+    "exit",
+  ),
+  // AC8: the nested shell
+  p(
+    AS,
+    "nested-shlvl",
+    "nested: SHLVL",
+    "echo $SHLVL",
+    "bash",
+    "echo $SHLVL",
+    "exit",
+    "echo $SHLVL",
+  ),
+  p(AS, "nested-exit-n", "nested: exit N", "bash", "exit 3", "echo code=$?"),
+  p(
+    AS,
+    "nested-state",
+    "nested: state",
+    "X=1; export Y=2",
+    "bash",
+    'echo "[$X][$Y]"',
+    "cd /tmp; Z=3",
+    "exit",
+    'echo "[$Z]"; pwd',
+  ),
+  // AC14: the order of an awk output pipe
+  s(
+    AS,
+    "awk-pipe-order",
+    "awk: output pipe order",
+    `awk 'BEGIN{print "b\\na" | "sort"; close("sort"); print "x"}'`,
   ),
 ];
 
