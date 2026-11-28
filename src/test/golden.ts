@@ -31,6 +31,8 @@ export interface StepNote {
 export type GoldenStep =
   | ({ input: string } & StepResult & StepNote)
   | ({ advanceMs: number } & StepNote)
+  | ({ keys: string } & StepNote)
+  | ({ signal: "INT" | "TSTP" | "QUIT" } & StepNote)
   | ({
       tab: string;
       cursor: number;

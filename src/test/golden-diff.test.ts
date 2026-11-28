@@ -45,6 +45,8 @@ function observable(s: GoldenStep): unknown {
       value: s.value,
       newCursor: s.newCursor,
     };
+  if ("keys" in s) return { keys: s.keys };
+  if ("signal" in s) return { signal: s.signal };
   return { advanceMs: s.advanceMs };
 }
 

@@ -4,13 +4,11 @@
 // the setup below turns that into RECORD=1 for this file. A re-record keeps
 // the `reason` and `replaces` of every step, because they are written on the
 // step in src/test/scripts.ts and copied here.
-import { expect, it, vi } from "vitest";
-import { setClock } from "../engine/clock";
-import { createEngine, SAVE_KEY } from "../engine/index";
+import { expect, it } from "vitest";
 import type { OutLine } from "../engine/output";
-import { makeFakeClock, seededRandom, SEED, START_MS } from "./determinism";
-import { collector } from "./engineHarness";
 import type { Golden, GoldenStep } from "./golden";
+import { acts, closeSession, mayWait, openSession } from "./goldenSession";
+import type { Running } from "./goldenSession";
 import { lineOf, SCRIPTS } from "./scripts";
 import type { GoldenScript } from "./scripts";
 
@@ -20,25 +18,39 @@ export const plain = (lines: OutLine[]): string =>
 
 /** Runs one golden script on a fresh engine and records every step. */
 export async function recordGolden(script: GoldenScript): Promise<Golden> {
-  const clock = makeFakeClock(START_MS);
-  vi.spyOn(Math, "random").mockImplementation(seededRandom(SEED));
-  const store = new Map<string, string>();
   try {
-    const col = collector();
-    const engine = createEngine({
-      clock,
-      onOutput: col.onOutput,
-      storage: {
-        getItem: (k: string) => store.get(k) ?? null,
-        setItem: (k: string, v: string) => void store.set(k, v),
-      },
-    });
-    await engine.start();
+    const session = await openSession();
     const steps: GoldenStep[] = [];
-    for (const step of script.steps) {
+    let running: Running | null = null;
+    /** Fills the result of the input that ended into its own step. */
+    const finish = async (r: Running, note: object): Promise<void> => {
+      const o = await r.result;
+      steps[r.index] = {
+        input: lineOf(script.steps[r.index]) as string,
+        text: o.text,
+        cleared: o.cleared,
+        code: o.code,
+        cwd: o.cwd,
+        cur: o.cur,
+        ...note,
+      };
+    };
+    const notes: Record<number, object> = {};
+    const settleRunning = async (): Promise<void> => {
+      if (running?.done()) {
+        const r: Running = running;
+        running = null;
+        await finish(r, notes[r.index] ?? {});
+      }
+    };
+    for (const [i, step] of script.steps.entries()) {
       const line = lineOf(step);
       if (line !== undefined) {
-        const note =
+        if (running)
+          throw new Error(
+            `${script.name} step ${i}: the input of step ${(running as Running).index} is still waiting`,
+          );
+        notes[i] =
           typeof step === "object" && "input" in step
             ? {
                 reason: step.reason,
@@ -47,40 +59,54 @@ export async function recordGolden(script: GoldenScript): Promise<Golden> {
                   : {}),
               }
             : {};
-        col.reset();
-        const r = await engine.execute(line);
-        const s = engine.state;
-        const shown = col.take(r);
-        steps.push({
-          input: line,
-          text: shown.text,
-          cleared: shown.cleared,
-          code: s.lastCode,
-          cwd: s.cwd,
-          cur: s.cur,
-          ...note,
-        });
-      } else if (typeof step === "object" && "advanceMs" in step) {
-        await clock.advance(step.advanceMs);
-        steps.push({ advanceMs: step.advanceMs });
-      } else if (typeof step === "object" && "tab" in step) {
+        steps[i] = undefined as unknown as GoldenStep;
+        running = await session.begin(i, line, mayWait(script.steps, i));
+        // No later step acts on it: it must end by itself.
+        if (!acts(script.steps, i)) {
+          const r: Running = running;
+          running = null;
+          await session.wait(r);
+          await finish(r, notes[i]);
+        } else await settleRunning();
+        continue;
+      }
+      if (typeof step !== "object") continue;
+      if ("advanceMs" in step) {
+        await session.advance(step.advanceMs);
+        steps[i] = { advanceMs: step.advanceMs };
+      } else if ("keys" in step) {
+        await session.keys(step.keys);
+        steps[i] = {
+          keys: step.keys,
+          ...(step.reason !== undefined ? { reason: step.reason } : {}),
+        };
+      } else if ("signal" in step) {
+        await session.signal(step.signal);
+        steps[i] = {
+          signal: step.signal,
+          ...(step.reason !== undefined ? { reason: step.reason } : {}),
+        };
+      } else if ("tab" in step) {
         const cursor = step.cursor ?? step.tab.length;
-        const r = engine.complete(step.tab, cursor);
-        steps.push({
+        const r = session.engine.complete(step.tab, cursor);
+        steps[i] = {
           tab: step.tab,
           cursor,
           value: r.value,
           newCursor: r.cursor,
           listing: r.listing.length ? r.listing.join("  ") : null,
           ...(step.reason !== undefined ? { reason: step.reason } : {}),
-        });
+        };
       }
+      await settleRunning();
     }
-    return { script: script.name, steps, save: store.get(SAVE_KEY) ?? null };
+    if (running)
+      throw new Error(
+        `${script.name}: the input of step ${(running as Running).index} is still waiting at the end`,
+      );
+    return { script: script.name, steps, save: session.saved() };
   } finally {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-    setClock();
+    closeSession();
   }
 }
 

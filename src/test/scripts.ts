@@ -4,15 +4,19 @@
 // compose subcommand, pipes, redirects, &&, ;, globs, quotes, variables,
 // and error paths. coverage.test.ts checks this coverage.
 
-/** One step of a script: a command line, a clock move, or a Tab press. */
+/** One step of a script: a command line, a clock move, a Tab press, typed keys, or a signal. */
 export type Step =
   | string
   | { advanceMs: number }
+  /** B21: text typed while a command runs and reads the keyboard. the byte 0x04 is Ctrl-D. */
+  | { keys: string; reason?: string }
+  /** B21: Ctrl-C, Ctrl-Z, or Ctrl-\ while a command runs. */
+  | { signal: "INT" | "TSTP" | "QUIT"; reason?: string }
   | { tab: string; cursor?: number; reason?: string }
   /** A command line with a note (D9 (4)-(5)): `reason` and `replaces` go into the recorded JSON. */
   | { input: string; reason: string; replaces?: number };
 
-/** The command line of a step, or undefined for a clock move or a Tab press. */
+/** The command line of a step, or undefined for a clock move, a Tab press, keys, or a signal. */
 export function lineOf(step: Step): string | undefined {
   if (typeof step === "string") return step;
   return "input" in step ? step.input : undefined;
@@ -521,7 +525,11 @@ export const SCRIPTS: GoldenScript[] = [
         input: "sh projects/webapp/app.py",
         reason: "R1 output as in Ubuntu; exit code as in Ubuntu (R2)",
       },
-      "bash",
+      {
+        input: "bash",
+        reason:
+          "R7 run-2b behavior: a bare bash starts a nested shell that the rest of the script runs in (B14)",
+      },
       "bash nosuch.sh",
       "bash logs",
       "./nosuch.sh",
@@ -643,6 +651,22 @@ export const SCRIPTS: GoldenScript[] = [
         input: "top",
         reason:
           "R1 the save differs from run 1: new files in the home folder and history without repeated lines (as in Ubuntu)",
+      },
+      // B21: steps that wait. They are added at the end, so no run-1 step moves.
+      "sleep 100",
+      { signal: "INT" },
+      "read v",
+      { keys: "hello\n" },
+      "cat",
+      { keys: "a\nb\n" },
+      { keys: "\x04" },
+      "sleep 5 &",
+      { advanceMs: 5000 },
+      "jobs",
+      {
+        input: "echo $v",
+        reason:
+          "R7 run-2b behavior: keyboard input, sleep, Ctrl-C, and jobs (B4, B5, B6, B9)",
       },
     ],
   },

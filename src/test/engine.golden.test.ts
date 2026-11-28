@@ -16,13 +16,11 @@
 //       game lines; and `cleared`, true when the input ran `clear`.
 //   engine.complete(value, cursor): { value, cursor, listing: string[] }
 //   engine.state                        the live game state (S)
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createEngine, SAVE_KEY } from "../engine/index";
-import { setClock } from "../engine/clock";
-import { makeFakeClock, seededRandom, SEED, START_MS } from "./determinism";
-import { collector } from "./engineHarness";
+import { afterEach, describe, expect, it } from "vitest";
 import type { Golden, GoldenStep } from "./golden";
 import "./golden.record";
+import { acts, closeSession, mayWait, openSession } from "./goldenSession";
+import type { Running } from "./goldenSession";
 import { SCRIPTS } from "./scripts";
 
 const goldens = import.meta.glob<Golden>("./golden/*.json", {
@@ -32,34 +30,7 @@ const goldens = import.meta.glob<Golden>("./golden/*.json", {
 const goldenFor = (name: string): Golden | undefined =>
   goldens[`./golden/${name}.json`];
 
-/** A fresh engine with the same clock and random source as the recording (D15b). */
-async function openEngine(saved?: string) {
-  const clock = makeFakeClock(START_MS);
-  vi.spyOn(Math, "random").mockImplementation(seededRandom(SEED));
-  const store = new Map<string, string>();
-  if (saved !== undefined) store.set(SAVE_KEY, saved);
-  const storage = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => {
-      store.set(k, v);
-    },
-  };
-  const col = collector();
-  const engine = createEngine({ storage, clock, onOutput: col.onOutput });
-  await engine.start();
-  return {
-    engine,
-    col,
-    saved: () => store.get(SAVE_KEY) ?? null,
-    advance: (ms: number) => clock.advance(ms),
-  };
-}
-
-afterEach(() => {
-  vi.useRealTimers();
-  vi.restoreAllMocks();
-  setClock();
-});
+afterEach(closeSession);
 
 describe("golden transcripts on the ported engine (AC3, AC5b)", () => {
   it("has a golden file for every script", () => {
@@ -73,52 +44,66 @@ describe("golden transcripts on the ported engine (AC3, AC5b)", () => {
       const golden = goldenFor(script.name);
       expect(golden, `missing golden file for ${script.name}`).toBeDefined();
       const g = golden as Golden;
-      const { engine, col, saved, advance } = await openEngine();
+      const session = await openSession();
+      const steps = g.steps;
+      let running: Running | null = null;
+      /** Compares what the input that ended gave with its own golden step. */
+      const check = async (r: Running): Promise<void> => {
+        const step = steps[r.index] as Extract<GoldenStep, { input: string }>;
+        const o = await r.result;
+        expect(o, `step ${r.index}: ${step.input}`).toEqual({
+          text: step.text,
+          cleared: step.cleared,
+          code: step.code,
+          cwd: step.cwd,
+          cur: step.cur,
+        });
+      };
+      const settleRunning = async (): Promise<void> => {
+        if (running?.done()) {
+          const r: Running = running;
+          running = null;
+          await check(r);
+        }
+      };
 
-      for (const [i, step] of g.steps.entries() as IterableIterator<
+      for (const [i, step] of steps.entries() as IterableIterator<
         [number, GoldenStep]
       >) {
-        if ("advanceMs" in step) {
-          await advance(step.advanceMs);
-        } else if ("tab" in step) {
-          const r = engine.complete(step.tab, step.cursor);
-          expect(
-            {
-              value: r.value,
-              newCursor: r.cursor,
-              listing: r.listing.length ? r.listing.join("  ") : null,
-            },
-            `step ${i}: Tab on ${JSON.stringify(step.tab)}`,
-          ).toEqual({
-            value: step.value,
-            newCursor: step.newCursor,
-            listing: step.listing,
-          });
+        if ("input" in step) {
+          expect(running, `step ${i}: an input is still waiting`).toBeNull();
+          running = await session.begin(i, step.input, mayWait(steps, i));
+          if (!acts(steps, i)) {
+            const r: Running = running;
+            running = null;
+            await session.wait(r);
+            await check(r);
+          } else await settleRunning();
         } else {
-          col.reset();
-          const r = await engine.execute(step.input);
-          const s = engine.state;
-          const shown = col.take(r);
-          expect(
-            {
-              text: shown.text,
-              cleared: shown.cleared,
-              code: s.lastCode,
-              cwd: s.cwd,
-              cur: s.cur,
-            },
-            `step ${i}: ${step.input}`,
-          ).toEqual({
-            text: step.text,
-            cleared: step.cleared,
-            code: step.code,
-            cwd: step.cwd,
-            cur: step.cur,
-          });
+          if ("advanceMs" in step) await session.advance(step.advanceMs);
+          else if ("keys" in step) await session.keys(step.keys);
+          else if ("signal" in step) await session.signal(step.signal);
+          else {
+            const r = session.engine.complete(step.tab, step.cursor);
+            expect(
+              {
+                value: r.value,
+                newCursor: r.cursor,
+                listing: r.listing.length ? r.listing.join("  ") : null,
+              },
+              `step ${i}: Tab on ${JSON.stringify(step.tab)}`,
+            ).toEqual({
+              value: step.value,
+              newCursor: step.newCursor,
+              listing: step.listing,
+            });
+          }
+          await settleRunning();
         }
       }
+      expect(running, "an input is still waiting at the end").toBeNull();
 
-      const mine = saved();
+      const mine = session.saved();
       expect(mine).not.toBeNull();
       expect(JSON.parse(mine as string)).toEqual(JSON.parse(g.save as string));
     });
