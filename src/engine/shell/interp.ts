@@ -1,10 +1,11 @@
 // B2: what the processes share. `Interp` keeps the host (the command table),
-// the parser cache for function bodies, and the process counter. The scheduler
-// of the next phase goes here. The processes themselves are in proc.ts.
+// the parser cache for function bodies, and the scheduler. The scheduler
+// is in sched.ts. The processes themselves are in proc.ts.
 import type { Node } from "./ast";
 import type { Context } from "./context";
 import type { Host, TaskCtx } from "./io";
 import { Proc, Run } from "./proc";
+import { Sched } from "./sched";
 
 export {
   AbortLine,
@@ -14,6 +15,7 @@ export {
   Proc,
   ReturnSig,
   Run,
+  SignalStop,
 } from "./proc";
 export type { HintEvent, Note } from "./proc";
 
@@ -21,8 +23,8 @@ export class Interp {
   readonly host: Host;
   /** Parsed function bodies, by source text. */
   readonly fnCache = new Map<string, Node>();
-  /** The next process id (B10 gives the visible numbers in a later phase). */
-  nextPid = 1;
+  /** The yield check, the process ids, and signal delivery (B6, B7, B10). */
+  readonly sched = new Sched();
 
   constructor(host: Host) {
     this.host = host;

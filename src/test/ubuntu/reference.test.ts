@@ -17,7 +17,14 @@ import { createEngine, SAVE_KEY } from "../../engine/index";
 import type { Engine } from "../../engine/index";
 import { fresh } from "../../engine/state";
 import type { DirNode, FileNode } from "../../engine/state";
-import { makeFakeClock, seededRandom, SEED, START_MS } from "../determinism";
+import {
+  drive,
+  makeFakeClock,
+  seededRandom,
+  SEED,
+  START_MS,
+} from "../determinism";
+import type { FakeEngineClock } from "../determinism";
 import { CASES, FEATURES, SCRIPT_PATH } from "./cases";
 import type { Case, PromptCase, ScriptCase } from "./cases";
 import { HOME_FILES } from "./home";
@@ -63,7 +70,7 @@ function referenceSave(scriptText?: string): string {
   return JSON.stringify(s);
 }
 
-async function open(scriptText?: string): Promise<Engine> {
+async function open(scriptText?: string): Promise<[Engine, FakeEngineClock]> {
   const clock = makeFakeClock(START_MS);
   vi.spyOn(Math, "random").mockImplementation(seededRandom(SEED));
   const store = new Map<string, string>([
@@ -77,7 +84,7 @@ async function open(scriptText?: string): Promise<Engine> {
     },
   });
   await engine.start();
-  return engine;
+  return [engine, clock];
 }
 
 const promptText = (e: Engine): string =>
@@ -88,7 +95,7 @@ const promptText = (e: Engine): string =>
 
 /** The simulator side of a prompt case, in the shape of the capture (D8). */
 async function simulatePrompt(c: PromptCase): Promise<string> {
-  const e = await open();
+  const [e, clock] = await open();
   let t = promptText(e);
   let pending: string[] = [];
   for (const input of c.inputs) {
@@ -106,15 +113,17 @@ async function simulatePrompt(c: PromptCase): Promise<string> {
       continue;
     }
     pending = [];
-    t += (await e.execute(text)).chunks.map((k) => k.text).join("");
+    t += (await drive(e.execute(text), clock)).chunks
+      .map((k) => k.text)
+      .join("");
     t += promptText(e);
   }
   return t;
 }
 
 async function simulateScript(c: ScriptCase) {
-  const e = await open(c.lines.join("\n") + "\n");
-  const r = await e.execute(`bash ${SCRIPT_PATH}`);
+  const [e, clock] = await open(c.lines.join("\n") + "\n");
+  const r = await drive(e.execute(`bash ${SCRIPT_PATH}`), clock);
   const part = (stream: "stdout" | "stderr") =>
     r.chunks
       .filter((k) => k.stream === stream)

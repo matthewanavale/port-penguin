@@ -18,12 +18,13 @@ import type {
   Word,
 } from "./ast";
 import { BUILTINS, KEYWORDS, unaryTest, intCompare } from "./builtins";
+import { getClock } from "../clock";
 import { Context } from "./context";
 import type { SrcInfo } from "./context";
 import { ExpError, Expander } from "./expand";
 import { matchPattern } from "./glob";
 import { resolvePath } from "./glob";
-import { BufWriter, Input, Meter, TermWriter } from "./io";
+import { BufWriter, Input, TermWriter } from "./io";
 import type {
   Chunk,
   Host,
@@ -33,7 +34,16 @@ import type {
   TaskCtx,
   Writer,
 } from "./io";
-import { LIM, LimitStop, NestStop, nestMessage, stopMessage } from "./limits";
+import {
+  LIM,
+  LimitStop,
+  NestStop,
+  isStackOverflow,
+  limitFromError,
+  nestMessage,
+  stopMessage,
+} from "./limits";
+import { SIGNALS } from "./sched";
 import type { Interp } from "./interp";
 import { parse, parseFull, parseUnits } from "./parser";
 import type { UnitResult } from "./parser";
@@ -58,6 +68,18 @@ export class ExitSig {
 /** A fatal error at the prompt: the rest of the input does not run. */
 export class AbortLine {
   constructor(readonly code: number) {}
+}
+
+/**
+ * A signal ended the process (B6): it had no trap for it. The status is
+ * 128 plus the signal number (130, 143, ...). It unwinds like `exit`, up to the
+ * process that has a trap for the signal, or to the end of the input.
+ */
+export class SignalStop {
+  readonly code: number;
+  constructor(readonly sig: string) {
+    this.code = 128 + (SIGNALS[sig] ?? 0);
+  }
 }
 
 /** A line the game prints itself: a stop notice, a hint. Never stdout or stderr. */
@@ -102,10 +124,12 @@ export class Run implements OutSink {
   chunks: Chunk[] = [];
   notes: Note[] = [];
   events: HintEvent[] = [];
-  meter = new Meter();
+  /** Every live process of the input: the foreground job gets its signals (B6). */
+  procs = new Set<Proc>();
   /** Set when `exit` ran at the prompt. */
   exited: number | null = null;
   steps = 0;
+  /** B8: the shell has no step limit; only `~/.bashrc` sets one (D19). */
   stepLimit: number;
   stepName: string;
   /** The process that runs now (for the D12 "typed at the prompt" check). */
@@ -117,7 +141,7 @@ export class Run implements OutSink {
   constructor(
     public task: TaskCtx,
     readonly onOutput?: (e: OutputEvent) => void,
-    stepLimit = LIM.steps,
+    stepLimit = Infinity,
   ) {
     this.stepLimit = stepLimit;
     this.stepName = `${stepLimit} steps`;
@@ -140,7 +164,7 @@ export class Run implements OutSink {
     this.onOutput?.({ kind: "clear" });
   }
 
-  /** Counts one step against the D5 meter. */
+  /** Counts one step against the step limit (only `~/.bashrc` has one, B8). */
   tick(): void {
     if (++this.steps > this.stepLimit) throw new LimitStop(this.stepName);
   }
@@ -175,8 +199,12 @@ export class Proc {
   lineOverride: number | null = null;
   /** The job this process belongs to (job control comes in a later phase). */
   job: unknown = null;
-  /** Pending signals (signals come in a later phase). */
+  /** Pending signals (B6): they run or end the process at the next safe point. */
   signals: string[] = [];
+  /** How many child processes this process waits on now. */
+  kids = 0;
+  /** Set while the process waits (B6): a signal calls it to end the wait. */
+  private waiter: (() => void) | null = null;
   ex: Expander;
   rootIn: Input;
   /** The list of its input (shared by all the processes of the input). */
@@ -189,8 +217,9 @@ export class Proc {
     run: Run,
     ctx: Context,
   ) {
-    this.pid = interp.nextPid++;
+    this.pid = interp.sched.allocPid();
     this.run = run;
+    run.procs.add(this);
     this.procFiles = run.procFiles;
     this.ctx = ctx;
     this.ex = new Expander(this);
@@ -241,6 +270,9 @@ export class Proc {
         : "command substitution";
       throw new NestStop(name, LIM.depth);
     }
+    // As in bash, a subshell resets the traps for signals; `trap ''` stays (B6).
+    for (const sig of Object.keys(SIGNALS))
+      if (ctx.traps[sig]) delete ctx.traps[sig];
     const c = new Proc(this.interp, this.run, ctx);
     c.chain = this.chain + 1;
     c.depth = this.depth;
@@ -258,9 +290,12 @@ export class Proc {
   async within<T>(c: Proc, f: () => Promise<T>): Promise<T> {
     const prev = this.run.cur;
     this.run.cur = c;
+    this.kids++;
     try {
       return await f();
     } finally {
+      this.kids--;
+      this.run.procs.delete(c);
       this.run.cur = prev;
       if (this.overflowName === null) this.overflowName = c.overflowName;
       if (c.procSeq > this.procSeq) this.procSeq = c.procSeq;
@@ -269,8 +304,8 @@ export class Proc {
 
   /* ---------- one input ---------- */
 
-  /** Starts an input: new run (output list, meter, steps), and task data. */
-  begin(task: TaskCtx, stepLimit = LIM.steps): void {
+  /** Starts an input: new run (output list, steps), and task data. */
+  begin(task: TaskCtx, stepLimit = Infinity): void {
     this.attach(new Run(task, this.run.onOutput, stepLimit));
   }
 
@@ -280,6 +315,10 @@ export class Proc {
     this.procFiles = run.procFiles;
     const task = run.task;
     run.cur = this;
+    run.procs.add(this);
+    this.signals = [];
+    this.kids = 0;
+    this.waiter = null;
     this.depth = 0;
     this.overflowName = null;
     this.scripts = 0;
@@ -288,8 +327,8 @@ export class Proc {
     this.rootIn.counts = () => (this.run.cur ?? this).promptLevel();
     this.ctx.io = {
       in: this.rootIn,
-      out: new TermWriter("stdout", this.run, this.run.meter, task),
-      err: new TermWriter("stderr", this.run, this.run.meter, null),
+      out: new TermWriter("stdout", this.run, task),
+      err: new TermWriter("stderr", this.run, null),
     };
   }
 
@@ -349,9 +388,11 @@ export class Proc {
         e instanceof AbortLine
       )
         reason = null;
+      else if (e instanceof SignalStop) reason = "interrupted";
       else if (e instanceof LimitStop) reason = e.limit;
       else if (e instanceof NestStop) reason = e.message;
-      else if (e instanceof RangeError) reason = "nesting too deep";
+      else if (limitFromError(e) === "nest") reason = "nesting too deep";
+      else if (limitFromError(e)) reason = "1 MB string";
       else reason = e instanceof Error ? e.message : "error";
     } finally {
       ctx.src = src;
@@ -383,10 +424,17 @@ export class Proc {
       this.note(nestMessage(e.name_, e.limit), true);
       return e.code;
     }
-    if (e instanceof RangeError) {
+    if (e instanceof SignalStop) {
+      // The terminal shows `^C` itself; bash names a core dump for SIGQUIT.
+      if (e.sig === "QUIT") this.ctx.io.err.write("Quit (core dumped)\n");
+      return e.code;
+    }
+    const lim = limitFromError(e);
+    if (lim === "nest") {
       this.note(nestMessage(this.overflowName ?? "function", LIM.depth), true);
       return 1;
     }
+    if (lim) return this.topError(lim);
     if (e instanceof ExitSig) {
       if (this.ctx.src.kind === "prompt") this.run.exited = e.code;
       return e.code;
@@ -542,6 +590,8 @@ export class Proc {
 
   async runNode(n: Node): Promise<number> {
     this.tick();
+    const due = this.interp.sched.due();
+    if (due || this.signals.length) await this.pause(due);
     const ctx = this.ctx;
     ctx.line = this.lineOverride ?? n.line;
     let code: number;
@@ -556,11 +606,88 @@ export class Proc {
             throw new AbortLine(code);
           throw new ExitSig(code);
         }
+      } else if (e instanceof SignalStop && this.ctx.traps[e.sig]) {
+        // A child ended by the signal, and this process has a trap for it.
+        code = e.code;
       } else throw e;
     }
     this.ctx.lastCode = code;
     if (n.type !== "pipeline") this.ctx.pipestatus = [code];
+    if (this.signals.length) await this.dispatchSignals();
     return code;
+  }
+
+  /* ---------- signals and waiting (B6, B7) ---------- */
+
+  /** Called by the scheduler: ends the wait of this process, if it waits. */
+  wake(): void {
+    this.waiter?.();
+  }
+
+  /** The yield check (B7), then the pending signals (B6). */
+  async pause(due?: boolean): Promise<void> {
+    const sched = this.interp.sched;
+    if (due ?? sched.due()) await sched.yield();
+    if (this.signals.length) await this.dispatchSignals();
+  }
+
+  /**
+   * Handles the pending signals: a trap runs its command; `''` ignores; no
+   * trap ends the process (`SignalStop`).
+   */
+  async dispatchSignals(): Promise<void> {
+    while (this.signals.length) {
+      const sig = this.signals.shift() as string;
+      const trap = this.ctx.traps[sig];
+      if (trap === undefined || sig === "KILL") throw new SignalStop(sig);
+      if (trap === "") continue;
+      await this.runTrap(sig, trap, this.ctx.lastCode);
+    }
+  }
+
+  /**
+   * A wait that a signal ends at once. `arm` starts the wait and gives the
+   * function that cancels it; it calls `wake` when the wait is over. Gives
+   * null when the wait was over, or the name of the signal that ended it. A
+   * signal with no trap ends the process (`SignalStop`); a trapped one stays
+   * pending and runs when the command ends.
+   */
+  async interruptible(
+    arm: (wake: () => void) => () => void,
+  ): Promise<string | null> {
+    this.ending();
+    if (this.signals.length) return this.signals[0];
+    let over = false;
+    await new Promise<void>((resolve) => {
+      const cancel = arm(() => {
+        over = true;
+        resolve();
+      });
+      this.waiter = () => {
+        cancel();
+        resolve();
+      };
+    });
+    this.waiter = null;
+    if (over) return null;
+    this.ending();
+    return this.signals[0] ?? null;
+  }
+
+  /** Ends the process with `SignalStop` when a pending signal has no trap. */
+  private ending(): void {
+    for (const sig of this.signals)
+      if (this.ctx.traps[sig] === undefined || sig === "KILL")
+        throw new SignalStop(sig);
+  }
+
+  /** Waits `ms` on the engine clock (B5). Gives the signal that ended it early, or null. */
+  waitTime(ms: number): Promise<string | null> {
+    return this.interruptible((wake) => {
+      const clock = getClock();
+      const id = clock.setTimer(ms, wake);
+      return () => clock.clearTimer(id);
+    });
   }
 
   private async exec(n: Node): Promise<number> {
@@ -925,7 +1052,7 @@ export class Proc {
     } catch (e) {
       if (e instanceof ReturnSig) code = e.code;
       else {
-        if (e instanceof RangeError && this.overflowName === null)
+        if (isStackOverflow(e) && this.overflowName === null)
           this.overflowName = name;
         throw e;
       }

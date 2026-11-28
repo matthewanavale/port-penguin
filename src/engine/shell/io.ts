@@ -40,19 +40,6 @@ export interface Writer {
   readonly tty: boolean;
 }
 
-/** Counts what one input sends to the terminal (D5). */
-export class Meter {
-  lines = 0;
-  bytes = 0;
-  add(text: string): void {
-    for (let i = text.indexOf("\n"); i >= 0; i = text.indexOf("\n", i + 1))
-      this.lines++;
-    this.bytes += text.length;
-    if (this.lines > LIM.lines) throw new LimitStop("10000 output lines");
-    if (this.bytes > LIM.bytes) throw new LimitStop("1 MB of output");
-  }
-}
-
 /** Where the terminal output of one input goes (B15): the `Run` of the input. */
 export interface OutSink {
   emit(chunk: Chunk): void;
@@ -60,22 +47,29 @@ export interface OutSink {
   clear(): void;
 }
 
-/** The terminal side: ordered chunks, the meter, and `allOut`. */
+/** What `allOut` keeps of one input (B12). */
+const ALL_OUT_CAP = 1_048_576;
+
+/** The terminal side: ordered chunks and `allOut`. */
 export class TermWriter implements Writer {
   readonly tty = true;
   constructor(
     private stream: Stream,
     private sink: OutSink,
-    private meter: Meter,
     private task: TaskCtx | null,
   ) {}
   write(text: string, html?: string): void {
     if (text === "" && html === undefined) return;
-    this.meter.add(text);
     const c: Chunk = { stream: this.stream, text };
     if (html !== undefined) c.html = html;
     this.sink.emit(c);
-    if (this.stream === "stdout" && this.task) this.task.allOut += text;
+    // B12: `allOut` keeps at most its first 1 MB per input.
+    if (
+      this.stream === "stdout" &&
+      this.task &&
+      this.task.allOut.length < ALL_OUT_CAP
+    )
+      this.task.allOut += text.slice(0, ALL_OUT_CAP - this.task.allOut.length);
   }
 }
 

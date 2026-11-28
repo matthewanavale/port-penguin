@@ -24,6 +24,7 @@ import { termCols } from "./shell/context";
 import type { Proc } from "./shell/proc";
 import type { CmdFn, Host, IO } from "./shell/io";
 import { LIM } from "./shell/limits";
+import { SIGNALS } from "./shell/sched";
 import {
   canWrite,
   readPath,
@@ -2775,24 +2776,37 @@ const dircolors: CmdFn = (argv, _sh, io) => {
   return 0;
 };
 
-/** `yes` writes until a limit stops it: there is no SIGPIPE in 2a (D20, D5). */
-const yes: CmdFn = (argv, _sh, io) => {
+/**
+ * `yes` writes until a signal or a limit stops it (B8). It writes in blocks
+ * and gives the browser a turn between them (B7), so Ctrl-C reaches it.
+ */
+const yes: CmdFn = async (argv, sh, io) => {
   const text = (argv.length > 1 ? argv.slice(1).join(" ") : "y") + "\n";
-  for (;;) io.out.write(text);
+  const block = text.repeat(Math.max(1, Math.floor(1024 / text.length)));
+  for (;;) {
+    io.out.write(block);
+    await sh.pause();
+  }
 };
 
+const SLEEP_UNIT: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+
+/** `sleep` waits on the engine clock (B5); a signal ends the wait (B6). */
 const sleep: CmdFn = async (argv, sh, io) => {
-  // Run 2b makes `sleep` wait; in 2a it checks its input and returns.
   if (argv.length < 2) return missingOperand(io, "sleep");
+  let seconds = 0;
   for (const a of argv.slice(1)) {
-    if (!/^(\d+\.?\d*|\.\d+)[smhd]?$/.test(a)) {
+    const m = /^(\d+\.?\d*|\.\d+)([smhd]?)$/.exec(a);
+    if (!m) {
       usageError(io, "sleep", `invalid time interval ${qc(a)}`);
       return 1;
     }
+    seconds += parseFloat(m[1]) * SLEEP_UNIT[m[2] || "s"];
   }
-  // Nothing runs at the same time in 2a, so a `>( )` consumer runs here.
+  // A `>( )` consumer of this input runs while it waits.
   await sh.cleanProcs();
-  return 0;
+  const sig = await sh.waitTime(seconds * 1000);
+  return sig === null ? 0 : 128 + (SIGNALS[sig] ?? 0);
 };
 
 /** Names that exist in /usr/bin on Ubuntu but are builtins here. */

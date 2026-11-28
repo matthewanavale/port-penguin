@@ -75,6 +75,8 @@ export interface FakeEngineClock extends Clock {
   advance(ms: number): Promise<void>;
   /** How many timers wait. */
   pending(): number;
+  /** The time of the earliest waiting timer, or null when none waits. */
+  next(): number | null;
 }
 
 /** Lets promise work and one macrotask run (the engine waits on promises). */
@@ -113,6 +115,11 @@ export function makeFakeClock(startMs: number = START_MS): FakeEngineClock {
       timers.delete(id);
     },
     pending: () => timers.size,
+    next() {
+      let at: number | null = null;
+      for (const t of timers.values()) if (at === null || t.at < at) at = t.at;
+      return at;
+    },
     async advance(ms: number) {
       const limit = current + ms;
       await settle();
@@ -126,4 +133,38 @@ export function makeFakeClock(startMs: number = START_MS): FakeEngineClock {
       await settle();
     },
   };
+}
+
+/**
+ * Runs `p` (an input of the engine) to its end: whenever the engine waits and a
+ * timer is set, moves the clock to that timer. For tests whose command only
+ * sleeps (a `sleep` between two steps). It fails when the engine waits with no
+ * timer (a command that waits for the keyboard, or a deadlock), so a test never
+ * hangs.
+ */
+export async function drive<T>(
+  p: Promise<T>,
+  clock: FakeEngineClock,
+): Promise<T> {
+  let done = false;
+  void p.then(
+    () => (done = true),
+    () => (done = true),
+  );
+  for (let i = 0; i < 100_000; i++) {
+    await settle();
+    if (done) return await p;
+    const at = clock.next();
+    if (at === null) {
+      // The engine may still run (a yield); give it a few turns before failing.
+      for (let k = 0; k < 20 && !done && clock.next() === null; k++)
+        await settle();
+      if (done) return await p;
+      if (clock.next() === null)
+        throw new Error("the engine waits and no timer is set");
+      continue;
+    }
+    await clock.advance(Math.max(0, at - clock.now()));
+  }
+  throw new Error("the engine did not finish");
 }

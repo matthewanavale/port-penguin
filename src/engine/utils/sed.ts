@@ -3,7 +3,7 @@
 import { get } from "../paths";
 import { openForWrite, writeText } from "../shell/redirect";
 import type { CmdFn, IO } from "../shell/io";
-import type { Proc } from "../shell/proc";
+import { CallSteps } from "../shell/limits";
 import { errOut, getopt, readOperand, splitLines } from "./text";
 
 class SedError extends Error {}
@@ -484,7 +484,6 @@ function runSed(
   startLine: number,
   io: IO,
   isLastFile: boolean,
-  sh: Proc,
 ): { out: string; exit: number | null; lines: number } {
   const nl = o.zero ? "\0" : "\n";
   const lines =
@@ -496,6 +495,8 @@ function runSed(
   let pos = 0;
   let exit: number | null = null;
   const queued: string[] = [];
+  // B8: the steps of this one call (it cannot yield).
+  const steps = new CallSteps();
   const isLast = () => pos >= lines.length && isLastFile;
   const emit = (s: string, last: boolean) => {
     out += s + (last && noFinalNl ? "" : nl);
@@ -517,7 +518,7 @@ function runSed(
     let deleted = false;
     let quit = false;
     cycle: while (pc < cmds.length) {
-      sh.tick();
+      steps.tick();
       const c = cmds[pc];
       const matches = (a: Addr): boolean =>
         a.k === "n"
@@ -825,7 +826,7 @@ const sed: CmdFn = async (argv, sh, io) => {
           code = 2;
           continue;
         }
-        const r = runSed(cmds, n.x, o, 0, io, true, sh);
+        const r = runSed(cmds, n.x, o, 0, io, true);
         if (inPlace) {
           const slash = f.lastIndexOf("/");
           const b = inPlace.includes("*")
@@ -868,7 +869,7 @@ const sed: CmdFn = async (argv, sh, io) => {
     }
     if (o.separate) {
       for (let k = 0; k < texts.length; k++) {
-        const r = runSed(cmds, texts[k], o, 0, io, true, sh);
+        const r = runSed(cmds, texts[k], o, 0, io, true);
         io.out.write(r.out);
         if (r.exit !== null) return r.exit;
       }
@@ -879,7 +880,7 @@ const sed: CmdFn = async (argv, sh, io) => {
           k < texts.length - 1 && t !== "" && !t.endsWith("\n") ? t + "\n" : t,
         )
         .join("");
-      const r = runSed(cmds, joined, o, 0, io, true, sh);
+      const r = runSed(cmds, joined, o, 0, io, true);
       io.out.write(r.out);
       if (r.exit !== null) return r.exit;
     }

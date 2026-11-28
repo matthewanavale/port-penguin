@@ -65,7 +65,14 @@ const $ = (id: string) => document.getElementById(id) as HTMLElement;
 
 // Old order: intro, then the task setup (its alert), then save.
 const first = intro(!engine.resumed);
+// While `~/.bashrc` runs there is no terminal yet: Ctrl-C stops it (B15).
+const stopRc = (e: KeyboardEvent): void => {
+  if (e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === "c")
+    engine.signal("INT");
+};
+document.addEventListener("keydown", stopRc);
 first.push(...(await engine.start()));
+document.removeEventListener("keydown", stopRc);
 
 const panel = createPanel({
   engine,

@@ -363,6 +363,50 @@ describe("createTerminal (AC8, AC9)", () => {
     ]);
   });
 
+  it("Ctrl-C during sleep 100 echoes ^C and ends the command at once (B6)", async () => {
+    const { x, engine, execute } = await setup();
+    x.dataHandler?.("sleep 100\r");
+    await flush();
+    expect(engine.busy()).toBe(true);
+    const before = x.written.length;
+    x.dataHandler?.("\x03");
+    await flush();
+    await flush();
+    expect(x.written.slice(before)).toContain("^C\r\n");
+    expect(engine.busy()).toBe(false);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(engine.state.lastCode).toBe(130);
+  });
+
+  it("Ctrl-Z and Ctrl-\\ echo ^Z and ^\\ and send TSTP and QUIT (B6)", async () => {
+    const { x, engine } = await setup();
+    const signal = vi.spyOn(engine, "signal");
+    for (const [key, echo, sig] of [
+      ["\x1a", "^Z", "TSTP"],
+      ["\x1c", "^\\", "QUIT"],
+    ]) {
+      x.dataHandler?.("sleep 100\r");
+      await flush();
+      const before = x.written.length;
+      x.dataHandler?.(key);
+      await flush();
+      await flush();
+      expect(x.written.slice(before)).toContain(echo);
+      expect(signal).toHaveBeenLastCalledWith(sig);
+    }
+  });
+
+  it("a signal key empties the keys typed ahead (B24)", async () => {
+    const { x, execute } = await setup();
+    x.dataHandler?.("sleep 100\r");
+    await flush();
+    x.dataHandler?.("echo ahead\r");
+    x.dataHandler?.("\x03");
+    await flush();
+    await flush();
+    expect(execute.mock.calls.map((c) => c[0])).toEqual(["sleep 100"]);
+  });
+
   it("extra key Tab completes the line", async () => {
     const { x, t, execute } = await setup();
     await send(x, "pw");

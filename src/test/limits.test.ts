@@ -1,4 +1,5 @@
-// AC5: the limits of D5, D6, D19, D21, and D20. At a limit the input stops,
+// AC5, AC9: the limits of D5 (changed by B8), D6, D19, D21, and D20, and the
+// width cap of B18. At a limit the input stops,
 // the terminal shows `^C` and one line, and `$?` is 130. The nesting limits
 // print one line and exit with 1 (the parser limit with 2). No JavaScript
 // error reaches the screen.
@@ -30,15 +31,52 @@ async function expectStopped(input: string, limit?: string) {
   expect(r.text).not.toMatch(/RangeError|TypeError|undefined/);
 }
 
+/** Real time passes: the engine yields through real macrotasks (B7). */
+const real = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Starts an endless input, lets it run `ms` of real time, then sends Ctrl-C. */
+async function runUntilCtrlC(input: string, ms: number) {
+  const p = sh.run(input);
+  await real(ms);
+  sh.engine.signal("INT");
+  return await p;
+}
+
+describe("B8: no step or output limit at the prompt", () => {
+  it("runs a loop past 200000 steps and ends by itself", async () => {
+    // Each iteration is three steps or more: 80000 iterations pass the old limit.
+    const r = await sh.run(
+      "i=0; while [ $i -lt 80000 ]; do i=$((i+1)); done; echo $i",
+    );
+    expect(r.out).toBe("80000\n");
+    expect(r.text).not.toMatch(STOPPED);
+    expect(r.code).toBe(0);
+  }, 60_000);
+
+  it("runs yes past 10000 lines until Ctrl-C, with no limit line", async () => {
+    const r = await runUntilCtrlC("yes", 20);
+    expect(r.code).toBe(130);
+    expect(r.out.split("\n").length).toBeGreaterThan(10_000);
+    expect(r.text).not.toMatch(STOPPED);
+  });
+
+  it("does not stop a script or a function that loops", async () => {
+    await sh.run("printf 'while :; do :; done\n' > loop.sh");
+    for (const input of ["bash ./loop.sh", "f(){ while :; do :; done; }; f"]) {
+      const r = await runUntilCtrlC(input, 40);
+      expect(r.code, input).toBe(130);
+      expect(r.text, input).not.toMatch(STOPPED);
+    }
+  });
+
+  it("has no output limit for a long command", async () => {
+    const r = await sh.run("seq 1 100000 | wc -l");
+    expect(r.out).toBe("100000\n");
+  });
+});
+
 describe("D5 limits", () => {
-  it("stops an endless loop at 200000 steps", async () => {
-    await expectStopped("while true; do :; done", "200000 steps");
-  });
-
-  it("stops seq 1 1000000000 at the output limit", async () => {
-    await expectStopped("seq 1 1000000000", "10000 output lines");
-  });
-
   it("stops a huge brace expansion", async () => {
     await expectStopped("echo {1..100000000}");
   });
@@ -60,7 +98,7 @@ describe("D5 limits", () => {
   });
 
   it("keeps working after a limit", async () => {
-    await sh.run("while true; do :; done");
+    await sh.run("x=a; while true; do x=$x$x; done");
     expect((await sh.run("echo ok")).out).toBe("ok\n");
   });
 
@@ -250,5 +288,41 @@ describe("storage (D21)", () => {
       /port-penguin: progress could not be saved \(.*quota full.*\)/,
     );
     expect(r.text.match(/progress could not be saved/g)?.length).toBe(1);
+  });
+});
+
+describe("B18: field widths and JavaScript errors", () => {
+  it("stops printf '%999999999d' at the 1 MB string line", async () => {
+    await expectStopped("printf '%999999999d' 1", "1 MB string");
+  });
+
+  it("stops a huge printf precision and a huge * width", async () => {
+    await expectStopped("printf '%.999999999f' 1", "1 MB string");
+    await expectStopped("printf '%*d' 999999999 1", "1 MB string");
+  });
+
+  it("stops awk printf and sprintf with a huge width", async () => {
+    await expectStopped(
+      "awk 'BEGIN{printf \"%999999999d\", 1}'",
+      "1 MB string",
+    );
+    await expectStopped(
+      "awk 'BEGIN{x = sprintf(\"%999999999d\", 1)}'",
+      "1 MB string",
+    );
+  });
+
+  it("stops date +%999999999Y", async () => {
+    await expectStopped("date +%999999999Y", "1 MB string");
+  });
+
+  it("allows a width up to 1000000", async () => {
+    const r = await sh.run("printf '%1000000s' x | wc -c");
+    expect(r.out).toBe("1000000\n");
+  });
+
+  it("never shows the nesting text for a width stop", async () => {
+    const r = await sh.run("printf '%999999999d' 1");
+    expect(r.text).not.toMatch(/nesting too deep/);
   });
 });

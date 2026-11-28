@@ -8,7 +8,7 @@ import type { Context } from "./context";
 import { ExitSig, BreakSig, ContinueSig, ReturnSig, AbortLine } from "./proc";
 import type { Proc } from "./proc";
 import type { CmdFn, IO } from "./io";
-import { LIM, NestStop } from "./limits";
+import { LIM, NestStop, checkWidth } from "./limits";
 import { parseFull } from "./parser";
 import { readText } from "./redirect";
 
@@ -273,6 +273,8 @@ function formatOnce(
     let width = m[2] === "*" ? Number(next() ?? 0) : m[2] ? Number(m[2]) : 0;
     const hasPrec = m[0].includes(".");
     let prec = m[3] === "*" ? Number(next() ?? 0) : m[3] ? Number(m[3]) : 0;
+    checkWidth(Math.abs(width));
+    checkWidth(prec);
     let left = flags.includes("-");
     if (width < 0) {
       left = true;
@@ -1681,6 +1683,8 @@ const trap: Builtin = (sh, argv, io) => {
     "TERM",
     "HUP",
     "QUIT",
+    "TSTP",
+    "CONT",
     "USR1",
     "USR2",
   ];

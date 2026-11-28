@@ -5,6 +5,7 @@ import { clockNow } from "../clock";
 import { get } from "../paths";
 import { writeText } from "../shell/redirect";
 import { Input } from "../shell/io";
+import { CallSteps, checkWidth } from "../shell/limits";
 import type { CmdFn, IO, Writer } from "../shell/io";
 import type { Proc } from "../shell/proc";
 import { toJsRegex } from "./sed";
@@ -106,6 +107,8 @@ function sprintf(
       break;
     }
     let w = width === "" ? 0 : parseInt(width, 10);
+    checkWidth(w);
+    checkWidth(prec);
     if (w < 0) {
       flags += "-";
       w = -w;
@@ -1028,6 +1031,8 @@ class StepWriter implements Writer {
 }
 
 class Runtime {
+  /** B8: the steps of this one call (it cannot yield). */
+  budget = new CallSteps();
   globals = new Map<string, Val>();
   arrays = new Map<string, AwkArray>();
   frames: Frame[] = [];
@@ -1723,7 +1728,7 @@ class Runtime {
       this.flushOut(k.startsWith("|") ? k.slice(1) : k);
   }
   exec(s: Stmt): void {
-    this.sh.tick();
+    this.budget.tick();
     switch (s.t) {
       case "expr":
         this.eval(s.e);

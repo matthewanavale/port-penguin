@@ -3,6 +3,7 @@
 // exported for `touch -d` and `touch -t` (item 12).
 import { clockNow } from "../clock";
 import type { CmdFn } from "../shell/io";
+import { checkWidth } from "../shell/limits";
 import { errOut, getopt, tryHelp } from "./text";
 
 const DAYS = [
@@ -65,6 +66,7 @@ export function formatDate(ms: number, fmt: string): string {
     while ("-_0^#".includes(fmt[j]) && j < fmt.length - 1) flag += fmt[j++];
     let width = "";
     while (/\d/.test(fmt[j] ?? "")) width += fmt[j++];
+    if (width) checkWidth(parseInt(width, 10));
     const c = fmt[j];
     const num = (n: number, w: number, padc = "0"): string => {
       if (flag.includes("-")) return String(n);

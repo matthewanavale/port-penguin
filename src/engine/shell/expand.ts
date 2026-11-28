@@ -14,7 +14,7 @@ import {
   quotePattern,
   suffixMatch,
 } from "./glob";
-import { LIM, LimitStop } from "./limits";
+import { CallSteps, LIM, LimitStop } from "./limits";
 
 /** An expansion that stops the command. `fatal` ends a non-interactive shell. */
 export class ExpError extends Error {
@@ -35,8 +35,6 @@ export interface ExpEnv {
   procSubst(dir: "<" | ">", script: Script): Promise<string>;
   /** Prints an error line with the script prefix. */
   fail(msg: string): void;
-  /** Counts one step against the D5 meter (long pattern work). */
-  tick?(): void;
 }
 
 interface Seg {
@@ -846,9 +844,11 @@ export class Expander {
       const i = s.indexOf(lit);
       return i < 0 ? s : s.slice(0, i) + r + s.slice(i + lit.length);
     }
+    // B8: the pattern work of one expansion cannot yield; it has its own budget.
+    const steps = new CallSteps();
     const longestAt = (i: number): number => {
       for (let j = s.length; j > i; j--) {
-        this.env.tick?.();
+        steps.tick();
         if (matchPattern(s.slice(i, j), pat, ext)) return j;
       }
       return -1;
@@ -859,7 +859,7 @@ export class Expander {
     }
     if (op === "/%") {
       for (let i = 0; i < s.length; i++) {
-        this.env.tick?.();
+        steps.tick();
         if (matchPattern(s.slice(i), pat, ext))
           return s.slice(0, i) + fill(s.slice(i));
       }

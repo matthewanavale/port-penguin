@@ -45,6 +45,13 @@ export interface TerminalOptions {
   onResult(result: ExecResult): void;
 }
 
+/** The keys that send a signal to the running job (B6), and what the terminal echoes. */
+const SIGNAL_KEYS: Record<string, { sig: string; echo: string }> = {
+  "\x03": { sig: "INT", echo: "^C" },
+  "\x1a": { sig: "TSTP", echo: "^Z" },
+  "\x1c": { sig: "QUIT", echo: "^\\" },
+};
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
@@ -274,7 +281,10 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
   const run = (actions: EditorAction[]): string =>
     actions.map((a) => runOne(a)).join("");
 
-  /** True while an input runs: keys that arrive then wait (B15, this phase has no keyboard reads). */
+  /**
+   * True while an input runs. Ctrl-C, Ctrl-Z, and Ctrl-\\ then go to the job as
+   * signals (B6); other keys wait (the keyboard reads come in a later phase).
+   */
   let running = false;
   const waiting: string[] = [];
 
@@ -347,6 +357,14 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
 
   term.onData((data) => {
     if (running) {
+      const key = SIGNAL_KEYS[data];
+      if (key) {
+        // As a tty does, the signal key empties the type-ahead (B24).
+        waiting.length = 0;
+        term.write(key.echo + "\r\n");
+        engine.signal(key.sig);
+        return;
+      }
       waiting.push(data);
       return;
     }

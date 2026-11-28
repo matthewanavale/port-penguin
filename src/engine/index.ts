@@ -103,6 +103,13 @@ export interface Engine {
   start(): Promise<OutLine[]>;
   /** Runs one complete input. An incomplete input runs nothing and keeps the `> ` prompt. */
   execute(line: string): Promise<ExecResult>;
+  /**
+   * Sends a signal to the foreground job while an input runs (B6): `INT` for
+   * Ctrl-C, `TSTP` for Ctrl-Z, `QUIT` for Ctrl-\\. It does nothing when no input runs.
+   */
+  signal(sig: string): void;
+  /** True while a foreground job runs, and while `~/.bashrc` runs in `start()` (B15). */
+  busy(): boolean;
   /** True when `text` is a whole input; false when bash would show `> ` (AC1). */
   isComplete(text: string): boolean;
   /** Ctrl-C at the prompt or at `> `: drops the kept input and sets `$?` to 130. */
@@ -217,6 +224,10 @@ export function createEngine(opts: EngineOptions): Engine {
   const pctx = new PromptContext(() => s);
   const blank = (): Ctx => ({ line: "", segs: [], ranExec: null, allOut: "" });
   const interp = new Interp(host);
+  // B10: the ids of the processes start above the largest id of `S.procs`.
+  interp.sched.startPids(s.procs.reduce((m, p) => Math.max(m, p.pid), 0));
+  /** The input that runs now (B6): the foreground job. */
+  let fg: InputRun | null = null;
   /** The prompt shell: the root process. Its output run changes with each input. */
   const shell = interp.proc(pctx, new InputRun(blank()));
   /** Variables that `~/.bashrc` set. They are not saved: it sets them again at start. */
@@ -260,8 +271,10 @@ export function createEngine(opts: EngineOptions): Engine {
   /** Runs `~/.bashrc` silently under the D19 guard. Gives the dim line, if any. */
   async function runRc(): Promise<OutLine[]> {
     rcDone = true;
-    // Its output is discarded: this run has no `onOutput`.
-    shell.attach(new InputRun(blank()));
+    // Its output is discarded: this run has no `onOutput`. Ctrl-C stops it (B15).
+    const rcRun = new InputRun(blank());
+    shell.attach(rcRun);
+    fg = rcRun;
     const before = nul(pctx.env);
     const text = readText(HOME + "/.bashrc");
     let reason: string | null = null;
@@ -293,6 +306,7 @@ export function createEngine(opts: EngineOptions): Engine {
       }
       setMark(false);
     }
+    fg = null;
     rcOwned = nul();
     for (const [k, v] of Object.entries(pctx.env))
       if (before[k] === undefined) rcOwned[k] = v;
@@ -439,6 +453,14 @@ export function createEngine(opts: EngineOptions): Engine {
 
     isComplete,
 
+    signal(sig: string) {
+      if (fg) interp.sched.signalRun(fg, sig);
+    },
+
+    busy() {
+      return fg !== null;
+    },
+
     cancelInput() {
       use();
       pending = false;
@@ -480,6 +502,7 @@ export function createEngine(opts: EngineOptions): Engine {
       };
       const run = new InputRun(task, opts.onOutput);
       shell.attach(run);
+      fg = run;
       let crashed: string | null = null;
       try {
         await shell.runLine(lineText);
@@ -489,6 +512,7 @@ export function createEngine(opts: EngineOptions): Engine {
         console.error("port-penguin: simulator error:", e);
         pctx.lastCode = 1;
       }
+      fg = null;
       const chunks = run.chunks.slice();
       if (crashed !== null)
         lines.push(
