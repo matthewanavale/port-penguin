@@ -711,3 +711,57 @@ describe("background output and saving (B12, B13)", () => {
     expect(r.code).toBe(0);
   });
 });
+
+describe("each shell has its own job table (B9, B14)", () => {
+  it("a script, bash -c, and a subshell do not see the prompt shell's jobs", async () => {
+    await sh.run("sleep 50 &");
+    await sh.run("echo 'jobs; echo [$?]' > j.sh");
+    expect((await sh.run("bash j.sh")).out).toBe("[0]\n");
+    expect((await sh.run("bash -c 'jobs; echo [$?]'")).out).toBe("[0]\n");
+    expect((await sh.run("(jobs; echo [$?])")).out).toBe("[0]\n");
+    expect((await sh.run("echo $(jobs)")).out).toBe("\n");
+    // The prompt shell still sees its job.
+    expect((await sh.run("jobs")).out).toContain("sleep 50 &");
+  });
+
+  it("wait and %N in a subshell or a script do not reach the prompt shell's jobs", async () => {
+    await sh.run("sleep 50 &");
+    const a = await sh.run("(wait; echo done-$?)");
+    expect(a.out).toBe("done-0\n");
+    const b = await sh.run("(wait %1)");
+    expect(b.err).toContain("%1: no such job");
+    expect(b.code).toBe(127);
+    const c = await sh.run("bash -c 'kill %1'");
+    expect(c.err).toContain("%1: no such job");
+    expect((await sh.run("jobs")).out).toContain("Running");
+  });
+
+  it("a nested shell has its own table and numbers", async () => {
+    await sh.run("sleep 50 &");
+    await sh.run("bash");
+    expect((await sh.run("jobs")).out).toBe("");
+    const r = await sh.run("sleep 60 &");
+    expect(r.err).toMatch(/^\[1\] \d+\n$/);
+    const w = await sh.run("wait %2");
+    expect(w.err).toContain("%2: no such job");
+    await sh.run("exit");
+    const j = (await sh.run("jobs")).out;
+    expect(j).toContain("sleep 50 &");
+    expect(j).not.toContain("sleep 60");
+  });
+
+  it("a job of a subshell is a live process that ps and kill PID still see", async () => {
+    await sh.run("(sleep 50 &)");
+    const ps = (await sh.run("ps")).out;
+    expect(ps).toContain("sleep");
+    const pid = /(\d+) .*sleep/.exec(ps)?.[1];
+    expect(pid).toBeDefined();
+    await sh.run(`kill ${pid}`);
+    expect((await sh.run("ps")).out).not.toContain("sleep");
+  });
+
+  it("a pipeline stage shares the table of its shell", async () => {
+    await sh.run("sleep 50 &");
+    expect((await sh.run("jobs | cat")).out).toContain("sleep 50 &");
+  });
+});

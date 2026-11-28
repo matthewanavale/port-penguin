@@ -3213,7 +3213,7 @@ const ps: CmdFn = (argv, sh, io) => {
   const args = argv.slice(1);
   const full = args.some((a) => /^(aux|-e|-ef|-aux|-A|ax)$/.test(a));
   // B10: the processes of the jobs come after the `S.procs` rows, in PID order.
-  const live = sh.interp.jobs.liveProcs();
+  const live = sh.interp.liveProcs();
   if (!full)
     return line(
       io,
@@ -3255,7 +3255,7 @@ const clockText = (): string => clockDate().toTimeString().slice(0, 8);
 
 const top: CmdFn = (_argv, sh, io) => {
   const ps2 = S.procs.slice().sort((a, b) => b.cpu - a.cpu);
-  const live = sh.interp.jobs.liveProcs();
+  const live = sh.interp.liveProcs();
   const load = (ps2.reduce((s, p) => s + p.cpu, 0) / 100).toFixed(2);
   return line(
     io,
@@ -3294,7 +3294,7 @@ const pkill: CmdFn = (argv, sh, io) => {
   // B10: the processes of the jobs, by name; the signal is TERM unless one is named.
   const named = args.find((a) => /^-[A-Za-z0-9]+$/.test(a));
   const sig = (named && signalName(named.slice(1))) || "TERM";
-  const liveHit = sh.interp.jobs.liveProcs().filter((p) => p.name.includes(nm));
+  const liveHit = sh.interp.liveProcs().filter((p) => p.name.includes(nm));
   for (const p of liveHit) {
     const proc = p.job.live().find((x) => x.pid === p.pid);
     signalJob(sh, p.job, sig, proc === p.job.procs[0] ? undefined : proc);

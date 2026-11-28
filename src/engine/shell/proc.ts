@@ -20,6 +20,7 @@ import type {
 import { BUILTINS, KEYWORDS, unaryTest, intCompare } from "./builtins";
 import { getClock } from "../clock";
 import { Job } from "./jobs";
+import type { JobTable } from "./jobs";
 import { Context } from "./context";
 import type { SrcInfo } from "./context";
 import { ExpError, Expander } from "./expand";
@@ -173,6 +174,14 @@ interface ProcFile {
   ctx: Context;
 }
 
+/** B14: a bare `bash` asks the engine to start a child prompt shell after the input. */
+export interface ShellReq {
+  /** `--norc`: do not run `~/.bashrc` in the child. */
+  norc: boolean;
+  /** Options from the command line (`-x`, `-o name`). */
+  opts: Record<string, boolean>;
+}
+
 /** What a foreground chunk list keeps of one input (B15). */
 const CHUNK_CAP = 1_048_576;
 
@@ -188,6 +197,8 @@ export class Run implements OutSink {
   procs = new Set<Proc>();
   /** Set when `exit` ran at the prompt. */
   exited: number | null = null;
+  /** Set when the whole input was one bare `bash` (B14): the engine starts the child shell. */
+  shellReq: ShellReq | null = null;
   steps = 0;
   /** B8: the shell has no step limit; only `~/.bashrc` sets one (D19). */
   stepLimit: number;
@@ -299,6 +310,11 @@ export class Proc {
   lineOverride: number | null = null;
   /** The job this process belongs to (B9). */
   job: Job | null = null;
+  /** The process that started this one (a child shares its job table, or has its own). */
+  private parent: Proc | null = null;
+  /** True for a child that has a job table of its own (B9, B14). */
+  private ownJobs = false;
+  private jobTable: JobTable | null = null;
   /** Pending signals (B6): they run or end the process at the next safe point. */
   signals: string[] = [];
   /** How many child processes this process waits on now. */
@@ -329,6 +345,22 @@ export class Proc {
 
   get host(): Host {
     return this.interp.host;
+  }
+
+  /**
+   * The job table of this shell (B9, B14). A subshell, `$( )`, a script, and a
+   * background job have a table of their own; a pipeline stage shares its
+   * parent's. The prompt shell's table is set by the engine.
+   */
+  get jobs(): JobTable {
+    if (!this.jobTable) {
+      if (this.ownJobs) this.jobTable = this.interp.newTable();
+      else this.jobTable = this.parent ? this.parent.jobs : this.interp.jobs;
+    }
+    return this.jobTable;
+  }
+  set jobs(t: JobTable) {
+    this.jobTable = t;
   }
   /** The standard streams of this process (they live in its context). */
   get io(): IO {
@@ -363,7 +395,7 @@ export class Proc {
    * A child process on `ctx`. It starts with the counters of this process
    * (the D6 limits go on through the chain) and it shares the `Run`.
    */
-  spawn(ctx: Context, run: Run = this.run): Proc {
+  spawn(ctx: Context, run: Run = this.run, ownJobs = false): Proc {
     if (this.chain >= LIM.depth) {
       const frames = this.ctx.frames;
       const name = frames.length
@@ -375,6 +407,8 @@ export class Proc {
     for (const sig of Object.keys(SIGNALS))
       if (ctx.traps[sig]) delete ctx.traps[sig];
     const c = new Proc(this.interp, run, ctx);
+    c.parent = this;
+    c.ownJobs = ownJobs;
     c.chain = this.chain + 1;
     c.depth = this.depth;
     c.nest = this.nest;
@@ -481,7 +515,7 @@ export class Proc {
     const notify = this.ctx.interactive && this.ctx.src.kind === "prompt";
     const job = new Job(n.text ?? "", notify);
     const jrun = new Run(interp.bgTask, interp.output ?? this.run.onOutput);
-    const child = this.spawn(this.ctx.copy(), jrun);
+    const child = this.spawn(this.ctx.copy(), jrun, true);
     // The child is a process of the new job only.
     if (child.job) child.job.procs = child.job.procs.filter((x) => x !== child);
     child.attach(jrun);
@@ -496,7 +530,7 @@ export class Proc {
     job.add(child);
     job.run = jrun;
     job.onDone = interp.onJobEnd ?? null;
-    interp.jobs.add(job);
+    this.jobs.add(job);
     this.ctx.lastBg = String(child.pid);
     this.ctx.pipestatus = [0];
     if (notify) this.ctx.io.err.write(`[${job.n}] ${child.pid}\n`);
@@ -594,7 +628,7 @@ export class Proc {
         if (job && !job.fg && job.state === "running") {
           job.stop();
           job.dirty = true;
-          this.interp.jobs.touch(job);
+          (job.table ?? this.jobs).touch(job);
           await caller.gate();
         }
         const ac = new AbortController();
@@ -805,7 +839,7 @@ export class Proc {
     const sub = this.ctx.copy();
     const io: IO = { in: this.ctx.io.in, out: buf, err: this.ctx.io.err };
     sub.io = io;
-    const child = this.spawn(sub);
+    const child = this.spawn(sub, this.run, true);
     child.nest++;
     let code: number;
     try {
@@ -838,7 +872,7 @@ export class Proc {
       const buf = new BufWriter();
       const sub = this.ctx.copy();
       sub.io = { in: this.ctx.io.in, out: buf, err: this.ctx.io.err };
-      const child = this.spawn(sub);
+      const child = this.spawn(sub, this.run, true);
       child.nest++;
       try {
         await this.within(child, () => child.runList(script.items));
@@ -869,7 +903,7 @@ export class Proc {
           out: this.ctx.io.out,
           err: this.ctx.io.err,
         };
-        const child = this.spawn(c);
+        const child = this.spawn(c, this.run, true);
         try {
           await this.within(child, () => child.runList(p.script.items));
         } catch (e) {
@@ -1220,7 +1254,7 @@ export class Proc {
 
   private async subshell(body: Node[]): Promise<number> {
     const sub = this.ctx.copy();
-    const child = this.spawn(sub);
+    const child = this.spawn(sub, this.run, true);
     let code: number;
     try {
       code = await this.within(child, () => child.runList(body));
@@ -1861,7 +1895,7 @@ export class Proc {
     name: string,
   ): Promise<number> {
     if (this.scripts >= LIM.scripts) throw new NestStop(name, LIM.scripts);
-    const proc = this.spawn(child);
+    const proc = this.spawn(child, this.run, true);
     proc.scripts = this.scripts + 1;
     proc.nest = this.nest + 1;
     return await this.within(proc, async () => {

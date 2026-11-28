@@ -54,6 +54,8 @@ export class Job {
   disowned = false;
   /** True for a job that prints its state changes (job control is on, B9). */
   notify: boolean;
+  /** The table that holds the job: the table of the shell that started it (B9, B14). */
+  table: JobTable | null = null;
   /** What waits for a change of state (`fg`, `wait`). */
   private waiters = new Set<() => void>();
   /** The state at the last change, for the order of `%+` and `%-`. */
@@ -133,12 +135,14 @@ export class Job {
   }
 }
 
-/** The jobs of the prompt shell. */
+/** The jobs of one shell: the prompt shell, a nested shell, a subshell, or a script (B9, B14). */
 export class JobTable {
   jobs: Job[] = [];
   /** Jobs that `disown` took away: they still end with the shell (B11). */
   away: Job[] = [];
   private clock = 0;
+  /** The set of tables that hold a live job; `add` puts this table in it (B10). */
+  registry: Set<JobTable> | null = null;
   /** The input number at which `exit` warned about stopped jobs (B9). */
   warned = -1;
   /** A number for each input, so a second `exit` follows the first. */
@@ -151,6 +155,8 @@ export class JobTable {
     let n = 1;
     while (this.jobs.some((j) => j.n === n)) n++;
     job.n = n;
+    job.table = this;
+    this.registry?.add(this);
     job.stamp = ++this.clock;
     this.jobs.push(job);
     return job;

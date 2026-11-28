@@ -23,8 +23,10 @@ import {
 } from "./shell/context";
 import { Interp } from "./shell/interp";
 import { Job, jobLine } from "./shell/jobs";
+import type { JobTable } from "./shell/jobs";
 import type { JobNotice } from "./shell/jobs";
 import { Run as InputRun, SignalStop } from "./shell/proc";
+import type { Proc, ShellReq } from "./shell/proc";
 import type { UnitKind } from "./shell/proc";
 import type { ReadRequest, Chunk, Ctx, OutputSink } from "./shell/io";
 import { parseFull } from "./shell/parser";
@@ -184,6 +186,24 @@ class PromptContext extends Context {
   }
 }
 
+/** What a nested shell keeps of its parent, to give back at `exit` (B14). */
+interface ShellSnap {
+  cwd: string;
+  oldpwd: string;
+  lastCode: number;
+  env: Record<string, string>;
+  exported: Set<string>;
+  vars: Context["vars"];
+  functions: Context["functions"];
+  aliases: Context["aliases"];
+  options: Context["options"];
+  traps: Context["traps"];
+  /** The variables `~/.bashrc` set in the parent (not saved). */
+  rcOwned: Record<string, string>;
+  /** The job table of the parent shell. */
+  jobs: JobTable;
+}
+
 /** A word after which bash joins the next history line with a space, not `; `. */
 const OPENER = /(^|[\s;&|({])(then|do|else|elif|if|while|until|\{|\()$|[;&|]$/;
 
@@ -245,6 +265,14 @@ export function createEngine(opts: EngineOptions): Engine {
   let fg: InputRun | null = null;
   /** The prompt shell: the root process. Its output run changes with each input. */
   let shell = interp.proc(pctx, new InputRun(blank()));
+  /** B14: the parents of the active nested shells, outermost first. */
+  const nested: ShellSnap[] = [];
+  /** A new root process for the prompt shell; it keeps the job table of the shell. */
+  const newRoot = (): Proc => {
+    const p = interp.proc(pctx, new InputRun(blank()));
+    p.jobs = shell.jobs;
+    return p;
+  };
   // B12: what a background job does goes into the check of the input that runs
   // when it happens, or into the check after the next input.
   const pendingTask: Ctx = blank();
@@ -311,9 +339,9 @@ export function createEngine(opts: EngineOptions): Engine {
   function announceStopped(run: InputRun, job: Job): void {
     run.emit({
       stream: "stderr",
-      text: jobLine(job, interp.jobs.mark(job)) + "\n",
+      text: jobLine(job, shell.jobs.mark(job)) + "\n",
     });
-    interp.jobs.extra.push({ text: "", say: `Job ${job.n} stopped` });
+    shell.jobs.extra.push({ text: "", say: `Job ${job.n} stopped` });
   }
 
   /** The status and the signal of a unit that ended well (a number, or the stages of a pipeline). */
@@ -336,7 +364,7 @@ export function createEngine(opts: EngineOptions): Engine {
   function stopForeground(): void {
     const run = fg;
     if (!run) return;
-    const table = interp.jobs;
+    const table = shell.jobs;
     if (run.fgJob) {
       const j = run.fgJob;
       j.stop();
@@ -360,7 +388,7 @@ export function createEngine(opts: EngineOptions): Engine {
     job.stop();
     announceStopped(run, job);
     // The next input needs a root process of its own; this one belongs to the job.
-    if (kind === "cmd") shell = interp.proc(pctx, new InputRun(blank()));
+    if (kind === "cmd") shell = newRoot();
     const end = (code: number, sig: string | null): void => {
       // A unit that ran on the baton of the root gives it back when it ends.
       if (kind !== "stages") interp.sched.release();
@@ -381,19 +409,26 @@ export function createEngine(opts: EngineOptions): Engine {
   }
 
   /**
-   * Ends every job, the foreground one too, and forgets the table (B11, B15).
-   * KILL runs no trap and prints no notice; HUP is what exit sends.
+   * Ends jobs and forgets them (B11, B15). KILL runs no trap and prints no
+   * notice; HUP is what `exit` sends. `all` ends the jobs of every shell, the
+   * foreground one too (a panel action, B15); `current` ends only the jobs of
+   * the shell that leaves (`exit` of a nested shell, B14).
    */
-  async function endJobs(sig: "KILL" | "HUP"): Promise<void> {
+  async function endJobs(
+    sig: "KILL" | "HUP",
+    scope: "all" | "current" = "all",
+  ): Promise<void> {
     const sched = interp.sched;
-    const all = interp.jobs.active();
-    if (fg) sched.signalRun(fg, sig);
+    const tables: JobTable[] =
+      scope === "all" ? [...interp.tables, shell.jobs] : [shell.jobs];
+    const all = [...new Set(tables.flatMap((t) => t.active()))];
+    if (scope === "all" && fg) sched.signalRun(fg, sig);
     for (const j of all)
       for (const p of j.live()) {
         sched.deliver(p, sig);
         p.cont();
       }
-    await fgDone;
+    if (scope === "all") await fgDone;
     for (const j of all)
       while (j.state !== "done")
         await new Promise<void>((resolve) => {
@@ -404,10 +439,25 @@ export function createEngine(opts: EngineOptions): Engine {
             resolve();
           }
         });
-    interp.jobs.clear();
-    pendingTask.segs = [];
-    pendingTask.allOut = "";
+    for (const t of new Set(tables)) t.clear();
+    if (scope === "all") {
+      pendingTask.segs = [];
+      pendingTask.allOut = "";
+    }
   }
+
+  /**
+   * B14, B15: a panel action closes every nested shell and keeps the current
+   * values of the top shell. The snapshots are dropped, none is restored.
+   */
+  function closeNested(): void {
+    if (!nested.length) return;
+    const top = nested[0].jobs;
+    nested.length = 0;
+    interp.shellDepth = 0;
+    shell.jobs = top;
+  }
+
   /** Variables that `~/.bashrc` set. They are not saved: it sets them again at start. */
   let rcOwned: Record<string, string> = nul();
   let rcDone = false;
@@ -517,6 +567,75 @@ export function createEngine(opts: EngineOptions): Engine {
     }
     pending = false;
     return await runRc();
+  }
+
+  /**
+   * B14: starts a child prompt shell. The parent's values go into a snapshot;
+   * the child is the prompt context backed by `S` (D13) with the exported
+   * variables, `SHLVL` plus 1, `$?` 0, and a job table of its own.
+   */
+  async function enterShell(req: ShellReq): Promise<OutLine[]> {
+    nested.push({
+      cwd: pctx.cwd,
+      oldpwd: pctx.oldpwd,
+      lastCode: pctx.lastCode,
+      env: nul(pctx.env),
+      exported: new Set(pctx.exported),
+      vars: cloneVars(pctx.vars),
+      functions: nul(pctx.functions),
+      aliases: nul(pctx.aliases),
+      options: nul(pctx.options),
+      traps: nul(pctx.traps),
+      rcOwned,
+      jobs: shell.jobs,
+    });
+    interp.shellDepth = nested.length;
+    const level = Math.floor(Number(pctx.get("SHLVL")));
+    const env: Record<string, string> = nul();
+    for (const k of pctx.exported)
+      if (pctx.env[k] !== undefined) env[k] = pctx.env[k];
+    env.SHLVL = String((Number.isFinite(level) && level >= 0 ? level : 0) + 1);
+    pctx.env = env;
+    pctx.exported = new Set(Object.keys(env));
+    pctx.vars = nul();
+    pctx.functions = nul();
+    pctx.aliases = nul();
+    pctx.options = nul();
+    for (const [k, v] of Object.entries(req.opts)) pctx.options[k] = v;
+    pctx.interactive = true;
+    pctx.src = { kind: "prompt" };
+    pctx.arg0 = "bash";
+    pctx.params = [];
+    pctx.frames = [];
+    pctx.traps = nul();
+    pctx.lastCode = 0;
+    shell.jobs = interp.newTable();
+    pending = false;
+    rcOwned = nul();
+    return req.norc ? [] : await runRc();
+  }
+
+  /** B14: `exit` in a nested shell ends its jobs (SIGHUP), restores the parent, and sets its `$?`. */
+  async function leaveShell(code: number): Promise<void> {
+    await endJobs("HUP", "current");
+    const snap = nested.pop();
+    interp.shellDepth = nested.length;
+    if (!snap) return;
+    pctx.cwd = snap.cwd;
+    pctx.oldpwd = snap.oldpwd;
+    pctx.env = snap.env;
+    pctx.exported = snap.exported;
+    pctx.vars = snap.vars;
+    pctx.functions = snap.functions;
+    pctx.aliases = snap.aliases;
+    pctx.options = snap.options;
+    pctx.traps = snap.traps;
+    pctx.frames = [];
+    pctx.params = [];
+    rcOwned = snap.rcOwned;
+    shell.jobs = snap.jobs;
+    pending = false;
+    pctx.lastCode = code;
   }
 
   const persist = (): string | null => {
@@ -641,7 +760,7 @@ export function createEngine(opts: EngineOptions): Engine {
     },
 
     notices() {
-      return interp.jobs.notices();
+      return shell.jobs.notices();
     },
 
     busy() {
@@ -660,7 +779,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     async execute(lineText: string): Promise<ExecResult> {
       use();
-      interp.jobs.inputSeq++;
+      shell.jobs.inputSeq++;
       const events: EngineEvent[] = [];
       const lines: OutLine[] = [];
       if (!rcDone) lines.push(...(await runRc()));
@@ -722,11 +841,14 @@ export function createEngine(opts: EngineOptions): Engine {
         lines.push(textLine(NOT_FOUND_HINT, "dim"));
       if (run.exited !== null) {
         const code = run.exited;
-        await endJobs("HUP");
-        syncOut();
-        lines.push(...(await newShell(new Set(pctx.exported))));
-        pctx.lastCode = code;
-      }
+        if (nested.length) await leaveShell(code);
+        else {
+          await endJobs("HUP");
+          syncOut();
+          lines.push(...(await newShell(new Set(pctx.exported))));
+          pctx.lastCode = code;
+        }
+      } else if (run.shellReq) lines.push(...(await enterShell(run.shellReq)));
       syncOut();
       checkMissions(task, lines, events);
       const failure = persist();
@@ -845,7 +967,7 @@ export function createEngine(opts: EngineOptions): Engine {
           cands = pick(
             [
               ...new Set([
-                ...interp.jobs.liveProcs().map((p) => p.pid),
+                ...interp.liveProcs().map((p) => p.pid),
                 ...s.procs.map((p) => p.pid),
               ]),
             ].map(String),
@@ -881,6 +1003,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     async skip() {
       await endJobs("KILL");
+      closeNested();
       use();
       const out: OutLine[] = [];
       s.cur++;
@@ -897,6 +1020,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     async jump(index: number) {
       await endJobs("KILL");
+      closeNested();
       use();
       const out: OutLine[] = [];
       s.cur = index;
@@ -910,6 +1034,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     async unlock(password: string) {
       await endJobs("KILL");
+      closeNested();
       use();
       if (sha256(password) !== HINT_HASH) return null;
       s.unlocked = true;
@@ -924,6 +1049,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     async lock() {
       await endJobs("KILL");
+      closeNested();
       use();
       s.unlocked = false;
       persist();
@@ -932,6 +1058,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     async reset() {
       await endJobs("KILL");
+      closeNested();
       s = fresh();
       use();
       await newShell();

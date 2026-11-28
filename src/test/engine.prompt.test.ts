@@ -129,3 +129,167 @@ describe("prompt shell state in the save", () => {
     expect(env.HISTCONTROL).toBeUndefined();
   });
 });
+
+describe("nested interactive shell (B14, AC8)", () => {
+  it("starts a child shell at once: execute resolves and busy stays false", async () => {
+    const r = await sh.run("bash");
+    expect(r.code).toBe(0);
+    expect(r.both).toBe("");
+    expect(sh.engine.busy()).toBe(false);
+    expect((await sh.run("echo $SHLVL")).out).toBe("2\n");
+  });
+
+  it("starts the child for sh and for options such as --norc", async () => {
+    await sh.run("sh");
+    expect((await sh.run("echo $SHLVL")).out).toBe("2\n");
+    await sh.run("bash --norc");
+    expect((await sh.run("echo $SHLVL")).out).toBe("3\n");
+    await sh.run("exit");
+    await sh.run("exit");
+    expect((await sh.run("echo $SHLVL")).out).toBe("1\n");
+  });
+
+  it("gives the child only the exported variables, and SHLVL plus 1", async () => {
+    await sh.run("export KEEP=1; LOSE=2; alias zz='echo zz'; f() { :; }");
+    await sh.run("bash");
+    expect((await sh.run('echo "[$KEEP][$LOSE][$SHLVL]"')).out).toBe(
+      "[1][][2]\n",
+    );
+    expect((await sh.run("type f")).code).not.toBe(0);
+    expect((await sh.run("env | grep -c '^SHLVL=2$'")).out).toBe("1\n");
+    expect((await sh.run("echo $?")).out).toBe("0\n");
+  });
+
+  it("runs ~/.bashrc in the child, and not with --norc", async () => {
+    await sh.run("bash");
+    expect((await sh.run("type ll")).out).toContain("aliased");
+    await sh.run("exit");
+    await sh.run("bash --norc");
+    expect((await sh.run("type ll")).code).not.toBe(0);
+  });
+
+  it("exit N returns to the parent with $? N and restores its state", async () => {
+    await sh.run("P=parent; cd /tmp/w");
+    await sh.run("bash");
+    await sh.run("cd /tmp; X=1; P=child; export Y=2");
+    expect(sh.engine.state.cwd).toBe("/tmp");
+    const r = await sh.run("exit 3");
+    expect(r.err).toBe("exit\n");
+    expect(sh.engine.state.lastCode).toBe(3);
+    expect(sh.engine.state.cwd).toBe("/tmp/w");
+    expect((await sh.run('echo "[$P][$X][$Y]"')).out).toBe("[parent][][]\n");
+    expect((await sh.run("echo $SHLVL")).out).toBe("1\n");
+  });
+
+  it("saves the child's values while it is active, and a reload brings back the top shell", async () => {
+    await sh.run("bash");
+    await sh.run("cd /tmp; export Z=9");
+    const saved = sh.store.get(SAVE_KEY) as string;
+    const again = await openShell({ saved });
+    expect(again.engine.state.cwd).toBe("/tmp");
+    expect((await again.run("echo $Z")).out).toBe("9\n");
+    // Only the top shell comes back: one exit leaves the game shell (D16).
+    await again.run("exit");
+    expect(again.engine.state.cwd).toBe("/home/cadet");
+  });
+
+  it("checks tasks on a command typed in the child, and once per input", async () => {
+    const start = sh.engine.state.cur;
+    await sh.run("bash");
+    expect(sh.engine.state.cur).toBe(start);
+    const r = await sh.run("pwd");
+    expect(r.out).toBe("/tmp/w\n");
+    expect(sh.engine.state.hist.at(-1)).toBe("pwd");
+  });
+
+  it("keeps > for an incomplete input in the child, and the same prompt text", async () => {
+    await sh.run("bash");
+    expect(sh.engine.isComplete("if true; then")).toBe(false);
+    expect(sh.engine.prompt().map((x) => x.text)).toEqual(["> "]);
+    sh.engine.cancelInput();
+    expect(
+      sh.engine
+        .prompt()
+        .map((x) => x.text)
+        .join(""),
+    ).toContain("cadet@");
+  });
+
+  it("stops the 65th nested bash with the D6 nesting message", async () => {
+    for (let i = 0; i < 64; i++) {
+      const r = await sh.run("bash --norc");
+      expect(r.code).toBe(0);
+    }
+    const r = await sh.run("bash --norc");
+    expect(r.text).toContain("nesting too deep (64)");
+    expect((await sh.run("echo $SHLVL")).out).toBe("65\n");
+    for (let i = 0; i < 64; i++) await sh.run("exit");
+    expect((await sh.run("echo $SHLVL")).out).toBe("1\n");
+  });
+
+  it("reads a pipe or a file as a script", async () => {
+    expect((await sh.run("echo 'echo hi' | bash")).out).toBe("hi\n");
+    await sh.run("echo 'echo from file' > s.txt");
+    expect((await sh.run("bash < s.txt")).out).toBe("from file\n");
+    expect(sh.engine.busy()).toBe(false);
+    expect((await sh.run("echo $SHLVL")).out).toBe("1\n");
+  });
+
+  it("prints the B14 message and returns 1 where bash must run as a whole command", async () => {
+    const msg =
+      "port-penguin: an interactive bash runs only as a whole command; type bash on its own line\n";
+    const a = await sh.run("bash; echo after");
+    expect(a.err).toBe(msg);
+    expect(a.out).toBe("after\n");
+    const b = await sh.run("f() { bash; }; f; echo $?");
+    expect(b.err).toBe(msg);
+    expect(b.out).toBe("1\n");
+    const c = await sh.run("bash | cat");
+    expect(c.err).toBe(msg);
+    expect(c.code).toBe(0);
+    const d = await sh.run("bash &");
+    expect(d.err).toContain("[1]");
+    const e = await sh.run("(bash)");
+    expect(e.err).toBe(msg);
+    const f = await sh.run("bash\nbash");
+    expect(f.err).toBe(msg + msg);
+    expect((await sh.run("echo $SHLVL")).out).toBe("1\n");
+  });
+
+  it("ends the jobs of the child at exit, and keeps the parent's jobs", async () => {
+    await sh.run("sleep 50 &");
+    await sh.run("bash");
+    await sh.run("sleep 60 &");
+    expect((await sh.run("jobs")).out).toMatch(
+      /^\[1\]\+ {2}Running +sleep 60 &\n$/,
+    );
+    await sh.run("exit");
+    const j = (await sh.run("jobs")).out;
+    expect(j).toMatch(/^\[1\]\+ {2}Running +sleep 50 &\n$/);
+    expect((await sh.run("ps")).out).not.toContain("sleep 60");
+  });
+
+  it("a panel action closes every nested shell and drops the snapshots (AC10)", async () => {
+    await sh.run("P=top; export E=1");
+    await sh.run("bash");
+    await sh.run("cd /tmp");
+    await sh.engine.reset();
+    expect(sh.engine.state.cwd).toBe("/home/cadet");
+    expect((await sh.run("echo $SHLVL")).out).toBe("1\n");
+    // A later exit goes through D16, not through an old snapshot.
+    await sh.run("export K=1; cd /tmp");
+    await sh.run("exit");
+    expect(sh.engine.state.cwd).toBe("/home/cadet");
+    expect((await sh.run("echo [$K][$P]")).out).toBe("[1][]\n");
+  });
+
+  it("skip keeps the child's current values and closes the nested shell", async () => {
+    await sh.run("bash");
+    await sh.run("cd /tmp");
+    await sh.engine.skip();
+    expect(sh.engine.state.cwd).toBe("/tmp");
+    await sh.run("exit");
+    // No snapshot is left: the exit is the D16 exit of the top shell.
+    expect(sh.engine.state.cwd).toBe("/home/cadet");
+  });
+});

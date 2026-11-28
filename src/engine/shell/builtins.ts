@@ -1192,7 +1192,7 @@ const exit: Builtin = (sh, argv, io) => {
     sh.ctx.src.kind === "prompt" && sh.nest === 0 && sh.ctx.interactive;
   if (prompt) io.err.write("exit\n");
   // B9: `exit` with stopped jobs warns once; a second `exit` right after leaves.
-  const table = sh.interp.jobs;
+  const table = sh.jobs;
   if (prompt && table.stopped().length && table.warned !== table.inputSeq - 1) {
     io.err.write("There are stopped jobs.\n");
     table.warned = table.inputSeq;
@@ -1327,12 +1327,49 @@ const execCmd: Builtin = async (sh, argv, io) => {
   throw new ExitSig(code);
 };
 
-/** `bash` and `sh`: run a script file or `-c` text in a context of its own (D13). */
+/** The long options of `bash` that the simulator accepts and ignores (B14). */
+const BASH_LONG = new Set([
+  "--norc",
+  "--noprofile",
+  "--login",
+  "--posix",
+  "--restricted",
+  "--verbose",
+  "--noediting",
+  "--debugger",
+  "--rcfile",
+]);
+
+/**
+ * B14: true when the whole input is this one bare command: not in a list,
+ * pipeline, function, subshell, or script, and no redirect of stdin.
+ */
+function bareInput(sh: Proc, argv: string[]): boolean {
+  if (!sh.promptLevel() || !sh.ctx.interactive) return false;
+  if (!sh.run.jobControl || sh.run.root !== sh) return false;
+  const r = parseFull(sh.task.line, { extglob: !!sh.ctx.options.extglob });
+  if (r.status !== "ok" || r.ast.items.length !== 1) return false;
+  const n = r.ast.items[0];
+  if (n.type !== "simple" || n.bg || n.assigns.length) return false;
+  const stdin = (op: string, fd: number | undefined): boolean =>
+    fd === 0 || (fd === undefined && /^(<|<<|<<<|<&|<>)$/.test(op));
+  if (n.redirs?.some((d) => stdin(d.op, d.fd))) return false;
+  if (n.words.length !== argv.length) return false;
+  return n.words.every(
+    (w, i) =>
+      w.every((p) => p.k === "lit" || p.k === "sq") &&
+      w.map((p) => (p.k === "lit" || p.k === "sq" ? p.v : "")).join("") ===
+        argv[i],
+  );
+}
+
+/** `bash` and `sh`: run a script file or `-c` text in a context of its own (D13), or start a child shell (B14). */
 const bash: Builtin = async (sh, argv, io) => {
   const name = argv[0];
   const opts: Record<string, boolean> = nul<boolean>();
   let i = 1;
   let cText: string | null = null;
+  let norc = false;
   for (; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--") {
@@ -1342,6 +1379,11 @@ const bash: Builtin = async (sh, argv, io) => {
     if (a === "--version") {
       out(io, "GNU bash, version 5.2.21(1)-release (x86_64-pc-linux-gnu)\n");
       return 0;
+    }
+    if (BASH_LONG.has(a)) {
+      if (a === "--norc") norc = true;
+      if (a === "--rcfile") i++;
+      continue;
     }
     if (!/^[-+][a-zA-Z]+$/.test(a)) break;
     const val = a[0] === "-";
@@ -1361,7 +1403,8 @@ const bash: Builtin = async (sh, argv, io) => {
   };
   if (cText !== null) {
     if (argv[i] === undefined) {
-      sh.err.write(`${name}: -c: option requires an argument\n`);
+      sh.err.write(`${name}: -c: option requires an argument
+`);
       return 2;
     }
     const text = argv[i++];
@@ -1372,15 +1415,24 @@ const bash: Builtin = async (sh, argv, io) => {
     return await sh.runInChild(c, text, name);
   }
   if (i >= argv.length) {
-    if (sh.ctx.src.kind !== "prompt") {
-      // From a script, bash reads its script from the input: here it is empty.
+    // A pipe or a file is the input: bash reads it as a script. So does a script
+    // or `-c` text that runs `bash`: the 2a case `script-bash-file` fixes that
+    // (Ubuntu gives the script a pipe). Only the prompt shell gets B14.
+    if (!io.in.tty || sh.ctx.src.kind !== "prompt") {
       const c = mk();
       c.src = { kind: "c" };
       c.arg0 = name;
       return await sh.runInChild(c, await io.in.readAll(sh), name);
     }
+    // The terminal is the input (B14): a child prompt shell, but only for a whole input.
+    if (bareInput(sh, argv)) {
+      if (sh.interp.shellDepth >= LIM.scripts)
+        throw new NestStop(name, LIM.scripts);
+      sh.run.shellReq = { norc, opts };
+      return 0;
+    }
     sh.err.write(
-      "bash: this sandbox can’t open a nested shell. Try: bash script.sh\n",
+      "port-penguin: an interactive bash runs only as a whole command; type bash on its own line\n",
     );
     return 1;
   }
@@ -1388,7 +1440,8 @@ const bash: Builtin = async (sh, argv, io) => {
   const abs = sh.abs(path);
   const t = readText(abs);
   if ("err" in t) {
-    sh.err.write(`${name}: ${path}: ${t.err}\n`);
+    sh.err.write(`${name}: ${path}: ${t.err}
+`);
     return t.err === "Permission denied"
       ? 126
       : t.err === "Is a directory"
@@ -1907,7 +1960,7 @@ function jobsFor(
   specs: string[],
   dflt: "current" | "all",
 ): Job[] | null {
-  const table = sh.interp.jobs;
+  const table = sh.jobs;
   if (!specs.length) {
     if (dflt === "all") return [...table.jobs].sort((a, b) => a.n - b.n);
     const j = table.find("%");
@@ -1930,7 +1983,7 @@ function jobsFor(
 }
 
 const jobsCmd: Builtin = (sh, argv, io) => {
-  const table = sh.interp.jobs;
+  const table = sh.jobs;
   let long = false;
   let pids = false;
   let only: JobState | null = null;
@@ -1971,7 +2024,7 @@ const jobsCmd: Builtin = (sh, argv, io) => {
 
 /** Brings `job` to the foreground and waits for it (`fg`). */
 async function foreground(sh: Proc, job: Job, io: IO): Promise<number> {
-  const table = sh.interp.jobs;
+  const table = sh.jobs;
   out(io, job.cmd + "\n");
   job.dirty = false;
   job.fg = true;
@@ -2010,7 +2063,7 @@ const fgCmd: Builtin = async (sh, argv, io) => {
 };
 
 const bgCmd: Builtin = (sh, argv, io) => {
-  const table = sh.interp.jobs;
+  const table = sh.jobs;
   const list = jobsFor(sh, "bg", argv.slice(1), "current");
   if (list === null) return 1;
   let code = 0;
@@ -2033,7 +2086,7 @@ const bgCmd: Builtin = (sh, argv, io) => {
 };
 
 const waitCmd: Builtin = async (sh, argv) => {
-  const table = sh.interp.jobs;
+  const table = sh.jobs;
   let next = false;
   const ids: string[] = [];
   for (const a of argv.slice(1)) {
@@ -2104,7 +2157,7 @@ const waitCmd: Builtin = async (sh, argv) => {
 };
 
 const disownCmd: Builtin = (sh, argv) => {
-  const table = sh.interp.jobs;
+  const table = sh.jobs;
   let all = false;
   let runningOnly = false;
   const specs: string[] = [];
@@ -2143,7 +2196,7 @@ export function signalName(spec: string): string | null {
 
 /** Sends `sig` to a job: STOP and CONT change its state; the rest go to its processes (B9). */
 export function signalJob(sh: Proc, job: Job, sig: string, only?: Proc): void {
-  const table = sh.interp.jobs;
+  const table = job.table ?? sh.jobs;
   if (!only && (sig === "STOP" || sig === "TSTP")) {
     if (job.state === "running") {
       job.stop();
@@ -2221,7 +2274,7 @@ const killCmd: Builtin = (sh, argv, io) => {
     io.err.write("kill: usage: kill [-9] PID\n");
     return 1;
   }
-  const table = sh.interp.jobs;
+  const table = sh.jobs;
   const plain: string[] = [];
   let code = 0;
   for (const t of targets) {
@@ -2236,7 +2289,7 @@ const killCmd: Builtin = (sh, argv, io) => {
       continue;
     }
     const pid = Number(t);
-    const job = /^[0-9]+$/.test(t) ? table.byPid(pid) : null;
+    const job = /^[0-9]+$/.test(t) ? sh.interp.byPid(pid) : null;
     if (job) {
       const p = job.live().find((x) => x.pid === pid);
       signalJob(sh, job, sig, p === job.procs[0] ? undefined : p);
