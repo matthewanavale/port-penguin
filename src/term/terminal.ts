@@ -54,6 +54,8 @@ export interface TerminalOptions {
 
 /** The keys that send a signal to the running job (B6), and what the terminal echoes. */
 const SIGNAL_KEYS: Record<string, { sig: string; echo: string }> = {
+  // The tty echoes the key only. The engine writes what bash writes next: a
+  // newline, `Quit (core dumped)`, or the `Stopped` line (which starts with one).
   "\x03": { sig: "INT", echo: "^C" },
   "\x1a": { sig: "TSTP", echo: "^Z" },
   "\x1c": { sig: "QUIT", echo: "^\\" },
@@ -441,8 +443,8 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       if (key) {
         // As a tty does, the signal key empties the type-ahead (B24).
         tty.flush();
-        term.write(key.echo + "\r\n");
-        atLineStart = true;
+        term.write(key.echo);
+        atLineStart = false;
         engine.signal(key.sig);
         return;
       }

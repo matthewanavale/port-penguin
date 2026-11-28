@@ -26,9 +26,10 @@ export function jobLine(
   opts: { pid?: boolean; text?: string } = {},
 ): string {
   const state = opts.text ?? j.stateText();
-  const pid = opts.pid ? String(j.pid).padStart(5) + " " : "";
+  // `jobs -l` as bash 5.2: one space after the mark, the PID in 5 columns.
+  const gap = opts.pid ? " " + String(j.pid).padStart(5) + " " : "  ";
   const amp = j.state === "running" && opts.text === undefined ? " &" : "";
-  return `[${j.n}]${mark}  ${pid}${state.padEnd(24)}${j.cmd}${amp}`;
+  return `[${j.n}]${mark}${gap}${state.padEnd(24)}${j.cmd}${amp}`;
 }
 
 /** What the next prompt shows for one job, and what a screen reader hears (B17). */
@@ -110,6 +111,8 @@ export class Job {
   stop(): void {
     if (this.state !== "running") return;
     this.state = "stopped";
+    // A new stop gives `exit` a new warning (B9).
+    if (this.table) this.table.warned = -1;
     for (const p of this.live()) p.stop();
     this.changed();
   }
@@ -206,7 +209,7 @@ export class JobTable {
     const hit = (f: (j: Job) => boolean): Job | string => {
       const m = all.filter(f);
       if (m.length === 0) return `${spec}: no such job`;
-      if (m.length > 1) return `${spec}: ambiguous job spec`;
+      if (m.length > 1) return `${s}: ambiguous job spec`;
       return m[0];
     };
     if (s.startsWith("?")) return hit((j) => j.cmd.includes(s.slice(1)));
@@ -245,14 +248,16 @@ export class JobTable {
     for (const j of [...this.jobs].sort((a, b) => a.n - b.n)) {
       if (j.dirty && j.notify) {
         const mark = this.mark(j);
+        // Bash starts a `Stopped` notice with a newline (the capture: `kill -STOP`, `^Z`).
+        const lead = j.state === "stopped" ? "\n" : "";
         out.push({
-          text: jobLine(j, mark),
+          text: lead + jobLine(j, mark),
           say: `Job ${j.n} ${j.state === "stopped" ? "stopped" : "done"}`,
         });
       }
       j.dirty = false;
     }
-    this.jobs = this.jobs.filter((j) => j.state !== "done");
+    this.jobs = this.jobs.filter((j) => j.state !== "done" || j.dirty);
     return out;
   }
 

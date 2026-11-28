@@ -339,7 +339,8 @@ export function createEngine(opts: EngineOptions): Engine {
   function announceStopped(run: InputRun, job: Job): void {
     run.emit({
       stream: "stderr",
-      text: jobLine(job, shell.jobs.mark(job)) + "\n",
+      // Bash starts the line with a newline: the tty echoes `^Z` without one.
+      text: "\n" + jobLine(job, shell.jobs.mark(job)) + "\n",
     });
     shell.jobs.extra.push({ text: "", say: `Job ${job.n} stopped` });
   }
@@ -377,7 +378,8 @@ export function createEngine(opts: EngineOptions): Engine {
     const { p, kind } = root.detach();
     const rest = [...run.procs].filter((x) => x !== root);
     const members = kind === "cmd" ? [root, ...rest] : rest;
-    const job = new Job(run.task.line.trim(), true);
+    // The job is the stopped unit, not the whole input: `echo a; sleep 100` stops `sleep 100`.
+    const job = new Job(root.unitText || run.task.line.trim(), true);
     if (kind === "cmd") root.pid = interp.sched.allocPid();
     for (const m of members) job.add(m);
     job.run = run;
@@ -756,6 +758,10 @@ export function createEngine(opts: EngineOptions): Engine {
         stopForeground();
         return;
       }
+      // The tty echoes `^C` with no newline. Bash ends the line when the job dies,
+      // unless the shell ignores the signal (`trap '' INT`: the capture, B6).
+      if (sig === "INT" && fg.root?.ctx.traps.INT !== "")
+        fg.emit({ stream: "stderr", text: "\n" });
       interp.sched.signalRun(fg, sig);
     },
 
@@ -815,8 +821,22 @@ export function createEngine(opts: EngineOptions): Engine {
       let release!: () => void;
       fgDone = new Promise<void>((resolve) => (release = resolve));
       let crashed: string | null = null;
+      /** The runs of this input: Ctrl-Z in a list starts a new one for the rest of the list (B9). */
+      const runs: InputRun[] = [run];
       try {
         await shell.runLine(lineText);
+        for (let cur = run; cur.rest; cur = runs[runs.length - 1]) {
+          const items = cur.rest;
+          cur.rest = null;
+          // The stopped unit went on as a job; the list goes on with a new root, as bash does.
+          const next = new InputRun(task, opts.onOutput);
+          next.jobControl = true;
+          shell.attach(next);
+          runs.push(next);
+          fg = next;
+          pctx.lastCode = 148;
+          await shell.runRest(items);
+        }
       } catch (e) {
         crashed = e instanceof Error ? e.message : "error";
         // The detail goes to the browser console, not to the learner.
@@ -826,7 +846,7 @@ export function createEngine(opts: EngineOptions): Engine {
       fg = null;
       curTask = null;
       release();
-      const chunks = run.chunks.slice();
+      const chunks = runs.flatMap((r) => r.chunks);
       if (crashed !== null)
         lines.push(
           textLine(
@@ -834,13 +854,17 @@ export function createEngine(opts: EngineOptions): Engine {
             "err",
           ),
         );
-      for (const n of run.notes)
-        lines.push(textLine(n.text, n.dim ? "dim" : undefined));
-      const seen = run.events;
+      for (const r of runs)
+        for (const n of r.notes)
+          lines.push(textLine(n.text, n.dim ? "dim" : undefined));
+      const seen = runs.flatMap((r) => r.events);
       if (seen.some((e) => e.kind === "notfound"))
         lines.push(textLine(NOT_FOUND_HINT, "dim"));
-      if (run.exited !== null) {
-        const code = run.exited;
+      const last = runs[runs.length - 1];
+      const exited = last.exited ?? run.exited;
+      const shellReq = last.shellReq ?? run.shellReq;
+      if (exited !== null) {
+        const code = exited;
         if (nested.length) await leaveShell(code);
         else {
           await endJobs("HUP");
@@ -848,7 +872,7 @@ export function createEngine(opts: EngineOptions): Engine {
           lines.push(...(await newShell(new Set(pctx.exported))));
           pctx.lastCode = code;
         }
-      } else if (run.shellReq) lines.push(...(await enterShell(run.shellReq)));
+      } else if (shellReq) lines.push(...(await enterShell(shellReq)));
       syncOut();
       checkMissions(task, lines, events);
       const failure = persist();

@@ -256,6 +256,23 @@ describe("nested interactive shell (B14, AC8)", () => {
     expect((await sh.run("echo $SHLVL")).out).toBe("1\n");
   });
 
+  it("prints the B14 message for a bash in a script whose stdin is the terminal, and reads a pipe or file as a script (E8)", async () => {
+    const msg =
+      "port-penguin: an interactive bash runs only as a whole command; type bash on its own line\n";
+    await sh.run("printf 'bash\necho code=$?\n' > s.sh");
+    // The terminal is the script's stdin: the message, status 1, and the script goes on.
+    const a = await sh.run("bash s.sh");
+    expect(a.err).toBe(msg);
+    expect(a.out).toBe("code=1\n");
+    expect(sh.engine.busy()).toBe(false);
+    expect((await sh.run("echo $SHLVL")).out).toBe("1\n");
+    // A file as stdin of the script: bash reads it as a script (the capture, script-bash-file).
+    await sh.run("echo 'echo inner' > in.txt");
+    const b = await sh.run("bash s.sh < in.txt");
+    expect(b.err).toBe("");
+    expect(b.out).toBe("inner\ncode=0\n");
+  });
+
   it("ends the jobs of the child at exit, and keeps the parent's jobs", async () => {
     await sh.run("sleep 50 &");
     await sh.run("bash");

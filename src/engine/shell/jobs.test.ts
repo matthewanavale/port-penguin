@@ -48,7 +48,8 @@ describe("starting a job (B9)", () => {
         "\n",
     );
     const l = await sh.run("jobs -l");
-    expect(l.out).toContain(`[1]-  ${pa?.padStart(5)} Running`);
+    // bash 5.2 (the capture): one space after the mark, the PID in 5 columns.
+    expect(l.out).toContain(`[1]- ${pa?.padStart(5)} Running`);
     expect((await sh.run("jobs -p")).out).toBe(`${pa}\n${pb}\n`);
     expect((await sh.run("jobs -r")).out.split("\n")).toHaveLength(3);
     expect((await sh.run("jobs -s")).out).toBe("");
@@ -147,7 +148,8 @@ describe("kill and signals (B9, B10)", () => {
   it("kill -STOP stops a job and kill -CONT lets it go on", async () => {
     await sh.run("sleep 2 &");
     await sh.run("kill -STOP %1");
-    expect(notes()).toEqual([row(1, "+", "Stopped", "sleep 2")]);
+    // The notice of a stop starts with a newline, as in bash.
+    expect(notes()).toEqual(["\n" + row(1, "+", "Stopped", "sleep 2")]);
     expect((await sh.run("jobs")).out).toBe(
       row(1, "+", "Stopped", "sleep 2") + "\n",
     );
@@ -214,7 +216,8 @@ describe("job specs (B9)", () => {
 
   it("reports an ambiguous spec and a missing one", async () => {
     const a = await sh.run("jobs %sleep");
-    expect(a.err).toBe("bash: jobs: %sleep: ambiguous job spec\n");
+    // bash names the text of the spec, with no `%` (the capture).
+    expect(a.err).toBe("bash: jobs: sleep: ambiguous job spec\n");
     const b = await sh.run("jobs %7");
     expect(b.err).toBe("bash: jobs: %7: no such job\n");
     expect(b.code).toBe(1);
@@ -259,7 +262,7 @@ describe("fg, bg, and Ctrl-Z (B9)", () => {
     await sh.keys("\x1a");
     const r = await f.result;
     expect(r.code).toBe(148);
-    expect(r.err).toBe(row(1, "+", "Stopped", "sleep 100") + "\n");
+    expect(r.err).toBe("\n" + row(1, "+", "Stopped", "sleep 100") + "\n");
     expect(sh.engine.busy()).toBe(false);
     expect((await sh.run("jobs")).out).toBe(
       row(1, "+", "Stopped", "sleep 100") + "\n",
@@ -349,7 +352,7 @@ describe("a background job that reads the terminal (B24)", () => {
   it("cat & stops with the Stopped line; fg lets it read the keyboard", async () => {
     await sh.run("cat &");
     await settle();
-    expect(notes()).toEqual([row(1, "+", "Stopped", "cat")]);
+    expect(notes()).toEqual(["\n" + row(1, "+", "Stopped", "cat")]);
     expect((await sh.run("jobs")).out).toBe(
       row(1, "+", "Stopped", "cat") + "\n",
     );
@@ -368,7 +371,7 @@ describe("a background job that reads the terminal (B24)", () => {
     await sh.run("{ read v; echo got $v; } &");
     await settle();
     expect(notes()).toEqual([
-      row(1, "+", "Stopped", "{ read v; echo got $v; }"),
+      "\n" + row(1, "+", "Stopped", "{ read v; echo got $v; }"),
     ]);
   });
 
@@ -439,13 +442,27 @@ describe("exit with stopped jobs (B9)", () => {
     expect((await sh.run("jobs")).out).toBe("");
   });
 
-  it("a command between the two exits starts the warning again", async () => {
+  it("a command between the two exits does not start the warning again", async () => {
+    // The capture (exit-stopped-jobs): `exit`, `jobs`, `exit` leaves.
     const f = sh.start("sleep 100");
     await settle();
     await sh.keys("\x1a");
     await f.result;
     await sh.run("exit");
     await sh.run("true");
+    expect((await sh.run("exit")).err).toBe("exit\n");
+  });
+
+  it("a new stop after the warning gives the warning again", async () => {
+    const f = sh.start("sleep 100");
+    await settle();
+    await sh.keys("\x1a");
+    await f.result;
+    await sh.run("exit");
+    const g = sh.start("sleep 101");
+    await settle();
+    await sh.keys("\x1a");
+    await g.result;
     expect((await sh.run("exit")).err).toContain("There are stopped jobs.");
   });
 

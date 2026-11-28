@@ -215,6 +215,8 @@ export class Run implements OutSink {
   fgJob: Job | null = null;
   /** Where a foregrounded job's output also goes into the chunk list (`fg`, B15). */
   mirror: Run | null = null;
+  /** The top-level items that follow the one Ctrl-Z took: they run on, as in bash (B9). */
+  rest: Node[] | null = null;
   private chunkBytes = 0;
   private capped = false;
   constructor(
@@ -282,6 +284,8 @@ export class Proc {
   detach: (() => { p: Promise<unknown>; kind: UnitKind }) | null = null;
   /** True when Ctrl-Z took the unit this process waited on: it holds no baton. */
   tokenless = false;
+  /** The source text of the command this process ran last at the top level: the name of a stopped job (B9). */
+  unitText = "";
   ctx: Context;
   run: Run;
   /** Depth of functions, `eval`, and `source` (D6). */
@@ -701,9 +705,40 @@ export class Proc {
       if (r.nest) this.note(r.message, true);
       else this.errLine(r.message);
       code = 2;
-    } else code = await this.execTop(() => this.runList(r.ast.items));
+    } else code = await this.execTop(() => this.runItems(r.ast.items));
     ctx.lastCode = code;
     return code;
+  }
+
+  /**
+   * The top-level items of an input. When Ctrl-Z takes one of them, the items
+   * after it stay in `run.rest`: the engine runs them on the new root (B9).
+   */
+  private async runItems(items: Node[]): Promise<number> {
+    let code = this.ctx.lastCode;
+    for (let i = 0; i < items.length; i++) {
+      try {
+        code = await this.runNode(items[i]);
+      } catch (e) {
+        if (e instanceof Detached && i + 1 < items.length)
+          this.run.rest = items.slice(i + 1);
+        throw e;
+      }
+    }
+    return code;
+  }
+
+  /** Runs the items that follow a stopped unit (B9). Returns `$?`. */
+  async runRest(items: Node[]): Promise<number> {
+    const sched = this.interp.sched;
+    await sched.acquire();
+    try {
+      const code = await this.execTop(() => this.runItems(items));
+      this.ctx.lastCode = code;
+      return code;
+    } finally {
+      if (!this.tokenless) sched.release();
+    }
   }
 
   /** Runs `~/.bashrc` text under the D19 guard. Returns an error reason, or null. */
@@ -956,6 +991,7 @@ export class Proc {
     const due = this.interp.sched.due();
     if (due || this.signals.length || this.held) await this.pause(due);
     const ctx = this.ctx;
+    if (n.text) this.unitText = n.text;
     ctx.line = this.lineOverride ?? n.line;
     let code: number;
     try {
@@ -1828,7 +1864,20 @@ export class Proc {
     if (cmd) {
       const r = cmd(argv, this, io);
       if (typeof r === "number") return r;
-      return await this.fgWait(r, "cmd");
+      const before = this.signals.length;
+      const code = await this.fgWait(r, "cmd");
+      // The capture (trap-int): at the prompt, a program that a trapped Ctrl-C ended
+      // does not run the trap. A script still runs it after the program.
+      if (
+        this.signals.length > before &&
+        this.ctx.traps.INT &&
+        this.promptLevel()
+      )
+        this.signals = [
+          ...this.signals.slice(0, before),
+          ...this.signals.slice(before).filter((x) => x !== "INT"),
+        ];
+      return code;
     }
     if (name.includes("/")) return await this.runPath(argv, io);
     this.fail(`${name}: command not found`);

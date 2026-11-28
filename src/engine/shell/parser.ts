@@ -852,7 +852,15 @@ class P {
     return { type: "andor", line: first.line, first, rest };
   }
 
+  /** One pipeline (or one command): its node keeps its source text for a stopped job (B9). */
   pipeline(): Node {
+    const from = this.peek().pos;
+    const node = this.pipelineNode();
+    node.text ??= this.src.slice(from, this.peek().pos).trim();
+    return node;
+  }
+
+  private pipelineNode(): Node {
     let negate = false;
     const line = this.lineAt(this.peek().pos);
     while (this.isWord(this.peek(), "!")) {

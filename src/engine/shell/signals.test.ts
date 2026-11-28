@@ -154,7 +154,7 @@ describe("other signals (B6)", () => {
 
 describe("trap on signals (B6)", () => {
   it("runs the trap and the script goes on", async () => {
-    const r = start("trap 'echo caught' INT; sleep 100; echo after");
+    const r = start(`bash -c "trap 'echo caught' INT; sleep 100; echo after"`);
     await real(5);
     sh.engine.signal("INT");
     const res = await r.result;
@@ -163,10 +163,21 @@ describe("trap on signals (B6)", () => {
   });
 
   it("gives the sleep status 130 to $? before the trap", async () => {
-    const r = start("trap 'echo got $?' INT; sleep 100; echo end $?");
+    const r = start(
+      `bash -c 'trap "echo got \\$?" INT; sleep 100; echo end $?'`,
+    );
     await real(5);
     sh.engine.signal("INT");
     expect((await r.result).out).toBe("got 130\nend 130\n");
+  });
+
+  it("does not run the trap at the prompt for a program that Ctrl-C ended (capture trap-int)", async () => {
+    const r = start("trap 'echo caught' INT; sleep 100; echo after");
+    await real(5);
+    sh.engine.signal("INT");
+    const res = await r.result;
+    expect(res.out).toBe("after\n");
+    expect(res.code).toBe(0);
   });
 
   it("runs a trap for TERM, HUP, QUIT, TSTP, CONT, USR1, USR2", async () => {

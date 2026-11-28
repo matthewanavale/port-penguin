@@ -251,7 +251,9 @@ describe("commands that read the keyboard (AC4)", () => {
     const res = await r.result;
     expect(res.code).toBe(130);
     expect(res.out).toBe("");
-    expect(sh.echoed()).toBe("par^C\r\n");
+    // The tty echoes the key; the engine ends the line (bash does it when the job dies).
+    expect(sh.echoed()).toBe("par^C");
+    expect(res.err).toBe("\n");
     expect(sh.tty.reading).toBe(false);
   });
 

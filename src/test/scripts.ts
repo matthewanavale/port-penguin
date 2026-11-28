@@ -633,7 +633,11 @@ export const SCRIPTS: GoldenScript[] = [
       "ps -ef",
       "top",
       "kill",
-      "kill -l",
+      {
+        input: "kill -l",
+        reason:
+          "R7 run-2b behavior: kill -l prints the bash 5.2 list of signals (B10)",
+      },
       "kill 1",
       "kill 99999",
       "kill 1021",

@@ -1191,9 +1191,10 @@ const exit: Builtin = (sh, argv, io) => {
   const prompt =
     sh.ctx.src.kind === "prompt" && sh.nest === 0 && sh.ctx.interactive;
   if (prompt) io.err.write("exit\n");
-  // B9: `exit` with stopped jobs warns once; a second `exit` right after leaves.
+  // B9: `exit` with stopped jobs warns once; the next `exit` leaves (the capture:
+  // `exit`, `jobs`, `exit` leaves). A new stop warns again.
   const table = sh.jobs;
-  if (prompt && table.stopped().length && table.warned !== table.inputSeq - 1) {
+  if (prompt && table.stopped().length && table.warned < 0) {
     io.err.write("There are stopped jobs.\n");
     table.warned = table.inputSeq;
     return 1;
@@ -1415,17 +1416,18 @@ const bash: Builtin = async (sh, argv, io) => {
     return await sh.runInChild(c, text, name);
   }
   if (i >= argv.length) {
-    // A pipe or a file is the input: bash reads it as a script. So does a script
-    // or `-c` text that runs `bash`: the 2a case `script-bash-file` fixes that
-    // (Ubuntu gives the script a pipe). Only the prompt shell gets B14.
-    if (!io.in.tty || sh.ctx.src.kind !== "prompt") {
+    // A pipe or a file is the input: bash reads it as a script (the 2a case
+    // `script-bash-file`: Ubuntu gives the script a pipe).
+    if (!io.in.tty) {
       const c = mk();
       c.src = { kind: "c" };
       c.arg0 = name;
       return await sh.runInChild(c, await io.in.readAll(sh), name);
     }
-    // The terminal is the input (B14): a child prompt shell, but only for a whole input.
-    if (bareInput(sh, argv)) {
+    // The terminal is the input (B14): a child prompt shell, but only for a whole
+    // input typed at the prompt. In a script or `-c` text the terminal is not read
+    // as a script (E8): the message below, status 1.
+    if (sh.ctx.src.kind === "prompt" && bareInput(sh, argv)) {
       if (sh.interp.shellDepth >= LIM.scripts)
         throw new NestStop(name, LIM.scripts);
       sh.run.shellReq = { norc, opts };
@@ -2085,7 +2087,7 @@ const bgCmd: Builtin = (sh, argv, io) => {
   return code;
 };
 
-const waitCmd: Builtin = async (sh, argv) => {
+const waitCmd: Builtin = async (sh, argv, io) => {
   const table = sh.jobs;
   let next = false;
   const ids: string[] = [];
@@ -2124,6 +2126,8 @@ const waitCmd: Builtin = async (sh, argv) => {
     if (!targets.length) return code;
   } else targets = table.jobs.filter((j) => j.state !== "done");
   const reap = (j: Job) => {
+    // The capture: `wait` prints the state line of a job that ended while it waited.
+    if (j.dirty && j.notify) io.err.write(jobLine(j, table.mark(j)) + "\n");
     j.dirty = false;
     table.jobs = table.jobs.filter((x) => x !== j);
   };
@@ -2212,6 +2216,64 @@ export function signalJob(sh: Proc, job: Job, sig: string, only?: Proc): void {
   for (const p of only ? [only] : job.live()) sh.interp.sched.deliver(p, sig);
 }
 
+/** The names of `kill -l` in bash 5.2 on Linux x86-64, by number (32 and 33 have none). */
+const KILL_NAMES: Record<number, string> = {
+  1: "SIGHUP",
+  2: "SIGINT",
+  3: "SIGQUIT",
+  4: "SIGILL",
+  5: "SIGTRAP",
+  6: "SIGABRT",
+  7: "SIGBUS",
+  8: "SIGFPE",
+  9: "SIGKILL",
+  10: "SIGUSR1",
+  11: "SIGSEGV",
+  12: "SIGUSR2",
+  13: "SIGPIPE",
+  14: "SIGALRM",
+  15: "SIGTERM",
+  16: "SIGSTKFLT",
+  17: "SIGCHLD",
+  18: "SIGCONT",
+  19: "SIGSTOP",
+  20: "SIGTSTP",
+  21: "SIGTTIN",
+  22: "SIGTTOU",
+  23: "SIGURG",
+  24: "SIGXCPU",
+  25: "SIGXFSZ",
+  26: "SIGVTALRM",
+  27: "SIGPROF",
+  28: "SIGWINCH",
+  29: "SIGIO",
+  30: "SIGPWR",
+  31: "SIGSYS",
+};
+
+/** `kill -l` with no argument: five entries a row, each followed by a tab (the last one of a row by a newline). */
+function killList(): string {
+  const names: [number, string][] = Object.entries(KILL_NAMES).map(
+    ([n, name]) => [Number(n), name],
+  );
+  for (let n = 34; n <= 64; n++)
+    names.push([
+      n,
+      n === 34
+        ? "SIGRTMIN"
+        : n < 50
+          ? `SIGRTMIN+${n - 34}`
+          : n === 64
+            ? "SIGRTMAX"
+            : `SIGRTMAX-${64 - n}`,
+    ]);
+  let r = "";
+  names.forEach(([n, name], i) => {
+    r += `${String(n).padStart(2)}) ${name}${(i + 1) % 5 === 0 ? "\n" : "\t"}`;
+  });
+  return r.endsWith("\n") ? r : r + "\n";
+}
+
 const KILL_USAGE =
   "kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]";
 
@@ -2266,7 +2328,7 @@ const killCmd: Builtin = (sh, argv, io) => {
       }
       return code;
     }
-    out(io, " 1) SIGHUP   2) SIGINT   9) SIGKILL  15) SIGTERM  19) SIGSTOP\n");
+    out(io, killList());
     return 0;
   }
   if (!targets.length) {
