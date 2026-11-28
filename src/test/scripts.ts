@@ -1052,12 +1052,14 @@ export const SCRIPTS: GoldenScript[] = [
     steps: [
       {
         tab: "",
-        reason: "R6 Tab list follows the new command table and skel files",
+        reason:
+          "R6 Tab list follows the new command table and skel files; R7 jobs, fg, bg, wait, disown are builtins",
       },
       { tab: "pw" },
       {
         tab: "d",
-        reason: "R6 Tab list follows the new command table and skel files",
+        reason:
+          "R6 Tab list follows the new command table and skel files; R7 disown is a builtin",
       },
       { tab: "doc" },
       { tab: "docker " },

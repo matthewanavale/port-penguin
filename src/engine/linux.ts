@@ -18,7 +18,7 @@ import { sha256 } from "./sha256";
 import { nul } from "./nullmap";
 import { d, f, HOME, HOST, S, nulTree } from "./state";
 import type { DirNode, FileNode, FsNode, Image } from "./state";
-import { BUILTINS } from "./shell/builtins";
+import { BUILTINS, signalJob, signalName } from "./shell/builtins";
 import type { Context } from "./shell/context";
 import { termCols } from "./shell/context";
 import type { Proc } from "./shell/proc";
@@ -3167,9 +3167,11 @@ const hostname: CmdFn = (_a, _s, io) => line(io, HOST);
 const id: CmdFn = (_a, _s, io) =>
   line(io, "uid=1000(cadet) gid=1000(cadet) groups=1000(cadet)");
 
-const ps: CmdFn = (argv, _sh, io) => {
+const ps: CmdFn = (argv, sh, io) => {
   const args = argv.slice(1);
   const full = args.some((a) => /^(aux|-e|-ef|-aux|-A|ax)$/.test(a));
+  // B10: the processes of the jobs come after the `S.procs` rows, in PID order.
+  const live = sh.interp.jobs.liveProcs();
   if (!full)
     return line(
       io,
@@ -3182,7 +3184,8 @@ const ps: CmdFn = (argv, _sh, io) => {
               "pts/0",
               p.cpu > 50 ? "01:12:07" : "00:00:00",
               p.cmd.split(" ")[0].replace(/^-/, ""),
-            ]),
+            ])
+            .concat(live.map((p) => [p.pid, "pts/0", "00:00:00", p.name])),
         ),
       ),
     );
@@ -3192,13 +3195,15 @@ const ps: CmdFn = (argv, _sh, io) => {
       [
         ["USER", "PID", "%CPU", "%MEM", "COMMAND"] as (string | number)[],
       ].concat(
-        S.procs.map((p) => [
-          p.user,
-          p.pid,
-          p.cpu.toFixed(1),
-          p.mem.toFixed(1),
-          p.cmd,
-        ]),
+        S.procs
+          .map((p) => [
+            p.user,
+            p.pid,
+            p.cpu.toFixed(1),
+            p.mem.toFixed(1),
+            p.cmd,
+          ])
+          .concat(live.map((p) => ["cadet", p.pid, "0.0", "0.0", p.cmdline])),
       ),
     ),
   );
@@ -3206,13 +3211,14 @@ const ps: CmdFn = (argv, _sh, io) => {
 
 const clockText = (): string => clockDate().toTimeString().slice(0, 8);
 
-const top: CmdFn = (_argv, _sh, io) => {
+const top: CmdFn = (_argv, sh, io) => {
   const ps2 = S.procs.slice().sort((a, b) => b.cpu - a.cpu);
+  const live = sh.interp.jobs.liveProcs();
   const load = (ps2.reduce((s, p) => s + p.cpu, 0) / 100).toFixed(2);
   return line(
     io,
     `top - ${clockText()} up 3 days,  2:14,  1 user,  load average: ${load}, ${load}, ${load}
-Tasks: ${ps2.length} total,   ${ps2.filter((p) => p.cpu > 1).length} running
+Tasks: ${ps2.length + live.length} total,   ${ps2.filter((p) => p.cpu > 1).length} running
 MiB Mem :   3936.0 total,   1412.4 free,   1201.7 used
 
 ` +
@@ -3220,13 +3226,15 @@ MiB Mem :   3936.0 total,   1412.4 free,   1201.7 used
         [
           ["PID", "USER", "%CPU", "%MEM", "COMMAND"] as (string | number)[],
         ].concat(
-          ps2.map((p) => [
-            p.pid,
-            p.user,
-            p.cpu.toFixed(1),
-            p.mem.toFixed(1),
-            p.cmd,
-          ]),
+          ps2
+            .map((p) => [
+              p.pid,
+              p.user,
+              p.cpu.toFixed(1),
+              p.mem.toFixed(1),
+              p.cmd,
+            ])
+            .concat(live.map((p) => [p.pid, "cadet", "0.0", "0.0", p.cmdline])),
         ),
       ) +
       `
@@ -3235,52 +3243,24 @@ MiB Mem :   3936.0 total,   1412.4 free,   1201.7 used
   );
 };
 
-const kill: CmdFn = (argv, _sh, io) => {
-  const args = argv.slice(1);
-  let sig = "TERM";
-  const pids: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === "-s") sig = (args[++i] || "").replace(/^SIG/, "");
-    else if (a === "-l")
-      return line(
-        io,
-        " 1) SIGHUP   2) SIGINT   9) SIGKILL  15) SIGTERM  19) SIGSTOP",
-      );
-    else if (/^-\w+$/.test(a)) {
-      const s = a.slice(1).replace(/^SIG/, "");
-      sig = s === "9" ? "KILL" : s === "15" ? "TERM" : s;
-    } else pids.push(a);
-  }
-  if (!pids.length) return fail(io, "kill: usage: kill [-9] PID");
-  const errs: string[] = [];
-  for (const ps2 of pids) {
-    const pid = +ps2;
-    const p = S.procs.find((x) => x.pid === pid);
-    if (!p) {
-      errs.push(`kill: (${ps2}) - No such process`);
-      continue;
-    }
-    if (p.user !== "cadet") {
-      errs.push(`kill: (${ps2}) - Operation not permitted`);
-      continue;
-    }
-    if (p.stubborn && sig !== "KILL") continue;
-    S.procs = S.procs.filter((x) => x !== p);
-  }
-  return errs.length ? fail(io, errs.join("\n")) : 0;
-};
-
-const pkill: CmdFn = (argv, _sh, io) => {
+const pkill: CmdFn = (argv, sh, io) => {
   const args = argv.slice(1);
   const pos = args.filter((a) => !a.startsWith("-"));
   const nm = pos[0];
   if (!nm) return fail(io, "pkill: no process name given");
   const sig9 = args.includes("-9") || args.includes("-KILL");
+  // B10: the processes of the jobs, by name; the signal is TERM unless one is named.
+  const named = args.find((a) => /^-[A-Za-z0-9]+$/.test(a));
+  const sig = (named && signalName(named.slice(1))) || "TERM";
+  const liveHit = sh.interp.jobs.liveProcs().filter((p) => p.name.includes(nm));
+  for (const p of liveHit) {
+    const proc = p.job.live().find((x) => x.pid === p.pid);
+    signalJob(sh, p.job, sig, proc === p.job.procs[0] ? undefined : proc);
+  }
   const hit = S.procs.filter((p) =>
     p.cmd.split(" ")[0].replace(/^-/, "").includes(nm),
   );
-  if (!hit.length) return 1;
+  if (!hit.length) return liveHit.length ? 0 : 1;
   for (const p of hit) {
     if (p.user !== "cadet")
       return fail(
@@ -3411,7 +3391,7 @@ export const CMDS: Record<string, CmdFn> = {
   clear,
   ps,
   top,
-  kill,
+  kill: (argv, sh, io) => BUILTINS.kill(sh, argv, io),
   pkill,
   killall: pkill,
   free,

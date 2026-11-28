@@ -13,15 +13,21 @@ export const SIGNALS: Record<string, number> = {
   QUIT: 3,
   KILL: 9,
   USR1: 10,
+  PIPE: 13,
+  ALRM: 14,
   USR2: 12,
   TERM: 15,
+  CHLD: 17,
   CONT: 18,
   STOP: 19,
   TSTP: 20,
+  TTIN: 21,
+  URG: 23,
+  WINCH: 28,
 };
 
 /** Signals that a process ignores when it has no trap (B6). */
-const DEFAULT_IGNORED = new Set(["CONT"]);
+const DEFAULT_IGNORED = new Set(["CONT", "CHLD", "URG", "WINCH"]);
 
 /** One real macrotask (B7): a `MessageChannel` message; `setTimeout(0)` where there is none. */
 function macrotask(): Promise<void> {
@@ -117,6 +123,14 @@ export class Sched {
    */
   deliver(p: Proc, sig: string): void {
     const trap = p.ctx.traps[sig];
+    // B9: SIGCONT lets a stopped process go on, with or without a trap.
+    if (sig === "CONT") p.cont();
+    // B9: SIGSTOP, and SIGTSTP with no trap, stop the process (they do not end it).
+    if (sig === "STOP" || (sig === "TSTP" && trap === undefined)) {
+      p.stop();
+      return;
+    }
+    if (sig === "KILL") p.cont();
     if (trap === "" && sig !== "KILL" && sig !== "STOP") return;
     if (trap === undefined && sig !== "KILL") {
       if (DEFAULT_IGNORED.has(sig)) return;
@@ -129,5 +143,7 @@ export class Sched {
   /** Sends `sig` to every process of the input `run` (the foreground job, B6). */
   signalRun(run: Run, sig: string): void {
     for (const p of [...run.procs]) this.deliver(p, sig);
+    // B9: a job that `fg` brought to the foreground gets the signal too.
+    if (run.fgJob) for (const p of run.fgJob.live()) this.deliver(p, sig);
   }
 }

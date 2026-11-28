@@ -19,6 +19,7 @@ import type {
 } from "./ast";
 import { BUILTINS, KEYWORDS, unaryTest, intCompare } from "./builtins";
 import { getClock } from "../clock";
+import { Job } from "./jobs";
 import { Context } from "./context";
 import type { SrcInfo } from "./context";
 import { ExpError, Expander } from "./expand";
@@ -83,6 +84,22 @@ export class SignalStop {
     this.code = 128 + (SIGNALS[sig] ?? 0);
   }
 }
+
+/**
+ * Ctrl-Z took the unit this process waited on (B9): the unit goes on as a
+ * stopped job, and the rest of the input does not run. The status is 148.
+ */
+export class Detached {
+  readonly code = 148;
+}
+
+/**
+ * What the root process waits on when Ctrl-Z can take it (B9): a command that
+ * the process runs itself (`cmd`), a child that runs on the baton of the
+ * process (`within`: a subshell, a script), or pipeline stages that have
+ * batons of their own (`stages`).
+ */
+export type UnitKind = "cmd" | "within" | "stages";
 
 /** A line the game prints itself: a stop notice, a hint. Never stdout or stderr. */
 export interface Note {
@@ -179,6 +196,14 @@ export class Run implements OutSink {
   cur: Proc | null = null;
   /** `>( )` consumers of the input, for all its processes (they run at its end or at `sleep`). */
   procFiles: ProcFile[] = [];
+  /** The process that reads the keys of the input (B9: Ctrl-Z takes the unit it waits on). */
+  root: Proc | null = null;
+  /** True for an input typed at the prompt: Ctrl-Z can take its foreground unit (B9). */
+  jobControl = false;
+  /** A job that `fg` brought to the foreground: it gets the signals of the input (B9). */
+  fgJob: Job | null = null;
+  /** Where a foregrounded job's output also goes into the chunk list (`fg`, B15). */
+  mirror: Run | null = null;
   private chunkBytes = 0;
   private capped = false;
   constructor(
@@ -192,6 +217,13 @@ export class Run implements OutSink {
 
   /** One piece of terminal output: kept (up to 1 MB of text) and sent on. */
   emit(chunk: Chunk): void {
+    (this.mirror ?? this).keep(chunk);
+    const r = this.onOutput?.({ kind: "chunk", chunk });
+    if (r) this.held = r;
+  }
+
+  /** Keeps a chunk in the list of the input, up to the cap. */
+  keep(chunk: Chunk): void {
     if (!this.capped) {
       if (this.chunkBytes + chunk.text.length > CHUNK_CAP) this.capped = true;
       else {
@@ -199,8 +231,6 @@ export class Run implements OutSink {
         this.chunks.push(chunk);
       }
     }
-    const r = this.onOutput?.({ kind: "chunk", chunk });
-    if (r) this.held = r;
   }
 
   /** The promise of the terminal while it is behind (B15 flow control), or null. */
@@ -225,8 +255,22 @@ export class Run implements OutSink {
 }
 
 export class Proc {
-  /** The process id (B10 gives the visible ones; this phase only counts). */
-  readonly pid: number;
+  /** The process id (B10). The processes of the prompt shell take none until a job needs one. */
+  pid: number;
+  /** True once the process ended: `ps` and signals skip it. */
+  ended = false;
+  /** B9: a stopped process waits at its next safe point until SIGCONT. */
+  held = false;
+  private resumers: (() => void)[] = [];
+  /** The command line of the last command this process ran (B10, for `ps aux`). */
+  cmdline = "";
+  /**
+   * B9: set while this input's root process waits on a unit that Ctrl-Z can
+   * take. It hands the unit over and gives what the job needs.
+   */
+  detach: (() => { p: Promise<unknown>; kind: UnitKind }) | null = null;
+  /** True when Ctrl-Z took the unit this process waited on: it holds no baton. */
+  tokenless = false;
   ctx: Context;
   run: Run;
   /** Depth of functions, `eval`, and `source` (D6). */
@@ -253,8 +297,8 @@ export class Proc {
   >();
   /** A trap runs with the line of the command that triggered it (`LINENO`). */
   lineOverride: number | null = null;
-  /** The job this process belongs to (job control comes in a later phase). */
-  job: unknown = null;
+  /** The job this process belongs to (B9). */
+  job: Job | null = null;
   /** Pending signals (B6): they run or end the process at the next safe point. */
   signals: string[] = [];
   /** How many child processes this process waits on now. */
@@ -272,8 +316,9 @@ export class Proc {
     readonly interp: Interp,
     run: Run,
     ctx: Context,
+    pid?: number,
   ) {
-    this.pid = interp.sched.allocPid();
+    this.pid = pid ?? interp.sched.allocPid();
     this.run = run;
     run.procs.add(this);
     this.procFiles = run.procFiles;
@@ -318,7 +363,7 @@ export class Proc {
    * A child process on `ctx`. It starts with the counters of this process
    * (the D6 limits go on through the chain) and it shares the `Run`.
    */
-  spawn(ctx: Context): Proc {
+  spawn(ctx: Context, run: Run = this.run): Proc {
     if (this.chain >= LIM.depth) {
       const frames = this.ctx.frames;
       const name = frames.length
@@ -329,7 +374,7 @@ export class Proc {
     // As in bash, a subshell resets the traps for signals; `trap ''` stays (B6).
     for (const sig of Object.keys(SIGNALS))
       if (ctx.traps[sig]) delete ctx.traps[sig];
-    const c = new Proc(this.interp, this.run, ctx);
+    const c = new Proc(this.interp, run, ctx);
     c.chain = this.chain + 1;
     c.depth = this.depth;
     c.nest = this.nest;
@@ -337,7 +382,7 @@ export class Proc {
     c.overflowName = this.overflowName;
     c.procSeq = this.procSeq;
     c.lineOverride = this.lineOverride;
-    c.job = this.job;
+    if (this.job) this.job.add(c);
     c.rootIn = this.rootIn;
     return c;
   }
@@ -347,15 +392,153 @@ export class Proc {
     const prev = this.run.cur;
     this.run.cur = c;
     this.kids++;
+    let gone = false;
     try {
-      return await f();
+      return await this.fgWait(f(), "within");
+    } catch (e) {
+      if (e instanceof Detached) gone = true;
+      throw e;
     } finally {
+      if (!gone) c.ended = true;
       this.kids--;
       this.run.procs.delete(c);
       this.run.cur = prev;
       if (this.overflowName === null) this.overflowName = c.overflowName;
       if (c.procSeq > this.procSeq) this.procSeq = c.procSeq;
     }
+  }
+
+  /* ---------- stop, continue, and Ctrl-Z (B9) ---------- */
+
+  /** SIGSTOP: the process waits at its next safe point until `cont`. */
+  stop(): void {
+    this.held = true;
+  }
+
+  /** SIGCONT: lets a stopped process go on. */
+  cont(): void {
+    this.held = false;
+    const r = this.resumers.splice(0);
+    for (const f of r) f();
+  }
+
+  /** The safe point of a stopped process: waits, with the baton given away, until `cont`. */
+  async gate(): Promise<void> {
+    while (this.held)
+      await this.interp.sched.blocked(
+        () => new Promise<void>((resolve) => this.resumers.push(resolve)),
+      );
+  }
+
+  /** True when Ctrl-Z may take what this process waits on. */
+  private detachable(): boolean {
+    return this.run.root === this && this.run.jobControl;
+  }
+
+  /**
+   * Waits for the unit `p`. At the root process of a prompt input, Ctrl-Z can
+   * take the unit: the wait ends with `Detached`, and `p` goes on as a job.
+   */
+  async fgWait<T>(p: Promise<T>, kind: UnitKind): Promise<T> {
+    if (!this.detachable()) return await p;
+    const gate = new Promise<never>((_, reject) => {
+      this.detach = () => {
+        this.tokenless = true;
+        reject(new Detached());
+        return { p, kind };
+      };
+    });
+    try {
+      return await Promise.race([p, gate]);
+    } finally {
+      this.detach = null;
+    }
+  }
+
+  /**
+   * Waits for pipeline stages that have batons of their own: gives the baton
+   * away, starts them with `start`, takes the baton back (not after Ctrl-Z).
+   */
+  private async awaitStages<T>(start: () => Promise<T>): Promise<T> {
+    const sched = this.interp.sched;
+    sched.release();
+    let gone = false;
+    try {
+      return await this.fgWait(start(), "stages");
+    } catch (e) {
+      if (e instanceof Detached) gone = true;
+      throw e;
+    } finally {
+      if (!gone) await sched.acquire();
+    }
+  }
+
+  /* ---------- background jobs (B9) ---------- */
+
+  /** `CMD &`: starts a job that runs on beside the shell. Returns 0. */
+  private startBg(n: Node): number {
+    const interp = this.interp;
+    const notify = this.ctx.interactive && this.ctx.src.kind === "prompt";
+    const job = new Job(n.text ?? "", notify);
+    const jrun = new Run(interp.bgTask, interp.output ?? this.run.onOutput);
+    const child = this.spawn(this.ctx.copy(), jrun);
+    // The child is a process of the new job only.
+    if (child.job) child.job.procs = child.job.procs.filter((x) => x !== child);
+    child.attach(jrun);
+    child.nest = this.nest + 1;
+    child.scripts = this.scripts;
+    const pio = this.ctx.io;
+    const io = child.ctx.io;
+    if (!(pio.out instanceof TermWriter)) io.out = pio.out;
+    if (!(pio.err instanceof TermWriter)) io.err = pio.err;
+    if (!pio.in.tty) io.in = pio.in;
+    io.fds = pio.fds;
+    job.add(child);
+    job.run = jrun;
+    job.onDone = interp.onJobEnd ?? null;
+    interp.jobs.add(job);
+    this.ctx.lastBg = String(child.pid);
+    this.ctx.pipestatus = [0];
+    if (notify) this.ctx.io.err.write(`[${job.n}] ${child.pid}\n`);
+    const node: Node = { ...n, bg: false };
+    const sched = interp.sched;
+    void (async () => {
+      await sched.acquire();
+      let res: { code: number; sig: string | null };
+      try {
+        res = await child.runJob(node);
+      } catch (e) {
+        console.error("port-penguin: simulator error:", e);
+        res = { code: 1, sig: null };
+      } finally {
+        sched.release();
+      }
+      job.finish(res.code, res.sig);
+    })();
+    return 0;
+  }
+
+  /** Runs the body of a job; gives its status and the signal that ended it. */
+  async runJob(node: Node): Promise<{ code: number; sig: string | null }> {
+    let code: number;
+    let sig: string | null = null;
+    try {
+      code = await this.runNode(node);
+    } catch (e) {
+      if (e instanceof SignalStop) {
+        code = e.code;
+        sig = e.sig;
+      } else code = this.topError(e);
+    }
+    try {
+      await this.cleanProcs();
+    } catch {
+      /* a consumer that fails does not change the status of the job */
+    }
+    for (const note of this.run.notes)
+      this.run.emit({ stream: "stderr", text: note.text + "\n" });
+    this.run.notes.length = 0;
+    return { code, sig };
   }
 
   /* ---------- one input ---------- */
@@ -371,7 +554,11 @@ export class Proc {
     this.procFiles = run.procFiles;
     const task = run.task;
     run.cur = this;
+    run.root = this;
     run.procs.add(this);
+    this.tokenless = false;
+    this.held = false;
+    this.ended = false;
     this.signals = [];
     this.kids = 0;
     this.waiter = null;
@@ -402,6 +589,14 @@ export class Proc {
         if (!reader) return null;
         const caller = sh ?? this.run.cur ?? this;
         const input = this.rootIn;
+        // B24: a background job that reads the terminal gets SIGTTIN and stops.
+        const job = caller.job;
+        if (job && !job.fg && job.state === "running") {
+          job.stop();
+          job.dirty = true;
+          this.interp.jobs.touch(job);
+          await caller.gate();
+        }
         const ac = new AbortController();
         let timedOut = false;
         let wakeNow: (() => void) | null = null;
@@ -456,7 +651,8 @@ export class Proc {
     try {
       return await this.runLineHeld(text);
     } finally {
-      sched.release();
+      // After Ctrl-Z the unit that was taken holds the baton (B9).
+      if (!this.tokenless) sched.release();
     }
   }
 
@@ -547,6 +743,7 @@ export class Proc {
 
   private topError(e: unknown): number {
     if (e instanceof SigPipe) return e.code;
+    if (e instanceof Detached) return e.code;
     if (e instanceof LimitStop) {
       this.note("^C", false);
       this.note(stopMessage(e.limit), true);
@@ -723,12 +920,12 @@ export class Proc {
   async runNode(n: Node): Promise<number> {
     this.tick();
     const due = this.interp.sched.due();
-    if (due || this.signals.length) await this.pause(due);
+    if (due || this.signals.length || this.held) await this.pause(due);
     const ctx = this.ctx;
     ctx.line = this.lineOverride ?? n.line;
     let code: number;
     try {
-      code = await this.exec(n);
+      code = n.bg ? this.startBg(n) : await this.exec(n);
     } catch (e) {
       if (e instanceof ExpError) {
         code = e.code;
@@ -773,6 +970,7 @@ export class Proc {
     const sched = this.interp.sched;
     await this.drain();
     if (due ?? sched.due()) await sched.yield();
+    await this.gate();
     if (this.signals.length) await this.dispatchSignals();
   }
 
@@ -800,6 +998,7 @@ export class Proc {
   async interruptible(
     arm: (wake: () => void) => () => void,
   ): Promise<string | null> {
+    await this.gate();
     this.ending();
     if (this.signals.length) return this.signals[0];
     let over = false;
@@ -817,6 +1016,7 @@ export class Proc {
         }),
     );
     this.waiter = null;
+    await this.gate();
     if (over) return null;
     this.ending();
     return this.signals[0] ?? null;
@@ -983,6 +1183,7 @@ export class Proc {
         if (e instanceof SigPipe) return { code: e.code };
         return { err: e };
       } finally {
+        child.ended = true;
         // A stage that ends closes its ends, so the others are never stuck.
         if (i < count - 1) pipes[i].closeWriter();
         if (i > 0) pipes[i - 1].closeReader();
@@ -991,7 +1192,7 @@ export class Proc {
     };
     let done: Done[];
     try {
-      done = await sched.blocked(() =>
+      done = await this.awaitStages(() =>
         Promise.all(children.map((_, i) => stageRun(i))),
       );
     } finally {
@@ -1576,6 +1777,7 @@ export class Proc {
     const name = argv[0];
     const ctx = this.ctx;
     this.cmd = name;
+    this.cmdline = argv.join(" ");
     if (!o.noFunc && !o.builtinOnly && ctx.functions[name] !== undefined) {
       const body = this.functionBody(name);
       if (body) return await this.callFunction(name, argv.slice(1), body);
@@ -1589,7 +1791,11 @@ export class Proc {
     const cmd = Object.hasOwn(this.host.commands, name)
       ? this.host.commands[name]
       : undefined;
-    if (cmd) return await cmd(argv, this, io);
+    if (cmd) {
+      const r = cmd(argv, this, io);
+      if (typeof r === "number") return r;
+      return await this.fgWait(r, "cmd");
+    }
     if (name.includes("/")) return await this.runPath(argv, io);
     this.fail(`${name}: command not found`);
     if (this.promptLevel()) this.run.events.push({ kind: "notfound", name });

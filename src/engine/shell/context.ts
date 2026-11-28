@@ -70,6 +70,8 @@ export class Context {
   line = 0;
   lastArg = "";
   pipestatus: number[] = [0];
+  /** `$!`: the id of the last background job (B9). */
+  lastBg = "";
   io!: IO;
   /** True in the prompt shell and in `bash -i`. */
   interactive = false;
@@ -123,6 +125,7 @@ export class Context {
     c.line = this.line;
     c.lastArg = this.lastArg;
     c.pipestatus = this.pipestatus.slice();
+    c.lastBg = this.lastBg;
     c.io = this.io;
     c.interactive = this.interactive;
     c.noErr = this.noErr;

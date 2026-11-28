@@ -22,7 +22,10 @@ import {
   termCols,
 } from "./shell/context";
 import { Interp } from "./shell/interp";
-import { Run as InputRun } from "./shell/proc";
+import { Job, jobLine } from "./shell/jobs";
+import type { JobNotice } from "./shell/jobs";
+import { Run as InputRun, SignalStop } from "./shell/proc";
+import type { UnitKind } from "./shell/proc";
 import type { ReadRequest, Chunk, Ctx, OutputSink } from "./shell/io";
 import { parseFull } from "./shell/parser";
 import { readText } from "./shell/redirect";
@@ -37,6 +40,7 @@ export { RC_KEY, SAVE_KEY } from "./state";
 export type { SaveStorage, State } from "./state";
 export type { Chunk, OutputEvent, OutputSink, ReadRequest } from "./shell/io";
 export type { Clock } from "./clock";
+export type { JobNotice } from "./shell/jobs";
 
 /* ============================================================
    INSTRUCTOR PASSWORD for hints, skipping and jumping.
@@ -103,6 +107,11 @@ export interface Engine {
   signal(sig: string): void;
   /** True while a foreground job runs, and while `~/.bashrc` runs in `start()` (B15). */
   busy(): boolean;
+  /**
+   * The job lines for the next prompt (B9, B15): each job whose state changed
+   * since the last prompt. Reading them clears them.
+   */
+  notices(): JobNotice[];
   /** True when `text` is a whole input; false when bash would show `> ` (AC1). */
   isComplete(text: string): boolean;
   /** Ctrl-C at the prompt or at `> `: drops the kept input and sets `$?` to 130. */
@@ -218,6 +227,7 @@ export function createEngine(opts: EngineOptions): Engine {
   const pctx = new PromptContext(() => s);
   const blank = (): Ctx => ({ line: "", segs: [], ranExec: null, allOut: "" });
   const interp = new Interp(host);
+  interp.output = opts.onOutput;
   // B4, B16: a read of the keyboard goes to the terminal. The first one of a
   // command typed at the prompt carries the hint (once per page load).
   let keyboardHintShown = false;
@@ -234,7 +244,170 @@ export function createEngine(opts: EngineOptions): Engine {
   /** The input that runs now (B6): the foreground job. */
   let fg: InputRun | null = null;
   /** The prompt shell: the root process. Its output run changes with each input. */
-  const shell = interp.proc(pctx, new InputRun(blank()));
+  let shell = interp.proc(pctx, new InputRun(blank()));
+  // B12: what a background job does goes into the check of the input that runs
+  // when it happens, or into the check after the next input.
+  const pendingTask: Ctx = blank();
+  let curTask: Ctx | null = null;
+  const bgTarget = (): Ctx => {
+    if (curTask) return curTask;
+    // A job that runs for ever at an idle prompt must not grow the list without a bound.
+    if (pendingTask.segs.length > 5000)
+      pendingTask.segs.splice(0, pendingTask.segs.length - 5000);
+    return pendingTask;
+  };
+  interp.bgTask = {
+    get line() {
+      return bgTarget().line;
+    },
+    set line(v: string) {
+      bgTarget().line = v;
+    },
+    get segs() {
+      return bgTarget().segs;
+    },
+    set segs(v: string[][]) {
+      bgTarget().segs = v;
+    },
+    get ranExec() {
+      return bgTarget().ranExec;
+    },
+    set ranExec(v: string | null) {
+      bgTarget().ranExec = v;
+    },
+    get allOut() {
+      return bgTarget().allOut;
+    },
+    set allOut(v: string) {
+      bgTarget().allOut = v;
+    },
+  };
+  /** Moves what jobs did since the last input into the check of the input that starts. */
+  function takePending(task: Ctx): void {
+    if (pendingTask.segs.length) {
+      task.segs.push(...pendingTask.segs);
+      pendingTask.segs = [];
+    }
+    if (pendingTask.allOut) {
+      task.allOut = (pendingTask.allOut + task.allOut).slice(0, 1_048_576);
+      pendingTask.allOut = "";
+    }
+    if (pendingTask.ranExec && !task.ranExec)
+      task.ranExec = pendingTask.ranExec;
+    pendingTask.ranExec = null;
+    curTask = task;
+  }
+  // B12: the game saves when a background job ends (an input saves at its own end).
+  interp.onJobEnd = () => {
+    if (fg === null) {
+      use();
+      persist();
+    }
+  };
+  /** Settles when the input that runs now has ended (for the panel actions, B15). */
+  let fgDone: Promise<void> = Promise.resolve();
+
+  /** Tells the player a job stopped, as bash does at once (B9). */
+  function announceStopped(run: InputRun, job: Job): void {
+    run.emit({
+      stream: "stderr",
+      text: jobLine(job, interp.jobs.mark(job)) + "\n",
+    });
+    interp.jobs.extra.push({ text: "", say: `Job ${job.n} stopped` });
+  }
+
+  /** The status and the signal of a unit that ended well (a number, or the stages of a pipeline). */
+  function unitCode(v: unknown, kind: UnitKind): [number, string | null] {
+    if (kind !== "stages") return [typeof v === "number" ? v : 0, null];
+    const list = Array.isArray(v)
+      ? (v as ({ code: number } | { err: unknown })[])
+      : [];
+    for (const d of list)
+      if ("err" in d && d.err instanceof SignalStop)
+        return [d.err.code, d.err.sig];
+    const last = list[list.length - 1];
+    return [last && "code" in last ? last.code : 0, null];
+  }
+
+  /**
+   * Ctrl-Z (B9): the unit that the input waits on goes on as a stopped job, and
+   * the rest of the input does not run. Does nothing when a builtin waits.
+   */
+  function stopForeground(): void {
+    const run = fg;
+    if (!run) return;
+    const table = interp.jobs;
+    if (run.fgJob) {
+      const j = run.fgJob;
+      j.stop();
+      table.touch(j);
+      announceStopped(run, j);
+      return;
+    }
+    const root = run.root;
+    if (!root || !root.detach) return;
+    const { p, kind } = root.detach();
+    const rest = [...run.procs].filter((x) => x !== root);
+    const members = kind === "cmd" ? [root, ...rest] : rest;
+    const job = new Job(run.task.line.trim(), true);
+    if (kind === "cmd") root.pid = interp.sched.allocPid();
+    for (const m of members) job.add(m);
+    job.run = run;
+    job.onDone = interp.onJobEnd ?? null;
+    // What the unit writes from now on belongs to the next check (B12).
+    run.task = interp.bgTask;
+    table.add(job);
+    job.stop();
+    announceStopped(run, job);
+    // The next input needs a root process of its own; this one belongs to the job.
+    if (kind === "cmd") shell = interp.proc(pctx, new InputRun(blank()));
+    const end = (code: number, sig: string | null): void => {
+      // A unit that ran on the baton of the root gives it back when it ends.
+      if (kind !== "stages") interp.sched.release();
+      job.finish(code, sig);
+    };
+    p.then(
+      (v) => {
+        const [code, sig] = unitCode(v, kind);
+        end(code, sig);
+      },
+      (e: unknown) => {
+        if (e instanceof SignalStop) end(e.code, e.sig);
+        else if (e && typeof e === "object" && "code" in e)
+          end(Number((e as { code: unknown }).code), null);
+        else end(1, null);
+      },
+    );
+  }
+
+  /**
+   * Ends every job, the foreground one too, and forgets the table (B11, B15).
+   * KILL runs no trap and prints no notice; HUP is what exit sends.
+   */
+  async function endJobs(sig: "KILL" | "HUP"): Promise<void> {
+    const sched = interp.sched;
+    const all = interp.jobs.active();
+    if (fg) sched.signalRun(fg, sig);
+    for (const j of all)
+      for (const p of j.live()) {
+        sched.deliver(p, sig);
+        p.cont();
+      }
+    await fgDone;
+    for (const j of all)
+      while (j.state !== "done")
+        await new Promise<void>((resolve) => {
+          const off = j.onChange(resolve);
+          // A job that ended in between never calls back.
+          if (j.state === "done") {
+            off();
+            resolve();
+          }
+        });
+    interp.jobs.clear();
+    pendingTask.segs = [];
+    pendingTask.allOut = "";
+  }
   /** Variables that `~/.bashrc` set. They are not saved: it sets them again at start. */
   let rcOwned: Record<string, string> = nul();
   let rcDone = false;
@@ -459,7 +632,16 @@ export function createEngine(opts: EngineOptions): Engine {
     isComplete,
 
     signal(sig: string) {
-      if (fg) interp.sched.signalRun(fg, sig);
+      if (!fg) return;
+      if (sig === "TSTP" && fg.root?.ctx.traps.TSTP === undefined) {
+        stopForeground();
+        return;
+      }
+      interp.sched.signalRun(fg, sig);
+    },
+
+    notices() {
+      return interp.jobs.notices();
     },
 
     busy() {
@@ -478,6 +660,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     async execute(lineText: string): Promise<ExecResult> {
       use();
+      interp.jobs.inputSeq++;
       const events: EngineEvent[] = [];
       const lines: OutLine[] = [];
       if (!rcDone) lines.push(...(await runRc()));
@@ -506,8 +689,12 @@ export function createEngine(opts: EngineOptions): Engine {
         allOut: "",
       };
       const run = new InputRun(task, opts.onOutput);
+      run.jobControl = true;
       shell.attach(run);
       fg = run;
+      takePending(task);
+      let release!: () => void;
+      fgDone = new Promise<void>((resolve) => (release = resolve));
       let crashed: string | null = null;
       try {
         await shell.runLine(lineText);
@@ -518,6 +705,8 @@ export function createEngine(opts: EngineOptions): Engine {
         pctx.lastCode = 1;
       }
       fg = null;
+      curTask = null;
+      release();
       const chunks = run.chunks.slice();
       if (crashed !== null)
         lines.push(
@@ -533,6 +722,7 @@ export function createEngine(opts: EngineOptions): Engine {
         lines.push(textLine(NOT_FOUND_HINT, "dim"));
       if (run.exited !== null) {
         const code = run.exited;
+        await endJobs("HUP");
         syncOut();
         lines.push(...(await newShell(new Set(pctx.exported))));
         pctx.lastCode = code;
@@ -652,7 +842,14 @@ export function createEngine(opts: EngineOptions): Engine {
             ),
           );
         else if (words[0] === "kill")
-          cands = pick(s.procs.map((p) => String(p.pid)));
+          cands = pick(
+            [
+              ...new Set([
+                ...interp.jobs.liveProcs().map((p) => p.pid),
+                ...s.procs.map((p) => p.pid),
+              ]),
+            ].map(String),
+          );
         else files(word);
       }
       const none: Completion = { value: v, cursor: pos, listing: [] };
@@ -683,6 +880,7 @@ export function createEngine(opts: EngineOptions): Engine {
     },
 
     async skip() {
+      await endJobs("KILL");
       use();
       const out: OutLine[] = [];
       s.cur++;
@@ -698,6 +896,7 @@ export function createEngine(opts: EngineOptions): Engine {
     },
 
     async jump(index: number) {
+      await endJobs("KILL");
       use();
       const out: OutLine[] = [];
       s.cur = index;
@@ -710,6 +909,7 @@ export function createEngine(opts: EngineOptions): Engine {
     },
 
     async unlock(password: string) {
+      await endJobs("KILL");
       use();
       if (sha256(password) !== HINT_HASH) return null;
       s.unlocked = true;
@@ -723,6 +923,7 @@ export function createEngine(opts: EngineOptions): Engine {
     },
 
     async lock() {
+      await endJobs("KILL");
       use();
       s.unlocked = false;
       persist();
@@ -730,6 +931,7 @@ export function createEngine(opts: EngineOptions): Engine {
     },
 
     async reset() {
+      await endJobs("KILL");
       s = fresh();
       use();
       await newShell();

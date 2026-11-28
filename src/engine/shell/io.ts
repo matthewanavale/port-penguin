@@ -74,6 +74,8 @@ export interface OutSink {
   clear(): void;
   /** A promise while the terminal cannot take more output, else null. */
   hold(): Promise<void> | null;
+  /** The task data that `allOut` goes to; the sink may move it (B12). */
+  task?: TaskCtx;
 }
 
 /** What `allOut` keeps of one input (B12). */
@@ -96,12 +98,9 @@ export class TermWriter implements Writer {
     if (html !== undefined) c.html = html;
     this.sink.emit(c);
     // B12: `allOut` keeps at most its first 1 MB per input.
-    if (
-      this.stream === "stdout" &&
-      this.task &&
-      this.task.allOut.length < ALL_OUT_CAP
-    )
-      this.task.allOut += text.slice(0, ALL_OUT_CAP - this.task.allOut.length);
+    const task = this.task && (this.sink.task ?? this.task);
+    if (this.stream === "stdout" && task && task.allOut.length < ALL_OUT_CAP)
+      task.allOut += text.slice(0, ALL_OUT_CAP - task.allOut.length);
   }
 }
 

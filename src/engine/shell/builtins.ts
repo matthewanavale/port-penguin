@@ -5,7 +5,17 @@ import { nul } from "../nullmap";
 import { get } from "../paths";
 import { ExpError } from "./expand";
 import type { Context } from "./context";
-import { ExitSig, BreakSig, ContinueSig, ReturnSig, AbortLine } from "./proc";
+import {
+  ExitSig,
+  BreakSig,
+  ContinueSig,
+  ReturnSig,
+  AbortLine,
+  SignalStop,
+} from "./proc";
+import { jobLine } from "./jobs";
+import type { Job, JobState } from "./jobs";
+import { S } from "../state";
 import type { Proc } from "./proc";
 import { getClock } from "../clock";
 import type { CmdFn, IO } from "./io";
@@ -1178,8 +1188,16 @@ const exit: Builtin = (sh, argv, io) => {
     sh.fail("exit: too many arguments");
     return 1;
   }
-  if (sh.ctx.src.kind === "prompt" && sh.nest === 0 && sh.ctx.interactive)
-    io.err.write("exit\n");
+  const prompt =
+    sh.ctx.src.kind === "prompt" && sh.nest === 0 && sh.ctx.interactive;
+  if (prompt) io.err.write("exit\n");
+  // B9: `exit` with stopped jobs warns once; a second `exit` right after leaves.
+  const table = sh.interp.jobs;
+  if (prompt && table.stopped().length && table.warned !== table.inputSeq - 1) {
+    io.err.write("There are stopped jobs.\n");
+    table.warned = table.inputSeq;
+    return 1;
+  }
   throw new ExitSig(r.code);
 };
 
@@ -1880,6 +1898,370 @@ const history: Builtin = (sh, argv, io) => {
   return 0;
 };
 
+/* ---------- job control (B9, B10) ---------- */
+
+/** Finds the jobs a builtin names: all of them when there is no spec; null after an error. */
+function jobsFor(
+  sh: Proc,
+  name: string,
+  specs: string[],
+  dflt: "current" | "all",
+): Job[] | null {
+  const table = sh.interp.jobs;
+  if (!specs.length) {
+    if (dflt === "all") return [...table.jobs].sort((a, b) => a.n - b.n);
+    const j = table.find("%");
+    if (typeof j === "string") {
+      sh.fail(`${name}: ${j}`);
+      return null;
+    }
+    return [j];
+  }
+  const found: Job[] = [];
+  let bad = false;
+  for (const s of specs) {
+    const j = table.find(s);
+    if (typeof j === "string") {
+      sh.fail(`${name}: ${j}`);
+      bad = true;
+    } else found.push(j);
+  }
+  return bad && !found.length ? null : found;
+}
+
+const jobsCmd: Builtin = (sh, argv, io) => {
+  const table = sh.interp.jobs;
+  let long = false;
+  let pids = false;
+  let only: JobState | null = null;
+  let i = 1;
+  for (; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--") {
+      i++;
+      break;
+    }
+    if (!/^-[a-z]+$/.test(a)) break;
+    for (const ch of a.slice(1)) {
+      if (ch === "l") long = true;
+      else if (ch === "p") pids = true;
+      else if (ch === "r") only = "running";
+      else if (ch === "s") only = "stopped";
+      else if (ch === "n") continue;
+      else {
+        sh.fail(`jobs: -${ch}: invalid option`);
+        io.err.write(
+          "jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]\n",
+        );
+        return 2;
+      }
+    }
+  }
+  const list = jobsFor(sh, "jobs", argv.slice(i), "all");
+  if (list === null) return 1;
+  for (const j of list) {
+    if (only && j.state !== only) continue;
+    if (pids) out(io, `${j.pid}\n`);
+    else out(io, jobLine(j, table.mark(j), { pid: long }) + "\n");
+    j.dirty = false;
+  }
+  table.jobs = table.jobs.filter((j) => j.state !== "done");
+  return 0;
+};
+
+/** Brings `job` to the foreground and waits for it (`fg`). */
+async function foreground(sh: Proc, job: Job, io: IO): Promise<number> {
+  const table = sh.interp.jobs;
+  out(io, job.cmd + "\n");
+  job.dirty = false;
+  job.fg = true;
+  const jrun = job.run;
+  if (jrun) jrun.mirror = sh.run;
+  sh.run.fgJob = job;
+  table.touch(job);
+  job.cont();
+  sh.kids++;
+  try {
+    while (job.state === "running") {
+      const sig = await sh.interruptible((wake) => {
+        const off = job.onChange(wake);
+        return () => void off();
+      });
+      if (sig !== null) await sh.dispatchSignals();
+    }
+  } finally {
+    sh.kids--;
+    job.fg = false;
+    sh.run.fgJob = null;
+    if (jrun) jrun.mirror = null;
+  }
+  if (job.state === "stopped") return 148;
+  table.jobs = table.jobs.filter((j) => j !== job);
+  job.dirty = false;
+  if (job.sig === "INT") throw new SignalStop("INT");
+  if (job.sig && job.sig !== "PIPE") io.err.write(job.stateText() + "\n");
+  return job.status;
+}
+
+const fgCmd: Builtin = async (sh, argv, io) => {
+  const list = jobsFor(sh, "fg", argv.slice(1, 2), "current");
+  if (list === null) return 1;
+  return await foreground(sh, list[0], io);
+};
+
+const bgCmd: Builtin = (sh, argv, io) => {
+  const table = sh.interp.jobs;
+  const list = jobsFor(sh, "bg", argv.slice(1), "current");
+  if (list === null) return 1;
+  let code = 0;
+  for (const j of list) {
+    if (j.state === "running") {
+      sh.fail(`bg: job ${j.n} already in background`);
+      continue;
+    }
+    if (j.state === "done") {
+      sh.fail("bg: job has terminated");
+      code = 1;
+      continue;
+    }
+    table.touch(j);
+    j.dirty = false;
+    j.cont();
+    out(io, `[${j.n}]${table.mark(j)} ${j.cmd} &\n`);
+  }
+  return code;
+};
+
+const waitCmd: Builtin = async (sh, argv) => {
+  const table = sh.interp.jobs;
+  let next = false;
+  const ids: string[] = [];
+  for (const a of argv.slice(1)) {
+    if (a === "-n") next = true;
+    else if (/^-[fp]+$/.test(a) || a === "--") continue;
+    else ids.push(a);
+  }
+  let targets: Job[] = [];
+  let code = 0;
+  if (ids.length) {
+    for (const id of ids) {
+      if (id.startsWith("%")) {
+        const j = table.find(id);
+        if (typeof j === "string") {
+          sh.fail(`wait: ${j}`);
+          code = 127;
+        } else targets.push(j);
+        continue;
+      }
+      const pid = /^[0-9]+$/.test(id) ? Number(id) : NaN;
+      const j = Number.isNaN(pid)
+        ? null
+        : (table.byPid(pid) ??
+          table.jobs.find((x) => x.state === "done" && x.pid === pid) ??
+          null);
+      if (!j) {
+        sh.fail(
+          Number.isNaN(pid)
+            ? `wait: \`${id}': not a pid or valid job spec`
+            : `wait: pid ${id} is not a child of this shell`,
+        );
+        code = Number.isNaN(pid) ? 1 : 127;
+      } else targets.push(j);
+    }
+    if (!targets.length) return code;
+  } else targets = table.jobs.filter((j) => j.state !== "done");
+  const reap = (j: Job) => {
+    j.dirty = false;
+    table.jobs = table.jobs.filter((x) => x !== j);
+  };
+  const running = (): Job[] => targets.filter((j) => j.state === "running");
+  const waitChange = async (): Promise<void> => {
+    const sig = await sh.interruptible((wake) => {
+      const offs = running().map((j) => j.onChange(wake));
+      return () => offs.forEach((f) => void f());
+    });
+    if (sig !== null) await sh.dispatchSignals();
+  };
+  if (next) {
+    if (!targets.length) return 127;
+    for (;;) {
+      const done = targets.find((j) => j.state === "done");
+      if (done) {
+        reap(done);
+        return done.status;
+      }
+      if (!running().length) return 127;
+      await waitChange();
+    }
+  }
+  while (running().length) await waitChange();
+  if (ids.length) {
+    const last = targets[targets.length - 1];
+    code = last.state === "done" ? last.status : 0;
+  } else code = 0;
+  for (const j of targets) if (j.state === "done") reap(j);
+  return code;
+};
+
+const disownCmd: Builtin = (sh, argv) => {
+  const table = sh.interp.jobs;
+  let all = false;
+  let runningOnly = false;
+  const specs: string[] = [];
+  for (const a of argv.slice(1)) {
+    if (/^-[arh]+$/.test(a)) {
+      if (a.includes("a")) all = true;
+      if (a.includes("r")) runningOnly = true;
+    } else specs.push(a);
+  }
+  const list =
+    all || (runningOnly && !specs.length)
+      ? [...table.jobs]
+      : jobsFor(sh, "disown", specs, "current");
+  if (list === null) return 1;
+  for (const j of list) {
+    if (runningOnly && j.state !== "running") continue;
+    table.jobs = table.jobs.filter((x) => x !== j);
+    if (j.state !== "done") table.away.push(j);
+    j.disowned = true;
+    j.dirty = false;
+  }
+  return 0;
+};
+
+/** The signal for a name or a number (INT, SIGINT, 2). Gives null when it is none. */
+export function signalName(spec: string): string | null {
+  const s = spec.replace(/^SIG/i, "").toUpperCase();
+  if (/^[0-9]+$/.test(s)) {
+    const n = Number(s);
+    if (n === 0) return "0";
+    for (const [k, v] of Object.entries(SIGNALS)) if (v === n) return k;
+    return null;
+  }
+  return Object.hasOwn(SIGNALS, s) ? s : null;
+}
+
+/** Sends `sig` to a job: STOP and CONT change its state; the rest go to its processes (B9). */
+export function signalJob(sh: Proc, job: Job, sig: string, only?: Proc): void {
+  const table = sh.interp.jobs;
+  if (!only && (sig === "STOP" || sig === "TSTP")) {
+    if (job.state === "running") {
+      job.stop();
+      job.dirty = true;
+      table.touch(job);
+    }
+    return;
+  }
+  if (!only && sig === "CONT") {
+    job.cont();
+    return;
+  }
+  for (const p of only ? [only] : job.live()) sh.interp.sched.deliver(p, sig);
+}
+
+const KILL_USAGE =
+  "kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]";
+
+const killCmd: Builtin = (sh, argv, io) => {
+  const args = argv.slice(1);
+  let sig = "TERM";
+  const targets: string[] = [];
+  let list = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--") {
+      targets.push(...args.slice(i + 1));
+      break;
+    }
+    if (a === "-l" || a === "-L") list = true;
+    else if (a === "-s" || a === "-n") {
+      const v = args[++i];
+      if (v === undefined) {
+        sh.fail(`kill: ${a}: option requires an argument`);
+        io.err.write(KILL_USAGE + "\n");
+        return 2;
+      }
+      const name = signalName(v);
+      if (!name) {
+        sh.fail(`kill: ${v}: invalid signal specification`);
+        return 1;
+      }
+      sig = name;
+    } else if (/^-[A-Za-z0-9]+$/.test(a) && !targets.length) {
+      const name = signalName(a.slice(1));
+      if (!name) {
+        sh.fail(`kill: ${a.slice(1)}: invalid signal specification`);
+        return 1;
+      }
+      sig = name;
+    } else targets.push(a);
+  }
+  if (list) {
+    if (targets.length) {
+      let code = 0;
+      for (const t of targets) {
+        const n = /^[0-9]+$/.test(t) ? Number(t) : NaN;
+        const name = signalName(
+          Number.isNaN(n) ? t : String(n > 128 ? n - 128 : n),
+        );
+        if (name && name !== "0")
+          out(io, Number.isNaN(n) ? `${SIGNALS[name]}\n` : `${name}\n`);
+        else {
+          sh.fail(`kill: ${t}: invalid signal specification`);
+          code = 1;
+        }
+      }
+      return code;
+    }
+    out(io, " 1) SIGHUP   2) SIGINT   9) SIGKILL  15) SIGTERM  19) SIGSTOP\n");
+    return 0;
+  }
+  if (!targets.length) {
+    // The run-1 message stays for a plain `kill`.
+    io.err.write("kill: usage: kill [-9] PID\n");
+    return 1;
+  }
+  const table = sh.interp.jobs;
+  const plain: string[] = [];
+  let code = 0;
+  for (const t of targets) {
+    if (t.startsWith("%")) {
+      const j = table.find(t);
+      if (typeof j === "string" || j.state === "done") {
+        sh.fail(`kill: ${typeof j === "string" ? j : `${t}: no such job`}`);
+        code = 1;
+        continue;
+      }
+      signalJob(sh, j, sig);
+      continue;
+    }
+    const pid = Number(t);
+    const job = /^[0-9]+$/.test(t) ? table.byPid(pid) : null;
+    if (job) {
+      const p = job.live().find((x) => x.pid === pid);
+      signalJob(sh, job, sig, p === job.procs[0] ? undefined : p);
+      continue;
+    }
+    const p = S.procs.find((x) => x.pid === pid);
+    if (!p) {
+      plain.push(`kill: (${t}) - No such process`);
+      continue;
+    }
+    if (p.user !== "cadet") {
+      plain.push(`kill: (${t}) - Operation not permitted`);
+      continue;
+    }
+    if (p.stubborn && sig !== "KILL") continue;
+    S.procs = S.procs.filter((x) => x !== p);
+  }
+  // The run-1 lines are plain text, as before.
+  if (plain.length) {
+    io.err.write(plain.join("\n") + "\n");
+    code = 1;
+  }
+  return code;
+};
+
 const HELP: Record<string, string> = {
   cd: "cd: cd [-L|[-P [-e]] [-@]] [dir]\n    Change the shell working directory.\n    \n    Change the current directory to DIR.  The default DIR is the value of the\n    HOME shell variable.\n",
   pwd: "pwd: pwd [-LP]\n    Print the name of the current working directory.\n",
@@ -1895,6 +2277,13 @@ const HELP: Record<string, string> = {
   test: "test: test [expr]\n    Evaluate conditional expression.\n",
   true: "true: true\n    Return a successful result.\n",
   false: "false: false\n    Return an unsuccessful result.\n",
+  jobs: "jobs: jobs [-lnprs] [jobspec ...]\n    Display status of jobs.\n    \n    Lists the active jobs.  -l adds process IDs, -p lists only process IDs,\n    -r lists only running jobs, -s lists only stopped jobs.\n",
+  fg: "fg: fg [job_spec]\n    Move job to the foreground.\n    \n    Place the job identified by JOB_SPEC in the foreground, making it the\n    current job.  If JOB_SPEC is not present, the shell's notion of the\n    current job is used.\n",
+  bg: "bg: bg [job_spec ...]\n    Move jobs to the background.\n    \n    Place the jobs identified by each JOB_SPEC in the background, as if they\n    had been started with `&'.  If JOB_SPEC is not present, the shell's notion\n    of the current job is used.\n",
+  wait: "wait: wait [-fn] [-p var] [id ...]\n    Wait for job completion and return exit status.\n    \n    Waits for each process identified by an ID, which may be a process ID or a\n    job specification, and reports its termination status.  If ID is not\n    given, waits for all currently active child processes.  With -n, waits\n    for the next job to end.\n",
+  disown:
+    "disown: disown [-h] [-ar] [jobspec ... | pid ...]\n    Remove jobs from current shell.\n    \n    Removes each JOBSPEC argument from the table of active jobs.  Without\n    any JOBSPECs, the shell uses its notion of the current job.\n",
+  kill: "kill: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]\n    Send a signal to a job.\n    \n    Send the processes identified by PID or JOBSPEC the signal named by\n    SIGSPEC or SIGNUM.  If neither SIGSPEC nor SIGNUM is present, then\n    SIGTERM is assumed.\n    \n    Options:\n      -s sig    SIG is a signal name\n      -n sig    SIG is a signal number\n      -l        list the signal names\n",
 };
 
 const help: Builtin = (sh, argv, io) => {
@@ -1956,6 +2345,12 @@ export const BUILTINS: Record<string, Builtin> = {
   exec: execCmd,
   exit,
   logout: exit,
+  jobs: jobsCmd,
+  fg: fgCmd,
+  bg: bgCmd,
+  wait: waitCmd,
+  disown: disownCmd,
+  kill: killCmd,
   return: returnCmd,
   break: breakCmd("break"),
   continue: breakCmd("continue"),

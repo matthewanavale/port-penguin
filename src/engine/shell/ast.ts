@@ -60,6 +60,8 @@ interface Base {
   line: number;
   redirs?: Redir[];
   bg?: boolean;
+  /** The source text of a node that ends with `&`, for the job table (B9). */
+  text?: string;
 }
 
 export interface Simple extends Base {

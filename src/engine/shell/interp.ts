@@ -3,7 +3,8 @@
 // is in sched.ts. The processes themselves are in proc.ts.
 import type { Node } from "./ast";
 import type { Context } from "./context";
-import type { Host, ReadRequest, TaskCtx } from "./io";
+import { JobTable } from "./jobs";
+import type { Host, OutputSink, ReadRequest, TaskCtx } from "./io";
 import { Proc, Run } from "./proc";
 import { Sched } from "./sched";
 
@@ -37,6 +38,18 @@ export class Interp {
       ) => Promise<string | null>)
     | null = null;
 
+  /** The job table of the prompt shell (B9). */
+  readonly jobs = new JobTable();
+  /** Where the output of a background job goes (B15); the engine sets it. */
+  output: OutputSink | undefined;
+  /**
+   * The task data of background jobs (B12): the engine points it at the input
+   * that runs, or at what waits for the next input.
+   */
+  bgTask: TaskCtx = { line: "", segs: [], ranExec: null, allOut: "" };
+  /** Called when a job is done (the engine saves, B12). */
+  onJobEnd: (() => void) | undefined;
+
   constructor(host: Host) {
     this.host = host;
   }
@@ -44,7 +57,8 @@ export class Interp {
   /** A root process on `ctx`: the terminal is its standard input and output. */
   proc(ctx: Context, run?: Run): Proc {
     const task: TaskCtx = { line: "", segs: [], ranExec: null, allOut: "" };
-    const p = new Proc(this, run ?? new Run(task), ctx);
+    // The prompt shell takes no process id: only the processes of jobs have one (B10).
+    const p = new Proc(this, run ?? new Run(task), ctx, 0);
     p.attach(p.run);
     return p;
   }

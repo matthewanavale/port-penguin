@@ -534,7 +534,7 @@ export class Expander {
       case "$":
         return "5150";
       case "!":
-        return undefined;
+        return c.lastBg || undefined;
       case "_":
         return c.lastArg;
       default:

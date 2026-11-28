@@ -343,10 +343,17 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
     // Ctrl-D at the prompt is not a typed command: the history keeps no `exit` for it.
     if (leave && engine.state.hist.length > histLen) engine.state.hist.pop();
     let out = chunks.finish();
+    // B9: the job notices come just before the next prompt, as in bash.
+    const notices = engine.notices();
+    const shown = notices.filter((n) => n.text);
+    if (shown.length)
+      out += renderLines(shown.map((n) => ({ runs: [{ text: n.text }] })));
     out += renderLines(res.lines);
     atLineStart = true;
     if (out) term.write(out);
     said = new Set();
+    // B17: each notice is announced once.
+    for (const n of notices) announce(n.say);
     opts.onResult(res);
   }
 
@@ -547,28 +554,46 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
 
   return {
     output(event) {
+      /** Writes to xterm and gives the flow-control promise (B15). */
+      const send = (data: string): void | Promise<void> => {
+        behind += data.length;
+        term.write(data, () => {
+          behind -= data.length;
+          if (behind <= OUTPUT_LIMIT) {
+            const w = waiters;
+            waiters = [];
+            for (const f of w) f();
+          }
+        });
+        if (behind > OUTPUT_LIMIT)
+          return new Promise<void>((resolve) => waiters.push(resolve));
+      };
       if (event.kind === "clear") {
         chunks.reset();
         rowsAbove = 0;
-        term.write(CLEAR);
-        atLineStart = true;
+        // B13: with no input running the prompt and the line come again.
+        if (running) {
+          term.write(CLEAR);
+          atLineStart = true;
+        } else term.write(CLEAR + draw(editor.line, editor.cursor));
         return;
+      }
+      if (!running) {
+        // B13: a background job writes while the player edits a line. The
+        // output goes on new lines, then the prompt and the line come again,
+        // with the cursor where it was.
+        const text = chunks.push(event.chunk) + chunks.finish();
+        if (!text) return;
+        let out = rowsAbove > 0 ? `\x1b[${rowsAbove}A` : "";
+        out += "\r\x1b[J" + text;
+        rowsAbove = 0;
+        atLineStart = false;
+        return send(out + draw(editor.line, editor.cursor));
       }
       const text = chunks.push(event.chunk);
       if (event.chunk.text) atLineStart = event.chunk.text.endsWith("\n");
       if (!text) return;
-      // Flow control: xterm tells when it has written the text (B15).
-      behind += text.length;
-      term.write(text, () => {
-        behind -= text.length;
-        if (behind <= OUTPUT_LIMIT) {
-          const w = waiters;
-          waiters = [];
-          for (const f of w) f();
-        }
-      });
-      if (behind > OUTPUT_LIMIT)
-        return new Promise<void>((resolve) => waiters.push(resolve));
+      return send(text);
     },
     read(req) {
       // B16 (a): the hint comes before the wait, on a row of its own.

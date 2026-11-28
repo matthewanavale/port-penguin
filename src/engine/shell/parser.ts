@@ -775,10 +775,12 @@ class P {
   unit(): Node[] {
     const out: Node[] = [];
     for (;;) {
+      const from = this.peek().pos;
       const node = this.andOr();
       const t = this.peek();
       if (this.isOp(t, "&")) {
         node.bg = true;
+        node.text = this.src.slice(from, t.pos).trim();
         this.next();
         out.push(node);
         const n = this.peek();
@@ -809,10 +811,12 @@ class P {
       const t = this.peek();
       if (t.t === "eof") throw new Incomplete("eof", this.pos);
       if (isEnd(t)) break;
+      const from = t.pos;
       const node = this.andOr();
       const n = this.peek();
       if (this.isOp(n, "&")) {
         node.bg = true;
+        node.text = this.src.slice(from, n.pos).trim();
         this.next();
       } else if (this.isOp(n, ";") || this.isNewline(n)) this.next();
       else if (!isEnd(n)) {
