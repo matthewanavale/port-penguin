@@ -38,7 +38,7 @@ npm run lint          # ESLint, then the TypeScript type check
 npm run format:check  # Prettier
 npm test              # Vitest
 npm run build
-npm run size          # gzip size of dist/assets/, at most 210 KB
+npm run size          # gzip size of dist/assets/, at most 225 KB
 ```
 
 ## Setup
@@ -173,6 +173,46 @@ each input into a syntax tree before it runs anything. It supports:
 - aliases, `source`, `bash FILE`, `sh -c`, and the common builtins;
 - an unfinished input shows `> ` and waits for more lines; Ctrl-C drops it.
 
+Commands can wait, and several commands can run at the same time:
+
+- **Keyboard input.** A command that reads the terminal waits until you
+  type. `read` (with `-n`, `-N`, `-s`, `-p`, `-t`, `-e`), `select`, `cat`,
+  `head`, `wc`, `grep`, `sort`, and every other command that reads
+  standard input with no file work this way. Press Enter to send a line.
+  Press Ctrl-D on an empty line to end the input. The first time a command
+  waits, the terminal shows a short hint.
+- **Time.** `sleep` waits for real time, with the suffixes `s`, `m`, `h`,
+  and `d`.
+- **Ctrl-C, Ctrl-Z, and Ctrl-\\.** While a command runs, these keys send
+  the signals INT, TSTP, and QUIT. `trap` can catch them. On a phone, use
+  the `^C` and `^D` keys at the start of the key bar above the keyboard.
+- **Pipes.** The stages of a pipeline run at the same time. `yes | head -1`
+  stops at once, with `PIPESTATUS` of `141 0`, as in bash.
+- **Jobs.** `CMD &` starts a background job. `jobs`, `fg`, `bg`, `wait`,
+  `disown`, and `kill %N` work as in bash, with the job specs `%N`, `%%`,
+  `%+`, `%-`, `%NAME`, and `%?TEXT`. A job that ends shows its `Done`
+  line before the next prompt. Background jobs show in `ps`, `ps aux`, and
+  `top`, and `kill PID` ends them. Each shell has its own jobs: a script, a
+  subshell, and a nested shell do not see the jobs of the prompt shell.
+- **Nested shell.** `bash` or `sh` on a line of its own starts a child
+  shell. It has only the exported variables, `SHLVL` plus 1, and its own
+  jobs. `exit` or Ctrl-D on an empty line goes back, and the parent shell
+  has the same folder and variables as before. In another place (after
+  `;`, in a pipe or a function), `bash` with no script prints a message and
+  returns 1. `echo 'echo hi' | bash` and `bash < FILE` read a script.
+- **Reload and panel.** A reload, `exit` at the top prompt, and the panel
+  buttons (skip, jump, reset, lock, unlock) end every job. Jobs are not
+  saved.
+
+Limits. At the prompt there is no step limit and no output limit:
+`while true; do :; done` and `yes` run until you press Ctrl-C. These limits
+stay: 1 MB for a string value and for data that a command keeps whole (for
+example `x=$(yes)`), 100 000 array items, 100 000 brace words, the nesting
+depth (64 scripts or nested shells), the 5 MB file system, 200 000 steps
+inside one call of `awk` or `sed`, 20 000 steps for `~/.bashrc`, and a
+field width of 1 000 000 in `printf`, `awk`, and `date`. The terminal keeps
+5000 lines of scrollback.
+
 The utilities (`find`, `awk`, `sed`, `tar`, `date`, `cut`, `tr`, `crontab`,
 and others) are in `src/engine/utils/`. Their messages follow Ubuntu 24.04.
 
@@ -180,13 +220,25 @@ and others) are in `src/engine/utils/`. Their messages follow Ubuntu 24.04.
 
 - `npm run golden:record` records `src/test/golden/*.json` from the engine.
   `src/test/golden-run1/` holds the run-1 baseline and is never edited. A
-  step that differs from it needs a `reason` (R1 to R6) in
-  `src/test/scripts.ts`.
+  step that differs from it needs a `reason` (R1 to R7) in
+  `src/test/scripts.ts`. R7 is run-2b behavior: keyboard input, `sleep`,
+  SIGPIPE, jobs, the nested `bash`, `kill`, and the learner hints.
+- A script step can also be `{ keys: "text" }` (text typed while a command
+  runs; `"\x04"` is Ctrl-D) or `{ signal: "INT" | "TSTP" | "QUIT" }`.
+  `{ advanceMs: N }` moves the fake clock. A command that waits for one of
+  these ends at the next step; a command that still waits at the next line
+  of the script is an error.
 - The reference fixtures in `src/test/ubuntu/fixtures/` come from real
   Ubuntu 24.04. To capture them again, run
   `node --experimental-strip-types src/test/ubuntu/capture.ts [group ...]`.
   This needs Docker and Node 24. Tests read the fixtures and do not need
-  Docker.
+  Docker. A prompt case can type with no prompt (`@type TEXT`, `@raw "JSON"`),
+  press a control key (`@key ^C`, `^Z`, `^D`, `^\`), and wait
+  (`@wait N`). The normalizer replaces job PIDs.
+- `node --experimental-strip-types src/tools/bench.ts` times 100 000
+  iterations of `i=$((i+1))` through the engine. It is not a test. Run it
+  on a branch and on a checkout of the base commit, then compare the two
+  medians.
 
 ## Where progress is stored
 
