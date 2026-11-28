@@ -20,8 +20,9 @@ const dim = (l: OutLine) =>
 const dimLines = (r: RunResult) => r.lines.filter(dim).map(lineText);
 const helpHints = (r: RunResult) => dimLines(r).filter((l) => /help/i.test(l));
 
-const KEYBOARD =
-  "port-penguin: keyboard input comes in a later update; use a pipe or < FILE";
+/** B16 (a): the hint is sent with the first keyboard read of a prompt command (the terminal shows it). */
+const KEYBOARD = (cmd: string): string =>
+  `port-penguin: ${cmd} is reading the keyboard. Type input and press Enter; Ctrl-D ends the input, Ctrl-C stops ${cmd}.`;
 
 describe("command not found (AC6)", () => {
   it("prints the bash error and then the hint on its own dim line", async () => {
@@ -63,29 +64,36 @@ describe("command not found (AC6)", () => {
   });
 });
 
-describe("keyboard input (D22)", () => {
-  it("makes cat with no pipe read an empty stdin, exit 0, and show the hint", async () => {
+describe("keyboard input (B4, B16)", () => {
+  it("makes cat wait for the keyboard; with nobody typing it gets end of input, exit 0", async () => {
     const r = await sh.run("cat");
     expect(r.both).toBe("");
     expect(r.code).toBe(0);
-    expect(dimLines(r)).toContain(KEYBOARD);
+    expect(sh.reads.length).toBe(1);
+    // The hint is for the terminal only: never in stdout, stderr, or the game lines.
+    expect(dimLines(r)).not.toContain(KEYBOARD("cat"));
+    expect(sh.reads[0].hint).toBe(KEYBOARD("cat"));
   });
 
-  it("makes read v exit 1 and show the hint", async () => {
-    const r = await sh.run("read v");
-    expect(r.code).toBe(1);
-    expect(dimLines(r)).toContain(KEYBOARD);
+  it("makes read v exit 1 at end of input and send the hint (first time per page load only)", async () => {
+    const first = await sh.run("read v");
+    expect(first.code).toBe(1);
+    expect(sh.reads[0].hint).toBe(KEYBOARD("read"));
+    await sh.run("read w");
+    expect(sh.reads[1].hint).toBeUndefined();
   });
 
-  it("shows no keyboard hint when stdin is a pipe or a file", async () => {
+  it("asks for no keyboard when stdin is a pipe or a file", async () => {
     await sh.run("echo hi > f");
-    expect(dimLines(await sh.run("echo a | cat"))).not.toContain(KEYBOARD);
-    expect(dimLines(await sh.run("cat < f"))).not.toContain(KEYBOARD);
-    expect(dimLines(await sh.run("cat f"))).not.toContain(KEYBOARD);
+    await sh.run("echo a | cat");
+    await sh.run("cat < f");
+    await sh.run("cat f");
+    expect(sh.reads).toEqual([]);
   });
 
-  it("shows no keyboard hint in a script", async () => {
+  it("sends no hint in a script", async () => {
     await sh.run("printf 'cat\\n' > s.sh");
-    expect(dimLines(await sh.run("bash s.sh"))).not.toContain(KEYBOARD);
+    await sh.run("bash s.sh");
+    expect(sh.reads.every((q) => q.hint === undefined)).toBe(true);
   });
 });

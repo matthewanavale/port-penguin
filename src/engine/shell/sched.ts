@@ -46,6 +46,39 @@ export class Sched {
   /** The next process id (B10): the host sets the start value with `startPids`. */
   private nextPid = 1;
 
+  /**
+   * The baton. Processes run side by side, but only one runs at a time: a
+   * process holds the baton until it waits (a pipe, a timer, the keyboard, a
+   * yield) or ends, then the next process in line takes it. So the order of
+   * the effects of the processes is fixed, as the risk table of the spec asks.
+   */
+  private held = false;
+  private line: (() => void)[] = [];
+
+  acquire(): Promise<void> {
+    if (!this.held) {
+      this.held = true;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => this.line.push(resolve));
+  }
+
+  release(): void {
+    const next = this.line.shift();
+    if (next) next();
+    else this.held = false;
+  }
+
+  /** Runs a wait with the baton given away; takes it back when the wait ends. */
+  async blocked<T>(wait: () => Promise<T>): Promise<T> {
+    this.release();
+    try {
+      return await wait();
+    } finally {
+      await this.acquire();
+    }
+  }
+
   /** The ids start above `max` (the largest id in `S.procs`). */
   startPids(max: number): void {
     if (max >= this.nextPid) this.nextPid = max + 1;
@@ -67,7 +100,7 @@ export class Sched {
 
   /** Gives the browser a turn, then starts a new budget. */
   async yield(): Promise<void> {
-    await macrotask();
+    await this.blocked(macrotask);
     this.last = performance.now();
   }
 

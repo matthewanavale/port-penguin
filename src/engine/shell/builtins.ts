@@ -7,7 +7,9 @@ import { ExpError } from "./expand";
 import type { Context } from "./context";
 import { ExitSig, BreakSig, ContinueSig, ReturnSig, AbortLine } from "./proc";
 import type { Proc } from "./proc";
+import { getClock } from "../clock";
 import type { CmdFn, IO } from "./io";
+import { SIGNALS } from "./sched";
 import { LIM, NestStop, checkWidth } from "./limits";
 import { parseFull } from "./parser";
 import { readText } from "./redirect";
@@ -1357,7 +1359,7 @@ const bash: Builtin = async (sh, argv, io) => {
       const c = mk();
       c.src = { kind: "c" };
       c.arg0 = name;
-      return await sh.runInChild(c, await io.in.readAll(), name);
+      return await sh.runInChild(c, await io.in.readAll(sh), name);
     }
     sh.err.write(
       "bash: this sandbox can’t open a nested shell. Try: bash script.sh\n",
@@ -1390,8 +1392,12 @@ const read: Builtin = async (sh, argv, io) => {
   let arr: string | null = null;
   let delim = "\n";
   let nchars = -1;
+  let exact = false;
   let prompt = "";
   let fd = 0;
+  let silent = false;
+  let edit = false;
+  let timeout: number | null = null;
   let i = 1;
   for (; i < argv.length; i++) {
     const a = argv[i];
@@ -1408,14 +1414,23 @@ const read: Builtin = async (sh, argv, io) => {
         return rest !== "" ? rest : (argv[++i] ?? "");
       };
       if (ch === "r") raw = true;
-      else if (ch === "s") continue;
+      else if (ch === "s") silent = true;
+      else if (ch === "e") edit = true;
       else if (ch === "a") arr = arg();
       else if (ch === "d") delim = arg()[0] ?? "\0";
-      else if (ch === "n" || ch === "N") nchars = Number(arg());
-      else if (ch === "p") prompt = arg();
+      else if (ch === "n" || ch === "N") {
+        nchars = Number(arg());
+        exact = ch === "N";
+      } else if (ch === "p") prompt = arg();
       else if (ch === "u") fd = Number(arg());
-      else if (ch === "t") arg();
-      else {
+      else if (ch === "t") {
+        const v = arg();
+        if (!/^\d+(\.\d*)?$|^\.\d+$/.test(v)) {
+          sh.fail(`read: ${v}: invalid timeout specification`);
+          return 1;
+        }
+        timeout = Number(v);
+      } else {
         sh.fail(`read: -${ch}: invalid option`);
         io.err.write(
           "read: usage: read [-ers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]\n",
@@ -1436,48 +1451,83 @@ const read: Builtin = async (sh, argv, io) => {
     sh.fail(`read: ${fd}: invalid file descriptor: Bad file descriptor`);
     return 1;
   }
+  const tty = src.tty;
+  // B16: the hint comes before the prompt text, so the prompt stays by the cursor.
+  if (tty) src.announce(sh);
   if (prompt && io.in.tty) io.err.write(prompt);
+  // B4: `-s` turns the echo off, `-e` uses the line editor, `-t` ends the wait.
+  const saved = { echo: src.echo, edit: src.edit, signal: src.signal };
+  let timer: number | null = null;
+  const ac = new AbortController();
+  if (tty && silent) src.echo = false;
+  if (tty && edit) src.edit = true;
+  if (timeout !== null && timeout > 0) {
+    src.signal = ac.signal;
+    timer = getClock().setTimer(timeout * 1000, () => ac.abort());
+  }
   // Read the text.
   let line = "";
   let eof = false;
   let gotAny = false;
-  if (nchars >= 0) {
-    const s = await src.readChunk(nchars);
-    if (s === null) eof = true;
-    else {
-      line = s;
-      gotAny = true;
-      eof = s.length < nchars;
-    }
-  } else {
-    for (;;) {
-      if (delim === "\n") {
-        const l = await src.readLine();
-        if (l === null) {
+  try {
+    if (nchars >= 0 && tty && !exact) {
+      // Character mode, one key at a time; Enter ends it (`-n`).
+      while (line.length < nchars) {
+        const ch = await src.readChunk(1, sh);
+        if (ch === null) {
           eof = true;
           break;
         }
         gotAny = true;
-        let t = l.line;
-        if (!raw && t.endsWith("\\") && l.nl) {
-          line += t.slice(0, -1);
-          continue;
+        if (ch === "\n") break;
+        line += ch;
+      }
+    } else if (nchars >= 0) {
+      const s = await src.readChunk(nchars, sh);
+      if (s === null) eof = true;
+      else {
+        line = s;
+        gotAny = true;
+        eof = s.length < nchars;
+      }
+    } else {
+      for (;;) {
+        if (delim === "\n") {
+          const l = await src.readLine(sh);
+          if (l === null) {
+            eof = true;
+            break;
+          }
+          gotAny = true;
+          let t = l.line;
+          if (!raw && t.endsWith("\\") && l.nl) {
+            line += t.slice(0, -1);
+            continue;
+          }
+          if (!raw && t.endsWith("\\") && !l.nl) t = t.slice(0, -1);
+          line += t;
+          if (!l.nl) eof = true;
+          break;
         }
-        if (!raw && t.endsWith("\\") && !l.nl) t = t.slice(0, -1);
-        line += t;
-        if (!l.nl) eof = true;
-        break;
+        const ch = await src.readChunk(1, sh);
+        if (ch === null) {
+          eof = true;
+          break;
+        }
+        gotAny = true;
+        if (ch === delim) break;
+        line += ch;
       }
-      const ch = await src.readChunk(1);
-      if (ch === null) {
-        eof = true;
-        break;
-      }
-      gotAny = true;
-      if (ch === delim) break;
-      line += ch;
     }
+  } finally {
+    src.echo = saved.echo;
+    src.edit = saved.edit;
+    src.signal = saved.signal;
+    if (timer !== null) getClock().clearTimer(timer);
   }
+  // `-t`: the time ran out (bash gives a status above 128); a signal with a trap ends the read too.
+  if (ac.signal.aborted) return 142;
+  if (sh.signals.length) return 128 + (SIGNALS[sh.signals[0]] ?? 0);
   // Remove backslashes unless -r.
   const unesc = (s: string) => (raw ? s : s.replace(/\\(.)/g, "$1"));
   const ifs = ctx.ifs();
@@ -1549,7 +1599,7 @@ const mapfile: Builtin = async (sh, argv, io) => {
     if (a === "-t") strip = true;
     else if (!a.startsWith("-")) name = a;
   }
-  const text = await io.in.readAll();
+  const text = await io.in.readAll(sh);
   const lines = text === "" ? [] : text.split(/(?<=\n)/);
   const items = lines.map((l) => ({ value: strip ? l.replace(/\n$/, "") : l }));
   sh.ctx.setArray(name, items, "array", false);

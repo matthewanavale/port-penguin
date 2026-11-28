@@ -940,6 +940,7 @@ class P {
         this.leave();
         node = { type: w, line, cond, body };
       } else if (w === "for") node = this.forLoop(line);
+      else if (w === "select") node = this.forLoop(line, true);
       else if (w === "case") node = this.caseCmd(line);
       else if (w === "{") {
         this.next();
@@ -1004,12 +1005,12 @@ class P {
     return { type: "arith", line, expr };
   }
 
-  forLoop(line: number): Node {
+  forLoop(line: number, select = false): Node {
     this.next();
     this.enter();
     const t = this.peek();
     if (t.t === "eof") throw new Incomplete("eof", this.pos);
-    if (this.isOp(t, "(") && this.src[t.pos + 1] === "(") {
+    if (!select && this.isOp(t, "(") && this.src[t.pos + 1] === "(") {
       const s = this.src;
       let depth = 0;
       let end = -1;
@@ -1084,7 +1085,9 @@ class P {
     const body = this.body((x) => this.isWord(x, "done"));
     this.expectWord("done");
     this.leave();
-    return { type: "for", line, name, words, body };
+    return select
+      ? { type: "for", line, name, words, body, select: true }
+      : { type: "for", line, name, words, body };
   }
 
   skipSeps(): void {

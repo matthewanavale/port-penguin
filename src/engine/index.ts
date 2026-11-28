@@ -23,7 +23,7 @@ import {
 } from "./shell/context";
 import { Interp } from "./shell/interp";
 import { Run as InputRun } from "./shell/proc";
-import type { Chunk, Ctx, OutputEvent } from "./shell/io";
+import type { ReadRequest, Chunk, Ctx, OutputSink } from "./shell/io";
 import { parseFull } from "./shell/parser";
 import { readText } from "./shell/redirect";
 import { nul } from "./nullmap";
@@ -35,7 +35,7 @@ export type { Chapter, Mission } from "./missions";
 export { sha256 } from "./sha256";
 export { RC_KEY, SAVE_KEY } from "./state";
 export type { SaveStorage, State } from "./state";
-export type { Chunk, OutputEvent } from "./shell/io";
+export type { Chunk, OutputEvent, OutputSink, ReadRequest } from "./shell/io";
 export type { Clock } from "./clock";
 
 /* ============================================================
@@ -70,19 +70,12 @@ export interface ExecResult {
   events: EngineEvent[];
 }
 
-/** What the engine asks the terminal for while a command reads the keyboard (B4, B15). */
-export interface ReadRequest {
-  mode: "line" | "char";
-  count?: number;
-  echo: boolean;
-}
-
 export interface EngineOptions {
   storage: SaveStorage;
   /** The engine clock (B5). The default reads `Date.now()` and `setTimeout`. */
   clock?: Clock;
   /** Command output reaches the terminal only through this (B15). */
-  onOutput?: (event: OutputEvent) => void;
+  onOutput?: OutputSink;
   /** Asks for keyboard input; resolves to the typed text, or null at end of input (B15). */
   onRead?: (req: ReadRequest) => Promise<string | null>;
 }
@@ -152,8 +145,9 @@ const DSUB = [
   "version",
 ];
 
-const KEYBOARD_HINT =
-  "port-penguin: keyboard input comes in a later update; use a pipe or < FILE";
+/** B16 (a): shown once per page load, before the first keyboard wait of a prompt command. */
+const keyboardHint = (cmd: string): string =>
+  `port-penguin: ${cmd || "the command"} is reading the keyboard. Type input and press Enter; Ctrl-D ends the input, Ctrl-C stops ${cmd || "it"}.`;
 const NOT_FOUND_HINT = "Type help to see what this terminal knows.";
 
 /** The prompt shell: cwd, `oldpwd`, and `$?` live in the saved state (D13). */
@@ -224,6 +218,17 @@ export function createEngine(opts: EngineOptions): Engine {
   const pctx = new PromptContext(() => s);
   const blank = (): Ctx => ({ line: "", segs: [], ranExec: null, allOut: "" });
   const interp = new Interp(host);
+  // B4, B16: a read of the keyboard goes to the terminal. The first one of a
+  // command typed at the prompt carries the hint (once per page load).
+  let keyboardHintShown = false;
+  interp.reader = (req, who) => {
+    if (!opts.onRead) return Promise.resolve(null);
+    if (who.prompt && !keyboardHintShown) {
+      keyboardHintShown = true;
+      req = { ...req, hint: keyboardHint(who.cmd) };
+    }
+    return opts.onRead({ ...req, cmd: who.cmd });
+  };
   // B10: the ids of the processes start above the largest id of `S.procs`.
   interp.sched.startPids(s.procs.reduce((m, p) => Math.max(m, p.pid), 0));
   /** The input that runs now (B6): the foreground job. */
@@ -273,7 +278,7 @@ export function createEngine(opts: EngineOptions): Engine {
     rcDone = true;
     // Its output is discarded: this run has no `onOutput`. Ctrl-C stops it (B15).
     const rcRun = new InputRun(blank());
-    shell.attach(rcRun);
+    shell.attach(rcRun, false);
     fg = rcRun;
     const before = nul(pctx.env);
     const text = readText(HOME + "/.bashrc");
@@ -526,8 +531,6 @@ export function createEngine(opts: EngineOptions): Engine {
       const seen = run.events;
       if (seen.some((e) => e.kind === "notfound"))
         lines.push(textLine(NOT_FOUND_HINT, "dim"));
-      if (seen.some((e) => e.kind === "stdin"))
-        lines.push(textLine(KEYBOARD_HINT, "dim"));
       if (run.exited !== null) {
         const code = run.exited;
         syncOut();

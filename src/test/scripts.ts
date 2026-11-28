@@ -236,7 +236,7 @@ export const SCRIPTS: GoldenScript[] = [
       {
         input: "cat",
         reason:
-          "R5 the hint is on its own line; the exit code is now as in Ubuntu",
+          "R7 run-2b behavior: cat waits for the keyboard (the hint is for the terminal, B16)",
       },
       "cat notes.txt crew.txt",
       "cat nosuch",
@@ -365,7 +365,11 @@ export const SCRIPTS: GoldenScript[] = [
         input: "grep",
         reason: "R1 output as in Ubuntu; exit code as in Ubuntu (R2)",
       },
-      { input: "grep x", reason: "R5 the hint is on its own line" },
+      {
+        input: "grep x",
+        reason:
+          "R7 run-2b behavior: grep waits for the keyboard (the hint is for the terminal, B16)",
+      },
       { input: "grep x nosuch", reason: "R2 exit code as in Ubuntu" },
       'grep "(" crew.txt',
       "grep zzz crew.txt",
@@ -415,7 +419,7 @@ export const SCRIPTS: GoldenScript[] = [
       {
         input: "sort",
         reason:
-          "R5 the hint is on its own line; the exit code is now as in Ubuntu",
+          "R7 run-2b behavior: sort waits for the keyboard (the hint is for the terminal, B16)",
       },
       {
         input: "sort nosuch",

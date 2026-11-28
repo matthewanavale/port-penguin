@@ -51,12 +51,12 @@
     },
     {
       "input": "sort",
-      "text": "port-penguin: keyboard input comes in a later update; use a pipe or < FILE",
+      "text": "",
       "cleared": false,
       "code": 0,
       "cwd": "/home/cadet",
       "cur": 0,
-      "reason": "R5 the hint is on its own line; the exit code is now as in Ubuntu"
+      "reason": "R7 run-2b behavior: sort waits for the keyboard (the hint is for the terminal, B16)"
     },
     {
       "input": "sort nosuch",
@@ -109,7 +109,7 @@
     },
     {
       "input": "uniq",
-      "text": "port-penguin: keyboard input comes in a later update; use a pipe or < FILE",
+      "text": "",
       "cleared": false,
       "code": 0,
       "cwd": "/home/cadet",

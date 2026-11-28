@@ -240,7 +240,7 @@ const tar: CmdFn = async (argv, sh, io) => {
 
   // -t and -x read an archive
   let text: string;
-  if (toStdio) text = await io.in.readAll();
+  if (toStdio) text = await io.in.readAll(sh);
   else {
     const an = get(sh.abs(arch as string));
     if (!an) return fatal(`${arch}: Cannot open: No such file or directory`);

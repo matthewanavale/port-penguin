@@ -850,7 +850,7 @@ const sed: CmdFn = async (argv, sh, io) => {
     const texts: string[] = [];
     for (const f of names) {
       if (f === "-") {
-        texts.push(await io.in.readAll());
+        texts.push(await io.in.readAll(sh));
         continue;
       }
       const n = get(sh.abs(f));

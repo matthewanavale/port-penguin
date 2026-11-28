@@ -79,7 +79,7 @@ describe("output streams through onOutput (B15)", () => {
     const events: OutputEvent[] = [];
     const engine = createEngine({
       storage: memory(),
-      onOutput: (e) => events.push(e),
+      onOutput: (e) => void events.push(e),
     });
     await engine.start();
     const res = await engine.execute("echo one; echo two >&2; echo three");
@@ -100,7 +100,7 @@ describe("output streams through onOutput (B15)", () => {
     const events: OutputEvent[] = [];
     const engine = createEngine({
       storage: memory(),
-      onOutput: (e) => events.push(e),
+      onOutput: (e) => void events.push(e),
     });
     await engine.start();
     await engine.execute("echo a; (clear); echo b");
@@ -111,7 +111,7 @@ describe("output streams through onOutput (B15)", () => {
     const events: OutputEvent[] = [];
     const engine = createEngine({
       storage: memory(),
-      onOutput: (e) => events.push(e),
+      onOutput: (e) => void events.push(e),
     });
     await engine.start();
     await engine.execute("true");

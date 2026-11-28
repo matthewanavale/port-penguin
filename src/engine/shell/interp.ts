@@ -3,7 +3,7 @@
 // is in sched.ts. The processes themselves are in proc.ts.
 import type { Node } from "./ast";
 import type { Context } from "./context";
-import type { Host, TaskCtx } from "./io";
+import type { Host, ReadRequest, TaskCtx } from "./io";
 import { Proc, Run } from "./proc";
 import { Sched } from "./sched";
 
@@ -25,6 +25,17 @@ export class Interp {
   readonly fnCache = new Map<string, Node>();
   /** The yield check, the process ids, and signal delivery (B6, B7, B10). */
   readonly sched = new Sched();
+  /**
+   * Asks the keyboard (B4). The engine sets it. `who` says which command waits
+   * and whether it was typed at the prompt (the B16 hint). Resolves to the typed
+   * text, or null at end of input. Unset: the terminal is empty (end of input).
+   */
+  reader:
+    | ((
+        req: ReadRequest,
+        who: { cmd: string; prompt: boolean },
+      ) => Promise<string | null>)
+    | null = null;
 
   constructor(host: Host) {
     this.host = host;

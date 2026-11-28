@@ -85,12 +85,12 @@
     },
     {
       "input": "grep x",
-      "text": "port-penguin: keyboard input comes in a later update; use a pipe or < FILE",
+      "text": "",
       "cleared": false,
       "code": 1,
       "cwd": "/home/cadet",
       "cur": 0,
-      "reason": "R5 the hint is on its own line"
+      "reason": "R7 run-2b behavior: grep waits for the keyboard (the hint is for the terminal, B16)"
     },
     {
       "input": "grep x nosuch",
@@ -191,7 +191,7 @@
     },
     {
       "input": "head",
-      "text": "port-penguin: keyboard input comes in a later update; use a pipe or < FILE",
+      "text": "",
       "cleared": false,
       "code": 0,
       "cwd": "/home/cadet",
@@ -260,7 +260,7 @@
     },
     {
       "input": "wc",
-      "text": "      0       0       0\nport-penguin: keyboard input comes in a later update; use a pipe or < FILE",
+      "text": "      0       0       0",
       "cleared": false,
       "code": 0,
       "cwd": "/home/cadet",

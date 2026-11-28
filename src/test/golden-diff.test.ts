@@ -1,5 +1,5 @@
 // D9 (4)-(6), AC9: the goldens against their run-1 copies. A re-recorded step
-// may differ from run 1 only with a `reason` that starts with a code R1 to R6.
+// may differ from run 1 only with a `reason` that starts with a code R1 to R7.
 // Steps are matched by index; added steps go at the end. The final save is
 // compared on a fixed set of fields; a difference needs a reason on the last
 // step of the golden. The run-1 copies in src/test/golden-run1/ are never edited.

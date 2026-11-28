@@ -1950,7 +1950,9 @@ const awk: CmdFn = async (argv, sh, io) => {
     const parts: string[] = [];
     for (const f of progFiles) {
       const t =
-        f === "-" ? await io.in.readAll() : await readOperand("awk", f, sh, io);
+        f === "-"
+          ? await io.in.readAll(sh)
+          : await readOperand("awk", f, sh, io);
       if (t === null) return 2;
       parts.push(t);
     }
@@ -1987,7 +1989,7 @@ const awk: CmdFn = async (argv, sh, io) => {
   const readsStdin =
     (needsRecords && (files.length === 0 || files.includes("-"))) ||
     (/getline/.test(src) && src.includes('"-"'));
-  const stdinText = readsStdin ? await io.in.readAll() : "";
+  const stdinText = readsStdin ? await io.in.readAll(sh) : "";
   const steps: AwkStep[] = [];
   const rio: IO = {
     in: new Input(stdinText),

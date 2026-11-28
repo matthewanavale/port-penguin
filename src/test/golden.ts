@@ -2,7 +2,7 @@
 // step to differ from its run-1 copy in src/test/golden-run1/.
 
 /** The reasons a re-recorded step may differ from run 1 (D9 (4)). */
-export const REASON_CODES = ["R1", "R2", "R3", "R4", "R5", "R6"] as const;
+export const REASON_CODES = ["R1", "R2", "R3", "R4", "R5", "R6", "R7"] as const;
 export type ReasonCode = (typeof REASON_CODES)[number];
 
 /** What one command line gives back. */

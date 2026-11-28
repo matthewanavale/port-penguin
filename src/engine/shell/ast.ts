@@ -92,6 +92,8 @@ export interface For extends Base {
   name: string;
   words: Word[] | null;
   body: Node[];
+  /** `select NAME in WORDS` (B4): the same shape, a menu loop. */
+  select?: true;
 }
 export interface CFor extends Base {
   type: "cfor";

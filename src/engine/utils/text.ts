@@ -9,6 +9,7 @@ import { readPath, writeText } from "../shell/redirect";
 import type { CmdFn, IO } from "../shell/io";
 import { Input } from "../shell/io";
 import type { Proc } from "../shell/proc";
+import { streamLines } from "../shell/stream";
 
 /* ---------- shared helpers ---------- */
 
@@ -109,7 +110,7 @@ export async function readOperand(
   sh: Proc,
   io: IO,
 ): Promise<string | null> {
-  if (name === "-") return await io.in.readAll();
+  if (name === "-") return await io.in.readAll(sh);
   const r = await readPath(sh.abs(name), io);
   if ("err" in r) {
     errOut(io, cmd, `${name}: ${r.err}`);
@@ -199,32 +200,32 @@ const cut: CmdFn = async (argv, sh, io) => {
   const keep = (n: number) => inRanges(ranges, n) !== comp;
   const files = p.rest.length ? p.rest : ["-"];
   let code = 0;
+  const cutLine = (line: string): string => {
+    if (mode !== "f") {
+      const sel: string[] = [];
+      line.split("").forEach((c, i) => {
+        if (keep(i + 1)) sel.push(c);
+      });
+      return sel.join("") + "\n";
+    }
+    if (!line.includes(delim)) return onlyDelim ? "" : line + "\n";
+    const sel = line.split(delim).filter((_, i) => keep(i + 1));
+    return sel.join(outDelim ?? delim) + "\n";
+  };
   for (const name of files) {
+    if (name === "-") {
+      // B26: standard input is a stream, one line at a time.
+      await streamLines(io.in, sh, (lines) => {
+        io.out.write(lines.map(cutLine).join(""));
+      });
+      continue;
+    }
     const text = await readOperand("cut", name, sh, io);
     if (text === null) {
       code = 1;
       continue;
     }
-    let res = "";
-    for (const line of splitLines(text)) {
-      if (mode !== "f") {
-        const chars = line.split("");
-        const sel: string[] = [];
-        chars.forEach((c, i) => {
-          if (keep(i + 1)) sel.push(c);
-        });
-        res += sel.join("") + "\n";
-        continue;
-      }
-      if (!line.includes(delim)) {
-        if (!onlyDelim) res += line + "\n";
-        continue;
-      }
-      const fields = line.split(delim);
-      const sel = fields.filter((_, i) => keep(i + 1));
-      res += sel.join(outDelim ?? delim) + "\n";
-    }
-    io.out.write(res);
+    io.out.write(splitLines(text).map(cutLine).join(""));
   }
   return code;
 };
@@ -348,31 +349,38 @@ const tr: CmdFn = async (argv, sh, io) => {
       if (!inSet.has(ch)) s1.push(ch);
     }
   }
-  const text = await io.in.readAll();
   const set1 = new Set(s1);
-  let out = "";
-  if (del && !squeeze) {
-    for (const ch of text) if (!set1.has(ch)) out += ch;
-    io.out.write(out);
-    return 0;
-  }
+  // B26: `tr` is a stream. `transform` keeps its state between chunks.
+  const run = async (transform: (t: string) => string): Promise<number> => {
+    for (;;) {
+      const c = await io.in.readChunk(undefined, sh);
+      if (c === null) return 0;
+      const o = transform(c);
+      if (o) io.out.write(o);
+      await sh.drain();
+    }
+  };
+  if (del && !squeeze)
+    return await run((t) => {
+      let o = "";
+      for (const ch of t) if (!set1.has(ch)) o += ch;
+      return o;
+    });
   const map = new Map<string, string>();
   let sq: Set<string>;
   if (del && squeeze) {
-    sq = new Set(s2raw as string[]);
-    for (const ch of text) {
-      if (set1.has(ch)) continue;
-      out += ch;
-    }
-    let r = "";
-    let last = "";
-    for (const ch of out) {
-      if (ch === last && sq.has(ch)) continue;
-      r += ch;
-      last = ch;
-    }
-    io.out.write(r);
-    return 0;
+    const sqd = new Set(s2raw as string[]);
+    let lastD = "";
+    return await run((t) => {
+      let r = "";
+      for (const ch of t) {
+        if (set1.has(ch)) continue;
+        if (ch === lastD && sqd.has(ch)) continue;
+        r += ch;
+        lastD = ch;
+      }
+      return r;
+    });
   }
   if (s2raw) {
     let s2 = s2raw;
@@ -385,15 +393,17 @@ const tr: CmdFn = async (argv, sh, io) => {
   } else sq = new Set(squeeze ? s1 : []);
   let last = "";
   let started = false;
-  for (const ch of text) {
-    const m = map.get(ch) ?? ch;
-    if (started && m === last && sq.has(m)) continue;
-    out += m;
-    last = m;
-    started = true;
-  }
-  io.out.write(out);
-  return 0;
+  return await run((t) => {
+    let o = "";
+    for (const ch of t) {
+      const m = map.get(ch) ?? ch;
+      if (started && m === last && sq.has(m)) continue;
+      o += m;
+      last = m;
+      started = true;
+    }
+    return o;
+  });
 };
 
 /* ---------- paste ---------- */
@@ -465,24 +475,41 @@ const tee: CmdFn = async (argv, sh, io) => {
     return 1;
   }
   const append = p.opts.some((o) => o.name === "a");
-  const text = await io.in.readAll();
-  io.out.write(text);
   let code = 0;
+  // B26: `tee` is a stream. Every file is opened (or emptied) first, then each
+  // chunk goes to the output and to the files as it comes.
+  const files: { name: string; abs: string }[] = [];
   for (const name of p.rest) {
-    if (name === "/dev/null") continue;
-    if (name === "/dev/stdout") {
-      io.out.write(text);
+    if (
+      name === "/dev/null" ||
+      name === "/dev/stdout" ||
+      name === "/dev/stderr"
+    )
       continue;
-    }
-    if (name === "/dev/stderr") {
-      io.err.write(text);
-      continue;
-    }
-    const e = writeText(sh.abs(name), text, append);
+    const abs = sh.abs(name);
+    const e = writeText(abs, "", append);
     if (e) {
       errOut(io, "tee", `${name}: ${e}`);
       code = 1;
+    } else files.push({ name, abs });
+  }
+  for (;;) {
+    const text = await io.in.readChunk(undefined, sh);
+    if (text === null) break;
+    io.out.write(text);
+    for (const name of p.rest) {
+      if (name === "/dev/stdout") io.out.write(text);
+      else if (name === "/dev/stderr") io.err.write(text);
     }
+    for (let i = files.length - 1; i >= 0; i--) {
+      const e = writeText(files[i].abs, text, true);
+      if (e) {
+        errOut(io, "tee", `${files[i].name}: ${e}`);
+        code = 1;
+        files.splice(i, 1);
+      }
+    }
+    await sh.drain();
   }
   return code;
 };
@@ -717,7 +744,7 @@ const xargs: CmdFn = async (argv, sh, io) => {
   }
   const cmd = argv.slice(i);
   if (cmd.length === 0) cmd.push("echo");
-  const text = await io.in.readAll();
+  const text = await io.in.readAll(sh);
   let items: string[];
   if (repl !== null) {
     items = text

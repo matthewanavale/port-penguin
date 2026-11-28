@@ -144,7 +144,7 @@ const crontab: CmdFn = async (argv, sh, io) => {
   }
   if (file === null) file = "-";
   let text: string;
-  if (file === "-") text = await io.in.readAll();
+  if (file === "-") text = await io.in.readAll(sh);
   else {
     const n = get(sh.abs(file));
     if (!n || n.t !== "f") {

@@ -24,12 +24,13 @@ import type { SrcInfo } from "./context";
 import { ExpError, Expander } from "./expand";
 import { matchPattern } from "./glob";
 import { resolvePath } from "./glob";
-import { BufWriter, Input, TermWriter } from "./io";
+import { BufWriter, Input, PipeWriter, TermWriter, pipeFeed } from "./io";
 import type {
   Chunk,
+  Feed,
   Host,
   IO,
-  OutputEvent,
+  OutputSink,
   OutSink,
   TaskCtx,
   Writer,
@@ -43,6 +44,7 @@ import {
   nestMessage,
   stopMessage,
 } from "./limits";
+import { Pipe, SigPipe } from "./pipe";
 import { SIGNALS } from "./sched";
 import type { Interp } from "./interp";
 import { parse, parseFull, parseUnits } from "./parser";
@@ -88,7 +90,7 @@ export interface Note {
   dim?: boolean;
 }
 
-export type HintEvent = { kind: "notfound"; name: string } | { kind: "stdin" };
+export type HintEvent = { kind: "notfound"; name: string };
 
 const ASSIGN_BUILTINS = new Set([
   "declare",
@@ -104,6 +106,47 @@ const xq = (s: string): string =>
     : /^[A-Za-z0-9_%+,\-./:=@]+$/.test(s)
       ? s
       : "'" + s.replace(/'/g, "'\\''") + "'";
+
+/** The menu of `select`, as bash 5.2 lays it out in columns (print_select_list). */
+export function selectMenu(items: string[], cols: number): string {
+  const len = (s: string): number => [...s].length;
+  const idx = String(items.length).length;
+  let max = 0;
+  for (const it of items) max = Math.max(max, len(it));
+  max += idx + 2 + 2;
+  const per = Math.max(1, max ? Math.floor(cols / max) : 1);
+  const rows = items.length
+    ? Math.floor(items.length / per) + (items.length % per ? 1 : 0)
+    : 1;
+  let out = "";
+  const indent = (from: number, to: number): string => {
+    let r = "";
+    while (from < to) {
+      if (Math.floor(to / 8) > Math.floor(from / 8)) {
+        r += "\t";
+        from += 8 - (from % 8);
+      } else {
+        r += " ";
+        from++;
+      }
+    }
+    return r;
+  };
+  for (let row = 0; row < rows; row++) {
+    let ind = row;
+    let pos = 0;
+    for (;;) {
+      out += String(ind + 1).padStart(idx) + ") " + items[ind];
+      const elem = len(items[ind]) + idx + 2;
+      ind += rows;
+      if (ind >= items.length) break;
+      out += indent(pos + elem, pos + max);
+      pos += max;
+    }
+    out += "\n";
+  }
+  return out;
+}
 
 /** A `>( )` consumer that waits for the end of its writer. */
 interface ProcFile {
@@ -140,7 +183,7 @@ export class Run implements OutSink {
   private capped = false;
   constructor(
     public task: TaskCtx,
-    readonly onOutput?: (e: OutputEvent) => void,
+    readonly onOutput?: OutputSink,
     stepLimit = Infinity,
   ) {
     this.stepLimit = stepLimit;
@@ -156,12 +199,23 @@ export class Run implements OutSink {
         this.chunks.push(chunk);
       }
     }
-    this.onOutput?.({ kind: "chunk", chunk });
+    const r = this.onOutput?.({ kind: "chunk", chunk });
+    if (r) this.held = r;
   }
+
+  /** The promise of the terminal while it is behind (B15 flow control), or null. */
+  hold(): Promise<void> | null {
+    const h = this.held;
+    if (!h) return null;
+    this.held = null;
+    return h;
+  }
+  private held: Promise<void> | null = null;
 
   /** The `clear` command (or Ctrl-L) from any process. */
   clear(): void {
-    this.onOutput?.({ kind: "clear" });
+    const r = this.onOutput?.({ kind: "clear" });
+    if (r) this.held = r;
   }
 
   /** Counts one step against the step limit (only `~/.bashrc` has one, B8). */
@@ -188,6 +242,8 @@ export class Proc {
   chain = 0;
   /** Depth of things that make a command not "typed at the prompt" (D12). */
   nest = 0;
+  /** The name of the command this process runs now (the B16 hint names it). */
+  cmd = "";
   /** The status of the last command substitution (for `x=$(false)`). */
   substCode: number | null = null;
   /** Array words of `declare a=(1 2)`, by argument index. */
@@ -310,7 +366,7 @@ export class Proc {
   }
 
   /** Makes this process the root of `run`: the terminal is its standard input and output. */
-  attach(run: Run): void {
+  attach(run: Run, terminal = true): void {
     this.run = run;
     this.procFiles = run.procFiles;
     const task = run.task;
@@ -323,12 +379,68 @@ export class Proc {
     this.overflowName = null;
     this.scripts = 0;
     this.nest = 0;
-    this.rootIn = new Input("", true);
+    // `~/.bashrc` reads `/dev/null` (B15); an input reads the terminal (B4).
+    this.rootIn = terminal
+      ? new Input("", true, this.terminalFeed())
+      : new Input("", false);
     this.rootIn.counts = () => (this.run.cur ?? this).promptLevel();
     this.ctx.io = {
       in: this.rootIn,
       out: new TermWriter("stdout", this.run, task),
       err: new TermWriter("stderr", this.run, null),
+    };
+  }
+
+  /**
+   * The feed of the terminal (B4): a read asks the engine's `reader`, which
+   * asks the terminal. A signal ends the wait and cancels the request.
+   */
+  private terminalFeed(): Feed {
+    return {
+      next: async (sh, want) => {
+        const reader = this.interp.reader;
+        if (!reader) return null;
+        const caller = sh ?? this.run.cur ?? this;
+        const input = this.rootIn;
+        const ac = new AbortController();
+        let timedOut = false;
+        let wakeNow: (() => void) | null = null;
+        const onAbort = (): void => {
+          timedOut = true;
+          ac.abort();
+          wakeNow?.();
+        };
+        if (want.signal) {
+          if (want.signal.aborted) return null;
+          want.signal.addEventListener("abort", onAbort, { once: true });
+        }
+        const req = {
+          mode: want.mode,
+          count: want.count,
+          echo: input.echo,
+          edit: input.edit,
+          signal: ac.signal,
+        };
+        let text: string | null = null;
+        try {
+          const asked = reader(req, {
+            cmd: caller.cmd,
+            prompt: input.counts(),
+          });
+          const sig = await caller.interruptible((wake) => {
+            wakeNow = wake;
+            void asked.then((v) => {
+              text = v;
+              wake();
+            });
+            return () => ac.abort();
+          });
+          if (sig !== null || timedOut) return null;
+          return text;
+        } finally {
+          want.signal?.removeEventListener("abort", onAbort);
+        }
+      },
     };
   }
 
@@ -339,6 +451,16 @@ export class Proc {
 
   /** Parses and runs one complete input at the prompt. Returns `$?`. */
   async runLine(text: string): Promise<number> {
+    const sched = this.interp.sched;
+    await sched.acquire();
+    try {
+      return await this.runLineHeld(text);
+    } finally {
+      sched.release();
+    }
+  }
+
+  private async runLineHeld(text: string): Promise<number> {
     const ctx = this.ctx;
     const r = parseFull(text, { extglob: !!ctx.options.extglob });
     let code: number;
@@ -351,12 +473,21 @@ export class Proc {
       code = 2;
     } else code = await this.execTop(() => this.runList(r.ast.items));
     ctx.lastCode = code;
-    if (this.rootIn.used) this.run.events.push({ kind: "stdin" });
     return code;
   }
 
   /** Runs `~/.bashrc` text under the D19 guard. Returns an error reason, or null. */
   async runRc(text: string, limit = LIM.rcSteps): Promise<string | null> {
+    const sched = this.interp.sched;
+    await sched.acquire();
+    try {
+      return await this.runRcHeld(text, limit);
+    } finally {
+      sched.release();
+    }
+  }
+
+  private async runRcHeld(text: string, limit: number): Promise<string | null> {
     const run = this.run;
     const saved = {
       limit: run.stepLimit,
@@ -415,6 +546,7 @@ export class Proc {
   }
 
   private topError(e: unknown): number {
+    if (e instanceof SigPipe) return e.code;
     if (e instanceof LimitStop) {
       this.note("^C", false);
       this.note(stopMessage(e.limit), true);
@@ -613,8 +745,20 @@ export class Proc {
     }
     this.ctx.lastCode = code;
     if (n.type !== "pipeline") this.ctx.pipestatus = [code];
+    await this.drain();
     if (this.signals.length) await this.dispatchSignals();
     return code;
+  }
+
+  /** B3: waits while the pipe this process writes to is full. */
+  async drain(): Promise<void> {
+    const io = this.ctx.io;
+    const a = io.out.drain?.(this);
+    if (a) await a;
+    if (io.err !== io.out) {
+      const b = io.err.drain?.(this);
+      if (b) await b;
+    }
   }
 
   /* ---------- signals and waiting (B6, B7) ---------- */
@@ -627,6 +771,7 @@ export class Proc {
   /** The yield check (B7), then the pending signals (B6). */
   async pause(due?: boolean): Promise<void> {
     const sched = this.interp.sched;
+    await this.drain();
     if (due ?? sched.due()) await sched.yield();
     if (this.signals.length) await this.dispatchSignals();
   }
@@ -658,16 +803,19 @@ export class Proc {
     this.ending();
     if (this.signals.length) return this.signals[0];
     let over = false;
-    await new Promise<void>((resolve) => {
-      const cancel = arm(() => {
-        over = true;
-        resolve();
-      });
-      this.waiter = () => {
-        cancel();
-        resolve();
-      };
-    });
+    await this.interp.sched.blocked(
+      () =>
+        new Promise<void>((resolve) => {
+          const cancel = arm(() => {
+            over = true;
+            resolve();
+          });
+          this.waiter = () => {
+            cancel();
+            resolve();
+          };
+        }),
+    );
     this.waiter = null;
     if (over) return null;
     this.ending();
@@ -703,7 +851,9 @@ export class Proc {
       case "case":
         return await this.withRedirects(n.redirs, () => this.caseNode(n));
       case "for":
-        return await this.withRedirects(n.redirs, () => this.forNode(n));
+        return await this.withRedirects(n.redirs, () =>
+          n.select ? this.selectNode(n) : this.forNode(n),
+        );
       case "cfor":
         return await this.withRedirects(n.redirs, () => this.cforNode(n));
       case "while":
@@ -795,29 +945,68 @@ export class Proc {
     n: Extract<Node, { type: "pipeline" }>,
   ): Promise<number> {
     const parent = this.ctx;
-    let input = parent.io.in;
-    const statuses: number[] = [];
-    for (let i = 0; i < n.cmds.length; i++) {
-      const last = i === n.cmds.length - 1;
-      const buf = last ? null : new BufWriter();
+    const count = n.cmds.length;
+    // B3: one pipe between each two stages; every stage is a process.
+    const pipes: Pipe[] = [];
+    for (let i = 0; i < count - 1; i++) pipes.push(new Pipe());
+    const children: Proc[] = [];
+    for (let i = 0; i < count; i++) {
       const stage = parent.copy();
       stage.io = {
-        in: input,
-        out: buf ?? parent.io.out,
+        in: parent.io.in,
+        out: i === count - 1 ? parent.io.out : new PipeWriter(pipes[i]),
         err: parent.io.err,
         fds: parent.io.fds,
       };
-      const child = this.spawn(stage);
-      let code: number;
       try {
-        code = await this.within(child, () => child.runNode(n.cmds[i]));
+        const child = this.spawn(stage);
+        if (i > 0)
+          stage.io.in = new Input("", false, pipeFeed(pipes[i - 1], child));
+        children.push(child);
       } catch (e) {
-        if (e instanceof ExitSig) code = e.code;
-        else if (e instanceof ReturnSig) code = e.code;
-        else throw e;
+        for (const c of children) this.run.procs.delete(c);
+        throw e;
       }
-      statuses.push(code);
-      if (buf) input = new Input(buf.text);
+    }
+    const prev = this.run.cur;
+    this.kids += count;
+    type Done = { code: number } | { err: unknown };
+    const sched = this.interp.sched;
+    const stageRun = async (i: number): Promise<Done> => {
+      const child = children[i];
+      await sched.acquire();
+      try {
+        return { code: await child.runNode(n.cmds[i]) };
+      } catch (e) {
+        if (e instanceof ExitSig) return { code: e.code };
+        if (e instanceof ReturnSig) return { code: e.code };
+        if (e instanceof SigPipe) return { code: e.code };
+        return { err: e };
+      } finally {
+        // A stage that ends closes its ends, so the others are never stuck.
+        if (i < count - 1) pipes[i].closeWriter();
+        if (i > 0) pipes[i - 1].closeReader();
+        sched.release();
+      }
+    };
+    let done: Done[];
+    try {
+      done = await sched.blocked(() =>
+        Promise.all(children.map((_, i) => stageRun(i))),
+      );
+    } finally {
+      this.kids -= count;
+      this.run.cur = prev;
+      for (const c of children) {
+        this.run.procs.delete(c);
+        if (this.overflowName === null) this.overflowName = c.overflowName;
+        if (c.procSeq > this.procSeq) this.procSeq = c.procSeq;
+      }
+    }
+    const statuses: number[] = [];
+    for (const d of done) {
+      if ("err" in d) throw d.err;
+      statuses.push(d.code);
     }
     parent.pipestatus = statuses;
     if (parent.options.pipefail) {
@@ -899,6 +1088,39 @@ export class Proc {
         this.fail(err);
         return 1;
       }
+      if (await this.loopBody(n.body, st)) break;
+    }
+    return st.code;
+  }
+
+  /** `select NAME in WORDS; do ...; done` (B4): the menu and PS3 go to stderr. */
+  private async selectNode(n: Extract<Node, { type: "for" }>): Promise<number> {
+    const items = n.words
+      ? await this.ex.words(n.words)
+      : this.ctx.params.slice();
+    const st = { code: 0 };
+    let show = true;
+    for (;;) {
+      this.tick();
+      const io = this.ctx.io;
+      if (show)
+        io.err.write(selectMenu(items, Number(this.ctx.get("COLUMNS")) || 80));
+      show = false;
+      io.err.write(this.ctx.get("PS3") ?? "#? ");
+      io.in.announce(this);
+      const l = await io.in.readLine(this);
+      if (l === null) {
+        // End of input (or a signal with a trap): bash ends the menu.
+        if (!this.signals.length) io.out.write("\n");
+        return 1;
+      }
+      this.ctx.set("REPLY", l.line);
+      if (l.line === "") {
+        show = true;
+        continue;
+      }
+      const k = /^[0-9]+$/.test(l.line.trim()) ? Number(l.line.trim()) : 0;
+      this.ctx.set(n.name, k >= 1 && k <= items.length ? items[k - 1] : "");
       if (await this.loopBody(n.body, st)) break;
     }
     return st.code;
@@ -1353,6 +1575,7 @@ export class Proc {
   ): Promise<number> {
     const name = argv[0];
     const ctx = this.ctx;
+    this.cmd = name;
     if (!o.noFunc && !o.builtinOnly && ctx.functions[name] !== undefined) {
       const body = this.functionBody(name);
       if (body) return await this.callFunction(name, argv.slice(1), body);

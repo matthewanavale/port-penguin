@@ -10,7 +10,15 @@ import { createEngine, SAVE_KEY } from "../engine/index";
 import type { Chunk, Engine, ExecResult, OutputEvent } from "../engine/index";
 import { chunkLines } from "../engine/output";
 import type { OutLine } from "../engine/output";
-import { makeFakeClock, seededRandom, SEED, START_MS } from "./determinism";
+import type { ReadRequest } from "../engine/index";
+import { Tty } from "../term/tty";
+import {
+  makeFakeClock,
+  seededRandom,
+  SEED,
+  START_MS,
+  settle,
+} from "./determinism";
 import type { FakeEngineClock } from "./determinism";
 
 export const plainText = (lines: OutLine[]): string =>
@@ -25,6 +33,12 @@ export function collector() {
   let events: OutputEvent[] = [];
   return {
     onOutput: (e: OutputEvent): void => void events.push(e),
+    /** The plain stdout and stderr text so far. */
+    sofar(): string {
+      return events
+        .map((e) => (e.kind === "chunk" ? e.chunk.text : ""))
+        .join("");
+    },
     /** Call before each input. */
     reset(): void {
       events = [];
@@ -78,10 +92,35 @@ export interface Shell {
   runAll(...inputs: string[]): Promise<RunResult>;
   /** Moves the fake engine clock, runs the due timers, and lets the engine settle. */
   advance(ms: number): Promise<void>;
+  /**
+   * Starts an input that may wait (for the keyboard, a timer, a pipe) and does
+   * not wait for it. Reads of the keyboard wait for `keys`; `run` gives end of
+   * input at once.
+   */
+  start(input: string): Started;
+  /**
+   * Types keys as the terminal does: Ctrl-C, Ctrl-Z, and Ctrl-\ while an input
+   * runs are signals; other keys go to the tty (B4, B24). Lets the engine settle.
+   */
+  keys(data: string): Promise<void>;
+  /** The tty (type-ahead, echo). */
+  tty: Tty;
+  /** What the tty echoed, since the start. */
+  echoed(): string;
+  /** The keyboard reads the engine asked for, in order. */
+  reads: ReadRequest[];
+  /** The plain stdout and stderr text that the running input wrote so far. */
+  sofar(): string;
   /** The fake engine clock. */
   clock: FakeEngineClock;
   /** Plain text of what `engine.start()` printed (the setup alert, the D19 line). */
   startText: string;
+}
+
+/** An input that was started and may still run. */
+export interface Started {
+  done(): boolean;
+  result: Promise<RunResult>;
 }
 
 export interface ShellOptions {
@@ -100,9 +139,20 @@ export async function openShell(opts: ShellOptions = {}): Promise<Shell> {
   if (opts.saved !== undefined) store.set(SAVE_KEY, opts.saved);
   for (const [k, v] of Object.entries(opts.keys ?? {})) store.set(k, v);
   const col = collector();
+  const tty = new Tty();
+  const reads: ReadRequest[] = [];
+  let waiting = 0;
+  let echoed = "";
   const engine = createEngine({
     clock,
     onOutput: col.onOutput,
+    onRead: (req) => {
+      reads.push(req);
+      // `run` has nobody at the keyboard: end of input at once (as 2a's empty terminal).
+      return waiting > 0 || tty.hasAhead
+        ? tty.read(req)
+        : Promise.resolve(null);
+    },
     storage: {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => {
@@ -146,6 +196,39 @@ export async function openShell(opts: ShellOptions = {}): Promise<Shell> {
     },
     async advance(ms: number) {
       return await clock.advance(ms);
+    },
+    tty,
+    reads,
+    echoed: () => echoed,
+    sofar: () => col.sofar(),
+    start(input: string): Started {
+      waiting++;
+      let ended = false;
+      const result = run(input).finally(() => {
+        ended = true;
+        waiting--;
+      });
+      return { done: () => ended, result };
+    },
+    async keys(data: string) {
+      const SIG: Record<string, string> = {
+        "\x03": "INT",
+        "\x1a": "TSTP",
+        "\x1c": "QUIT",
+      };
+      const ECHO: Record<string, string> = {
+        INT: "^C",
+        TSTP: "^Z",
+        QUIT: "^\\",
+      };
+      // Let the engine reach its wait first: a person types after the command asks.
+      await settle();
+      if (engine.busy() && SIG[data]) {
+        tty.flush();
+        echoed += ECHO[SIG[data]] + "\r\n";
+        engine.signal(SIG[data]);
+      } else echoed += tty.feed(data);
+      await settle();
     },
   };
 }

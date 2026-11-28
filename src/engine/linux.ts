@@ -24,6 +24,7 @@ import { termCols } from "./shell/context";
 import type { Proc } from "./shell/proc";
 import type { CmdFn, Host, IO } from "./shell/io";
 import { LIM } from "./shell/limits";
+import { streamLines } from "./shell/stream";
 import { SIGNALS } from "./shell/sched";
 import {
   canWrite,
@@ -194,7 +195,7 @@ async function readFileArg(
   name: string,
   how: (e: string) => string = (e) => `${name}: ${e}`,
 ): Promise<string | null> {
-  if (name === "-") return await io.in.readAll();
+  if (name === "-") return await io.in.readAll(sh);
   const r = lookup(sh, name);
   if (!isFound(r)) {
     errOut(io, cmd, how(r.err));
@@ -669,8 +670,36 @@ const cat: CmdFn = async (argv, sh, io) => {
   let code = 0;
   let lineNo = 0;
   let prevBlank = false;
+  let out = "";
+  const one = (line: string, nl: boolean) => {
+    const blank = line === "";
+    if (squeeze && blank && prevBlank) return;
+    prevBlank = blank;
+    let s = tabs ? line.replace(/\t/g, "^I") : line;
+    if (ends && nl) s += "$";
+    if (nonblank ? !blank : number) s = String(++lineNo).padStart(6) + "\t" + s;
+    out += s + (nl ? "\n" : "");
+  };
   for (const name of r.rest.length ? r.rest : ["-"]) {
-    if (name !== "-") {
+    if (name === "-") {
+      // B26: standard input is a stream. Each chunk goes out as it comes.
+      if (!fancy) {
+        for (;;) {
+          const c = await io.in.readChunk(undefined, sh);
+          if (c === null) break;
+          io.out.write(c);
+          await sh.drain();
+        }
+      } else {
+        await streamLines(io.in, sh, (lines, lastPart) => {
+          lines.forEach((l) => one(l, !lastPart));
+          io.out.write(out);
+          out = "";
+        });
+      }
+      continue;
+    }
+    {
       const f1 = lookup(sh, name);
       if (isFound(f1) && f1.node.t === "d") {
         errOut(io, "cat", `${name}: Is a directory`);
@@ -690,20 +719,10 @@ const cat: CmdFn = async (argv, sh, io) => {
     }
     const parts = text.split("\n");
     const last = parts.pop() as string;
-    let out = "";
-    const one = (line: string, nl: boolean) => {
-      const blank = line === "";
-      if (squeeze && blank && prevBlank) return;
-      prevBlank = blank;
-      let s = tabs ? line.replace(/\t/g, "^I") : line;
-      if (ends && nl) s += "$";
-      if (nonblank ? !blank : number)
-        s = String(++lineNo).padStart(6) + "\t" + s;
-      out += s + (nl ? "\n" : "");
-    };
     for (const line of parts) one(line, true);
     if (last !== "") one(last, false);
     io.out.write(out);
+    out = "";
   }
   return code;
 };
@@ -806,7 +825,15 @@ function headTail(which: "head" | "tail"): CmdFn {
     let firstOut = true;
     for (const name of names) {
       let text: string | null;
-      if (name === "-") text = await io.in.readAll();
+      if (name === "-" && which === "head" && !count.minus) {
+        // B26: `head` reads standard input as a stream and stops when it has enough.
+        if (header)
+          io.out.write(`${firstOut ? "" : "\n"}==> standard input <==\n`);
+        firstOut = false;
+        await headStream(io, sh, count.n, bytes);
+        continue;
+      }
+      if (name === "-") text = await io.in.readAll(sh);
       else {
         const f1 = lookup(sh, name);
         if (!isFound(f1)) {
@@ -843,6 +870,36 @@ function headTail(which: "head" | "tail"): CmdFn {
   };
 }
 
+/** `head` of standard input, one chunk at a time; it stops reading at `n` lines or bytes. */
+async function headStream(
+  io: IO,
+  sh: Proc,
+  n: number,
+  bytes: boolean,
+): Promise<void> {
+  let left = n;
+  while (left > 0) {
+    if (bytes) {
+      const c = await io.in.readChunk(undefined, sh);
+      if (c === null) return;
+      const b = enc.encode(c);
+      if (b.length <= left) {
+        io.out.write(c);
+        left -= b.length;
+      } else {
+        io.out.write(dec.decode(b.slice(0, left)));
+        left = 0;
+      }
+    } else {
+      const l = await io.in.readLine(sh);
+      if (l === null) return;
+      io.out.write(l.line + (l.nl ? "\n" : ""));
+      left--;
+    }
+    await sh.drain();
+  }
+}
+
 function slice(
   text: string,
   which: "head" | "tail",
@@ -875,6 +932,45 @@ function slice(
 const head = headTail("head");
 const tail = headTail("tail");
 
+/** The counts of standard input, read in chunks (B26). Only the columns asked for are worked out. */
+async function wcStream(
+  io: IO,
+  sh: Proc,
+  cols: string[],
+): Promise<Record<string, number>> {
+  const c = { l: 0, w: 0, c: 0, m: 0, L: 0 };
+  const want = (k: string) => cols.includes(k);
+  let inWord = false;
+  let cur = 0;
+  for (;;) {
+    const t = await io.in.readChunk(undefined, sh);
+    if (t === null) break;
+    if (want("l")) {
+      let at = -1;
+      while ((at = t.indexOf("\n", at + 1)) >= 0) c.l++;
+    }
+    if (want("w")) {
+      const m = t.match(/\S+/g);
+      c.w += m ? m.length : 0;
+      if (inWord && /^\S/.test(t)) c.w--;
+      inWord = /\S$/.test(t);
+    }
+    if (want("c")) c.c += byteLen(t);
+    if (want("m")) c.m += [...t].length;
+    if (want("L")) {
+      const parts = t.split("\n");
+      cur += [...parts[0]].length;
+      c.L = Math.max(c.L, cur);
+      for (let k = 1; k < parts.length; k++) {
+        cur = [...parts[k]].length;
+        c.L = Math.max(c.L, cur);
+      }
+    }
+    await sh.drain();
+  }
+  return c;
+}
+
 const wc: CmdFn = async (argv, sh, io) => {
   const r = opts(io, "wc", argv, "lwcmL", {
     lines: ["l", false],
@@ -899,8 +995,13 @@ const wc: CmdFn = async (argv, sh, io) => {
   for (const name of names) {
     let text: string;
     if (name === "-") {
-      text = await io.in.readAll();
+      // B26: `wc` counts standard input chunk by chunk.
       wide = true;
+      rows.push({
+        name: name === "-" && r.rest.length === 0 ? "" : name,
+        c: await wcStream(io, sh, cols),
+      });
+      continue;
     } else {
       const f1 = lookup(sh, name);
       if (!isFound(f1)) {
@@ -1255,8 +1356,6 @@ const uniq: CmdFn = async (argv, sh, io) => {
     return 1;
   }
   const inName = r.rest[0] ?? "-";
-  const text = await readFileArg("uniq", sh, io, inName);
-  if (text === null) return 1;
   const ci = r.has("i");
   const key = (l: string): string => {
     let s = l;
@@ -1265,6 +1364,34 @@ const uniq: CmdFn = async (argv, sh, io) => {
     if (checkW !== null) s = s.slice(0, checkW);
     return ci ? s.toLowerCase() : s;
   };
+  const keepGroup = (n: number): boolean =>
+    r.has("d") && !r.has("u")
+      ? n > 1
+      : r.has("u") && !r.has("d")
+        ? n === 1
+        : true;
+  const show = ([l, n]: [string, number]): string =>
+    (r.has("c") ? padL(String(n), 7) + " " + l : l) + "\n";
+  if (inName === "-" && r.rest[1] === undefined) {
+    // B26: `uniq` reads standard input as a stream; a group goes out when the next one starts.
+    let cur: [string, number] | null = null;
+    await streamLines(io.in, sh, (lines) => {
+      let out = "";
+      for (const l of lines) {
+        if (cur && key(cur[0]) === key(l)) cur[1]++;
+        else {
+          if (cur && keepGroup(cur[1])) out += show(cur);
+          cur = [l, 1];
+        }
+      }
+      io.out.write(out);
+    });
+    const last = cur as [string, number] | null;
+    if (last && keepGroup(last[1])) io.out.write(show(last));
+    return 0;
+  }
+  const text = await readFileArg("uniq", sh, io, inName);
+  if (text === null) return 1;
   const groups: [string, number][] = [];
   for (const l of splitLines(text)) {
     const last = groups[groups.length - 1];
@@ -1517,6 +1644,13 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
     const recursive = r.has("r") || r.has("R");
     const names = rest.length ? rest : recursive ? ["."] : ["-"];
     const implicitDot = recursive && !rest.length;
+    // B26: `grep` reads standard input as a stream when it has no context lines to keep.
+    const streamIn =
+      names.length === 1 &&
+      names[0] === "-" &&
+      r.val("A") === undefined &&
+      r.val("B") === undefined &&
+      r.val("C") === undefined;
     const srcs: GrepSrc[] = [];
     let code = 0;
     const quiet = r.has("q");
@@ -1554,7 +1688,11 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
     };
     for (const name of names) {
       if (name === "-") {
-        srcs.push({ name: "(standard input)", text: await io.in.readAll() });
+        if (!streamIn)
+          srcs.push({
+            name: "(standard input)",
+            text: await io.in.readAll(sh),
+          });
         continue;
       }
       const f1 = lookup(sh, name);
@@ -1605,6 +1743,89 @@ function grepCmd(forced: "E" | "F" | null, label: string): CmdFn {
     const paint = io.out.tty && sh.promptLevel() && color !== false;
     let matched = false;
     let printedGroup = false;
+    if (streamIn) {
+      const stdinName = "(standard input)";
+      let lineNo = 0;
+      let count = 0;
+      let text = "";
+      let html = "";
+      const showLine = (l: string, pre: string): void => {
+        if (onlyMatching) {
+          if (invert) return;
+          re.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(l)) !== null) {
+            if (m[0] === "") {
+              re.lastIndex++;
+              continue;
+            }
+            text += pre + m[0] + "\n";
+            html +=
+              esc(pre) +
+              (paint ? `<span class="hl">${esc(m[0])}</span>` : esc(m[0])) +
+              "\n";
+          }
+          return;
+        }
+        text += pre + l + "\n";
+        let body = esc(l);
+        if (paint && !invert) {
+          body = "";
+          let last = 0;
+          re.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(l)) !== null) {
+            if (m[0] === "") {
+              re.lastIndex++;
+              continue;
+            }
+            body +=
+              esc(l.slice(last, m.index)) +
+              `<span class="hl">${esc(m[0])}</span>`;
+            last = m.index + m[0].length;
+          }
+          body += esc(l.slice(last));
+        }
+        html += esc(pre) + body + "\n";
+      };
+      if (maxCount > 0)
+        await streamLines(io.in, sh, (lines) => {
+          text = "";
+          html = "";
+          let stop = false;
+          for (const l of lines) {
+            lineNo++;
+            re.lastIndex = 0;
+            if (re.test(l) === invert) continue;
+            count++;
+            matched = true;
+            if (quiet || listMatch || listNone) {
+              stop = true;
+              break;
+            }
+            if (!onlyCount)
+              showLine(
+                l,
+                (r.has("H") ? stdinName + ":" : "") +
+                  (numbers ? lineNo + ":" : ""),
+              );
+            if (count >= maxCount) {
+              stop = true;
+              break;
+            }
+          }
+          if (text) io.out.write(text, paint ? html : undefined);
+          return stop;
+        });
+      if (quiet) return matched ? 0 : 1;
+      if (listMatch || listNone) {
+        if (count > 0 === listMatch) io.out.write(stdinName + "\n");
+        return matched || listNone ? 0 : 1;
+      }
+      if (onlyCount)
+        io.out.write((r.has("H") ? stdinName + ":" : "") + count + "\n");
+      return matched ? 0 : 1;
+    }
     for (const src of srcs) {
       const lines = splitLines(src.text);
       const hit: boolean[] = lines.map((l) => {

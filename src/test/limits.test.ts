@@ -89,8 +89,14 @@ describe("D5 limits", () => {
     await expectStopped("a=(x{1..60000} y{1..60000})");
   });
 
-  it("stops yes | head -1 at the pipe data limit, as D20 records", async () => {
-    await expectStopped("yes | head -1");
+  it("does not stop yes | head -1: it prints y (B3 replaces D20)", async () => {
+    const r = await sh.run("yes | head -1");
+    expect(r.out).toBe("y\n");
+    expect(r.text).not.toMatch(STOPPED);
+  });
+
+  it("stops x=$(yes) at the 1 MB of pipe data line (B8)", async () => {
+    await expectStopped("x=$(yes)");
   });
 
   it("stops yes > f at 1 MB", async () => {

@@ -2,6 +2,7 @@
 // terminal both go to one ordered list of chunks, so the order of writing is
 // kept. A pipe or `$( )` collects text. A redirect writes to a file.
 import { LIM, LimitStop } from "./limits";
+import type { Pipe } from "./pipe";
 import type { Proc } from "./proc";
 
 export type Stream = "stdout" | "stderr";
@@ -18,6 +19,12 @@ export interface Chunk {
 
 /** What the engine sends out while an input runs (B15). */
 export type OutputEvent = { kind: "chunk"; chunk: Chunk } | { kind: "clear" };
+
+/**
+ * What the terminal gives back for an event: nothing, or a promise that ends
+ * when it can take more (flow control, as a tty blocks a fast writer).
+ */
+export type OutputSink = (event: OutputEvent) => void | Promise<void>;
 
 /** What task checks read (D10). */
 export interface TaskCtx {
@@ -38,6 +45,26 @@ export interface Writer {
   write(text: string, html?: string): void;
   /** True for the terminal (`ls` prints columns there). */
   readonly tty: boolean;
+  /**
+   * A pipe: gives a promise while the buffer is full (B3), or null when the
+   * writer may go on. The process awaits it at its next safe point.
+   */
+  drain?(sh?: Proc): Promise<void> | null;
+}
+
+/** What the engine asks the terminal for while a command reads the keyboard (B4, B15). */
+export interface ReadRequest {
+  mode: "line" | "char";
+  count?: number;
+  echo: boolean;
+  /** `read -e`: the game line editor, with history off (B4). */
+  edit?: boolean;
+  /** Set when the terminal shows a learner hint before it waits (B16a). */
+  hint?: string;
+  /** The command that waits (the live region names it, B17). */
+  cmd?: string;
+  /** Aborts the wait: a signal ended it, or `read -t` timed out. */
+  signal?: AbortSignal;
 }
 
 /** Where the terminal output of one input goes (B15): the `Run` of the input. */
@@ -45,6 +72,8 @@ export interface OutSink {
   emit(chunk: Chunk): void;
   /** The `clear` command (or Ctrl-L) from any process. */
   clear(): void;
+  /** A promise while the terminal cannot take more output, else null. */
+  hold(): Promise<void> | null;
 }
 
 /** What `allOut` keeps of one input (B12). */
@@ -58,6 +87,9 @@ export class TermWriter implements Writer {
     private sink: OutSink,
     private task: TaskCtx | null,
   ) {}
+  drain(): Promise<void> | null {
+    return this.sink.hold();
+  }
   write(text: string, html?: string): void {
     if (text === "" && html === undefined) return;
     const c: Chunk = { stream: this.stream, text };
@@ -83,6 +115,18 @@ export class BufWriter implements Writer {
   }
 }
 
+/** The write end of a pipe (B3). */
+export class PipeWriter implements Writer {
+  readonly tty = false;
+  constructor(readonly pipe: Pipe) {}
+  write(text: string): void {
+    this.pipe.write(text);
+  }
+  drain(sh?: Proc): Promise<void> | null {
+    return this.pipe.full ? this.pipe.drain(sh) : null;
+  }
+}
+
 export class NullWriter implements Writer {
   readonly tty = false;
   write(): void {
@@ -99,65 +143,137 @@ export class AliasWriter implements Writer {
   write(text: string, html?: string): void {
     this.to.write(text, html);
   }
+  drain(sh?: Proc): Promise<void> | null {
+    return this.to.drain ? this.to.drain(sh) : null;
+  }
+}
+
+/** Where more input comes from when the text is used up: a pipe or the terminal (B26). */
+export interface Feed {
+  /**
+   * More text, or null at the end of input. `want` is how the caller reads:
+   * a line (the terminal is in line mode) or a character count (character mode).
+   */
+  next(
+    sh: Proc | undefined,
+    want: { mode: "line" | "char"; count?: number; signal?: AbortSignal },
+  ): Promise<string | null>;
+  /** Called before the first wait of a read (the B16 hint). */
+  announce?(sh: Proc | undefined): void;
+}
+
+/** A feed from a pipe. */
+export function pipeFeed(pipe: Pipe, owner: Proc): Feed {
+  return { next: (sh, want) => pipe.read(sh ?? owner, want.count) };
 }
 
 /**
- * Standard input: a text with a read position. Shared by reference. The reads
- * are async (B26); in this phase every source is a whole text, so they
- * resolve at once.
+ * Standard input: a text with a read position, and a feed for more text. It is
+ * shared by reference. The reads are async (B26): a text source resolves at
+ * once; a pipe waits for data (B3); the terminal asks `onRead` (B4).
  */
 export class Input {
   pos = 0;
-  /** True once a command read from the terminal input (the D22 hint). */
-  used = false;
   /** The interpreter sets this: only a command typed at the prompt counts (D12). */
   counts: () => boolean = () => true;
+  /** The terminal echoes the typed keys (`read -s` turns it off, B4). */
+  echo = true;
+  /** `read -e`: the terminal uses the game line editor (B4). */
+  edit = false;
+  /** `read -t`: aborts the wait of a read when its time is over. */
+  signal: AbortSignal | undefined;
+  /** True once the feed gave its end. */
+  private ended = false;
   constructor(
     public text = "",
-    /** True when it is the terminal (empty in 2a, D22). */
+    /** True when it is the terminal. */
     public tty = false,
+    /** More text when `text` is used up. */
+    public feed: Feed | null = null,
   ) {}
-  private touch(): void {
-    if (this.tty && this.counts()) this.used = true;
+
+  /** The text left in the buffer. */
+  private get left(): number {
+    return this.text.length - this.pos;
   }
-  /** Reads the rest. */
-  readAll(): Promise<string> {
-    return Promise.resolve(this.takeAll());
+
+  /** Asks the feed for more; false at the end. */
+  private async more(
+    sh: Proc | undefined,
+    want: { mode: "line" | "char"; count?: number; signal?: AbortSignal },
+  ): Promise<boolean> {
+    if (!this.feed || this.ended) return false;
+    if (this.pos > 0 && this.pos === this.text.length) {
+      this.text = "";
+      this.pos = 0;
+    }
+    const s = await this.feed.next(sh, { ...want, signal: this.signal });
+    if (s === null) {
+      // A signal that has a trap also ends a wait with null: not the end of input.
+      if (!(sh && sh.signals.length)) this.ended = true;
+      return false;
+    }
+    this.text += s;
+    return true;
+  }
+
+  /** Called before a read waits, so the terminal can show its hint (B16). */
+  announce(sh?: Proc): void {
+    this.feed?.announce?.(sh);
+  }
+
+  /** Reads the rest. A whole read keeps the 1 MB value cap (B8). */
+  async readAll(sh?: Proc): Promise<string> {
+    while (await this.more(sh, { mode: "line" })) {
+      if (this.left > LIM.str) throw new LimitStop("1 MB of pipe data");
+    }
+    return this.takeAll();
   }
   /**
-   * The rest, at once, with no wait. For the places that need a plain text
-   * (`/dev/stdin` as a file name). It is only right for a text source.
+   * The rest of the buffer, at once, with no wait. For the places that need a
+   * plain text (`/dev/stdin` as a file name). It is only right for a text source.
    */
   takeAll(): string {
-    this.touch();
     const r = this.text.slice(this.pos);
     this.pos = this.text.length;
     return r;
   }
   /** One line without its newline, and whether the newline was there. */
-  readLine(): Promise<{ line: string; nl: boolean } | null> {
-    this.touch();
-    if (this.pos >= this.text.length) return Promise.resolve(null);
-    const i = this.text.indexOf(NL, this.pos);
-    if (i < 0) {
-      const line = this.text.slice(this.pos);
-      this.pos = this.text.length;
-      return Promise.resolve({ line, nl: false });
+  async readLine(sh?: Proc): Promise<{ line: string; nl: boolean } | null> {
+    let from = this.pos;
+    for (;;) {
+      const i = this.text.indexOf(NL, from);
+      if (i >= 0) {
+        const line = this.text.slice(this.pos, i);
+        this.pos = i + 1;
+        return { line, nl: true };
+      }
+      from = this.text.length;
+      const base = this.pos;
+      if (!(await this.more(sh, { mode: "line" }))) break;
+      // The buffer may have moved to its start.
+      from = from - base + this.pos;
     }
-    const line = this.text.slice(this.pos, i);
-    this.pos = i + 1;
-    return Promise.resolve({ line, nl: true });
+    if (this.pos >= this.text.length) return null;
+    const line = this.text.slice(this.pos);
+    this.pos = this.text.length;
+    return { line, nl: false };
   }
   /** Up to `max` characters (all that is ready when there is no limit), or null at the end. */
-  readChunk(max = Infinity): Promise<string | null> {
-    this.touch();
-    if (this.pos >= this.text.length) return Promise.resolve(null);
+  async readChunk(max = Infinity, sh?: Proc): Promise<string | null> {
+    if (this.left === 0) {
+      const want = {
+        mode: Number.isFinite(max) ? ("char" as const) : ("line" as const),
+        count: Number.isFinite(max) ? max : undefined,
+      };
+      while (this.left === 0) if (!(await this.more(sh, want))) return null;
+    }
     const r = this.text.slice(this.pos, this.pos + max);
     this.pos += r.length;
-    return Promise.resolve(r);
+    return r;
   }
   get eof(): boolean {
-    return this.pos >= this.text.length;
+    return this.pos >= this.text.length && (!this.feed || this.ended);
   }
 }
 
