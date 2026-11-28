@@ -6,7 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import type { Engine, ExecResult } from "../engine/index";
 import type { OutLine } from "../engine/output";
-import type { OutputEvent } from "../engine/shell/io";
+import type { OutputEvent, ReadRequest } from "../engine/shell/io";
 import {
   createChunkRenderer,
   renderLines,
@@ -15,14 +15,21 @@ import {
 } from "./ansi";
 import { createLineEditor } from "./lineEditor";
 import type { EditorAction } from "./lineEditor";
+import { Tty } from "./tty";
 
 export interface GameTerminal {
   /**
    * Command output from the engine (B15): `main.ts` connects this to the
    * `onOutput` of `createEngine`. A chunk is written at once; `clear` clears
-   * the screen.
+   * the screen. It gives a promise while xterm is more than 256 KB behind, so
+   * the engine waits (flow control, as a tty blocks a fast writer).
    */
-  output(event: OutputEvent): void;
+  output(event: OutputEvent): void | Promise<void>;
+  /**
+   * The keyboard read of a command (B4): `main.ts` connects this to the
+   * `onRead` of `createEngine`.
+   */
+  read(req: ReadRequest): Promise<string | null>;
   /** Writes lines above the prompt (panel messages). */
   print(lines: OutLine[]): void;
   /** Clears the screen and keeps the line being typed. */
@@ -51,6 +58,19 @@ const SIGNAL_KEYS: Record<string, { sig: string; echo: string }> = {
   "\x1a": { sig: "TSTP", echo: "^Z" },
   "\x1c": { sig: "QUIT", echo: "^\\" },
 };
+
+/** How much output xterm may hold before the engine must wait (B15). */
+export const OUTPUT_LIMIT = 256 * 1024;
+
+/** B16 (b): the first time per page load that `> ` shows. */
+export const NOT_FINISHED_HINT =
+  "port-penguin: the command is not finished. Type the rest, or press Ctrl-C to cancel.";
+
+/** B17: the texts for screen readers. */
+export const SR_NOT_FINISHED =
+  "Input not finished. Continue typing, or press Control C to cancel.";
+export const srWaiting = (cmd: string): string =>
+  `${cmd || "The command"} is waiting for keyboard input.`;
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
@@ -257,6 +277,10 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
 
   const chunks = createChunkRenderer();
 
+  /** Characters that xterm was given and has not written yet (B15 flow control). */
+  let behind = 0;
+  let waiters: (() => void)[] = [];
+
   /** One action that does not run a command (the listing, Ctrl-C, Ctrl-L). */
   function runOne(a: EditorAction): string {
     if (a.type === "interrupt") {
@@ -269,7 +293,7 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       rowsAbove = 0;
       return CLEAR;
     }
-    if (a.type === "submit") return "";
+    if (a.type === "submit" || a.type === "eof") return "";
     let out = endInput(a.line);
     out += renderLines([
       { style: "dim", runs: [{ text: a.items.join("  ") }] },
@@ -283,10 +307,48 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
 
   /**
    * True while an input runs. Ctrl-C, Ctrl-Z, and Ctrl-\\ then go to the job as
-   * signals (B6); other keys wait (the keyboard reads come in a later phase).
+   * signals (B6); other keys go to the tty: a command that reads the keyboard
+   * gets them, and the rest is type-ahead (B24).
    */
   let running = false;
-  const waiting: string[] = [];
+  const tty = new Tty();
+  /** True when the cursor is at the start of a row (a hint then needs no line break). */
+  let atLineStart = true;
+
+  // B17: one visually hidden live region. Each text is said once per prompt.
+  const live = document.createElement("div");
+  live.className = "sr-only";
+  live.setAttribute("aria-live", "polite");
+  live.setAttribute("role", "status");
+  container.appendChild(live);
+  let said = new Set<string>();
+  const announce = (text: string): void => {
+    if (said.has(text)) return;
+    said.add(text);
+    live.textContent = text;
+  };
+
+  /** B16 (b): once per page load. */
+  let notFinishedShown = false;
+
+  const dim = (text: string): string =>
+    renderLines([{ style: "dim", runs: [{ text }] }]);
+
+  /** Runs one complete input and writes its game lines (B15: the output came as it ran). */
+  async function execute(text: string, leave: boolean): Promise<void> {
+    engine.setColumns(term.cols);
+    chunks.reset();
+    const histLen = engine.state.hist.length;
+    const res = await engine.execute(text);
+    // Ctrl-D at the prompt is not a typed command: the history keeps no `exit` for it.
+    if (leave && engine.state.hist.length > histLen) engine.state.hist.pop();
+    let out = chunks.finish();
+    out += renderLines(res.lines);
+    atLineStart = true;
+    if (out) term.write(out);
+    said = new Set();
+    opts.onResult(res);
+  }
 
   /**
    * Runs the editor actions in order. A complete input goes to the engine; its
@@ -295,6 +357,14 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
   async function perform(actions: EditorAction[]): Promise<void> {
     let out = "";
     for (const a of actions) {
+      if (a.type === "eof") {
+        // B27: Ctrl-D on an empty line at the top prompt acts as `exit`.
+        if (kept.length) continue;
+        term.write(out + endInput("exit"));
+        out = "";
+        await execute("exit", true);
+        continue;
+      }
       if (a.type !== "submit") {
         out += runOne(a);
         continue;
@@ -304,23 +374,23 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       const text = kept.join("\n");
       if (!engine.isComplete(text)) {
         // Draw `> ` at once, so a pasted multi-line input keeps its order.
+        if (!notFinishedShown) {
+          notFinishedShown = true;
+          out += dim(NOT_FINISHED_HINT);
+        }
         out += renderRuns(engine.prompt());
+        announce(SR_NOT_FINISHED);
         continue;
       }
       kept = [];
-      engine.setColumns(term.cols);
       term.write(out);
       out = "";
-      chunks.reset();
-      const res = await engine.execute(text);
-      out += chunks.finish();
-      out += renderLines(res.lines);
-      opts.onResult(res);
+      await execute(text, false);
     }
     if (out) term.write(out);
   }
 
-  /** Handles one piece of typed or pasted text. */
+  /** Handles one piece of typed or pasted text at the prompt. */
   async function handle(data: string): Promise<void> {
     const before = editor.line,
       beforeCursor = editor.cursor;
@@ -340,7 +410,7 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       term.write(typed.out);
       return;
     }
-    if (!actions.some((a) => a.type === "submit")) {
+    if (!actions.some((a) => a.type === "submit" || a.type === "eof")) {
       term.write(run(actions) + draw(editor.line, editor.cursor));
       return;
     }
@@ -351,25 +421,35 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       running = false;
     }
     term.write(draw(editor.line, editor.cursor));
-    const next = waiting.shift();
-    if (next !== undefined) await handle(next);
+    atLineStart = false;
+    // Keys typed while the job ran start the next prompt (B24).
+    const next = tty.takeAhead();
+    if (next) await handle(next);
   }
 
-  term.onData((data) => {
+  /** Keys from the keyboard or the extra-keys bar. */
+  function onKeys(data: string): void {
     if (running) {
       const key = SIGNAL_KEYS[data];
       if (key) {
         // As a tty does, the signal key empties the type-ahead (B24).
-        waiting.length = 0;
+        tty.flush();
         term.write(key.echo + "\r\n");
+        atLineStart = true;
         engine.signal(key.sig);
         return;
       }
-      waiting.push(data);
+      const echo = tty.feed(data);
+      if (echo) {
+        term.write(echo);
+        atLineStart = echo.endsWith("\n");
+      }
       return;
     }
     void handle(data);
-  });
+  }
+
+  term.onData(onKeys);
 
   function focusNext(): void {
     const all = Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE));
@@ -471,10 +551,33 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
         chunks.reset();
         rowsAbove = 0;
         term.write(CLEAR);
+        atLineStart = true;
         return;
       }
       const text = chunks.push(event.chunk);
-      if (text) term.write(text);
+      if (event.chunk.text) atLineStart = event.chunk.text.endsWith("\n");
+      if (!text) return;
+      // Flow control: xterm tells when it has written the text (B15).
+      behind += text.length;
+      term.write(text, () => {
+        behind -= text.length;
+        if (behind <= OUTPUT_LIMIT) {
+          const w = waiters;
+          waiters = [];
+          for (const f of w) f();
+        }
+      });
+      if (behind > OUTPUT_LIMIT)
+        return new Promise<void>((resolve) => waiters.push(resolve));
+    },
+    read(req) {
+      // B16 (a): the hint comes before the wait, on a row of its own.
+      if (req.hint) {
+        term.write((atLineStart ? "" : "\r\n") + dim(req.hint));
+        atLineStart = true;
+      }
+      announce(srWaiting(req.cmd ?? ""));
+      return tty.read(req);
     },
     print(lines) {
       let out = rowsAbove > 0 ? `\x1b[${rowsAbove}A` : "";
@@ -497,6 +600,20 @@ export function createTerminal(opts: TerminalOptions): GameTerminal {
       redraw();
     },
     key(k) {
+      if (k === "ctrl-c") {
+        onKeys("\x03");
+        return;
+      }
+      if (k === "ctrl-d") {
+        onKeys("\x04");
+        return;
+      }
+      if (running) {
+        // While a command runs, the keys go to the tty (B24); up and down have no use.
+        if (k === "tab") onKeys("\t");
+        else if (k.length === 1) onKeys(k);
+        return;
+      }
       let out = "";
       if (k === "tab") out = run(editor.complete());
       else if (k === "up") editor.historyMove(-1);

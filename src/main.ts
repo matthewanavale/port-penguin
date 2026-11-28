@@ -4,7 +4,7 @@
 import "@xterm/xterm/css/xterm.css";
 import "./styles.css";
 import { createEngine, M, rankFor, sha256 } from "./engine/index";
-import type { Mission, OutputEvent, State } from "./engine/index";
+import type { Mission, OutputEvent, ReadRequest, State } from "./engine/index";
 import { htmlLine } from "./engine/output";
 import type { OutLine } from "./engine/output";
 import { bindExtraKeys, createTerminal } from "./term/terminal";
@@ -26,7 +26,10 @@ const esc = (s: unknown): string =>
 
 // The terminal sink exists before the engine, so the engine can write output
 // from its first input; `createTerminal` connects it below (B15).
-let sink: (event: OutputEvent) => void = () => undefined;
+let sink: (event: OutputEvent) => void | Promise<void> = () => undefined;
+// The keyboard: until the terminal exists nothing is typed, so a read ends at once (B4).
+let reader: (req: ReadRequest) => Promise<string | null> = () =>
+  Promise.resolve(null);
 
 const engine = createEngine({
   storage: {
@@ -34,6 +37,7 @@ const engine = createEngine({
     setItem: (k, v) => localStorage.setItem(k, v),
   },
   onOutput: (event) => sink(event),
+  onRead: (req) => reader(req),
 });
 
 function intro(isNew: boolean): OutLine[] {
@@ -108,6 +112,7 @@ $("clearBtn").onclick = () => {
 };
 
 sink = (event) => terminal.output(event);
+reader = (req) => terminal.read(req);
 
 bindExtraKeys($("keys"), terminal);
 

@@ -11,6 +11,8 @@
 //   createTerminal(opts) -> GameTerminal
 //   bindExtraKeys(bar, terminal)
 //   START_ERROR, FONT_WAIT_MS
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEngine } from "../engine/index";
 import type { Engine } from "../engine/index";
@@ -48,8 +50,14 @@ const fake = vi.hoisted(() => {
       this.dataHandler = cb;
       return { dispose() {} };
     }
-    write(s: string) {
+    /** Set by a test: xterm is slow, and the completion callbacks wait. */
+    holdWrites = false;
+    pending: (() => void)[] = [];
+    write(s: string, cb?: () => void) {
       this.written += s;
+      if (!cb) return;
+      if (this.holdWrites) this.pending.push(cb);
+      else cb();
     }
     attachCustomKeyEventHandler(fn: (ev: KeyboardEvent) => boolean) {
       this.keyHandler = fn;
@@ -110,6 +118,7 @@ async function setup(
   const engine: Engine = createEngine({
     storage: memoryStorage(),
     onOutput: (e) => sink.term?.output(e),
+    onRead: (req) => sink.term?.read(req) ?? Promise.resolve(null),
   });
   await engine.start();
   const container = document.getElementById("term") as HTMLElement;
@@ -627,5 +636,248 @@ describe("continuation input (AC1, AC10)", () => {
     expect(plainWritten(x).match(/progress could not be saved/g)?.length).toBe(
       1,
     );
+  });
+});
+
+// B4, B16, B17, B24, B27, B28: keyboard reads, hints, the live region, the
+// control keys, and output flow control.
+describe("keyboard input in the terminal (B4, B16, B17)", () => {
+  const plain = (x: Fake) =>
+    // eslint-disable-next-line no-control-regex
+    x.written.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+  const live = (c: HTMLElement) =>
+    c.querySelector('[aria-live="polite"]') as HTMLElement;
+
+  it("lets read v take typed keys, with echo", async () => {
+    const { x, engine } = await setup();
+    x.dataHandler?.("read v; echo got-$v\r");
+    await flush();
+    expect(engine.busy()).toBe(true);
+    const before = x.written.length;
+    x.dataHandler?.("hi");
+    expect(x.written.slice(before)).toContain("hi");
+    x.dataHandler?.("\r");
+    await flush();
+    await flush();
+    expect(engine.busy()).toBe(false);
+    expect(plain(x)).toContain("got-hi");
+  });
+
+  it("shows the keyboard hint once, before the wait", async () => {
+    const { x } = await setup();
+    x.dataHandler?.("cat\r");
+    await flush();
+    const hint =
+      "port-penguin: cat is reading the keyboard. Type input and press Enter; Ctrl-D ends the input, Ctrl-C stops cat.";
+    expect(plain(x)).toContain(hint);
+    x.dataHandler?.("\x04");
+    await flush();
+    await flush();
+    x.dataHandler?.("cat\r");
+    await flush();
+    x.dataHandler?.("\x04");
+    await flush();
+    await flush();
+    expect(plain(x).split(hint).length - 1).toBe(1);
+  });
+
+  it("shows no keyboard hint for a command in a script", async () => {
+    const { x } = await setup();
+    await send(x, "printf 'cat\\n' > s.sh\r");
+    x.dataHandler?.("bash s.sh\r");
+    await flush();
+    x.dataHandler?.("\x04");
+    await flush();
+    await flush();
+    expect(plain(x)).not.toContain("is reading the keyboard");
+  });
+
+  it("shows the not-finished hint once, before the first >", async () => {
+    const { x } = await setup();
+    const hint =
+      "port-penguin: the command is not finished. Type the rest, or press Ctrl-C to cancel.";
+    await send(x, "if true; then\r");
+    await send(x, "\x03");
+    await send(x, "if true; then\r");
+    await send(x, "\x03");
+    const shown = plain(x);
+    expect(shown.split(hint).length - 1).toBe(1);
+    expect(shown.indexOf(hint)).toBeLessThan(shown.indexOf("> "));
+  });
+
+  it("has one visually hidden live region", async () => {
+    const { container } = await setup();
+    const regions = container.querySelectorAll('[aria-live="polite"]');
+    expect(regions.length).toBe(1);
+    expect(regions[0].className).toBe("sr-only");
+  });
+
+  it("announces the not-finished text at >, once per prompt", async () => {
+    const { x, container } = await setup();
+    await send(x, "if true; then\r");
+    expect(live(container).textContent).toBe(
+      "Input not finished. Continue typing, or press Control C to cancel.",
+    );
+    live(container).textContent = "";
+    await send(x, "echo a\r");
+    // The same text is not said again at the same prompt.
+    expect(live(container).textContent).toBe("");
+  });
+
+  it("announces that a command waits for the keyboard", async () => {
+    const { x, container } = await setup();
+    x.dataHandler?.("cat\r");
+    await flush();
+    expect(live(container).textContent).toBe(
+      "cat is waiting for keyboard input.",
+    );
+    x.dataHandler?.("\x04");
+    await flush();
+    await flush();
+  });
+
+  it("Ctrl-D at an empty prompt prints exit and starts a new prompt (B27)", async () => {
+    const { x, execute, engine } = await setup();
+    await send(x, "\x04");
+    expect(execute).toHaveBeenCalledWith("exit");
+    expect(plain(x)).toContain("exit");
+    expect(plain(x)).toContain("cadet@");
+    // The history keeps no `exit` for Ctrl-D.
+    expect(engine.state.hist).not.toContain("exit");
+  });
+
+  it("Ctrl-D on a non-empty prompt line deletes the character under the cursor (B27)", async () => {
+    const { x, execute } = await setup();
+    await send(x, "echo ab");
+    await send(x, "\x1b[D\x1b[D");
+    await send(x, "\x04");
+    await send(x, "\r");
+    expect(execute).toHaveBeenLastCalledWith("echo b");
+  });
+
+  it("echoes the keys typed during a command and runs a typed line after it (B24)", async () => {
+    const { x, execute, engine } = await setup();
+    x.dataHandler?.("sleep 100\r");
+    await flush();
+    const before = x.written.length;
+    x.dataHandler?.("pwd");
+    expect(x.written.slice(before)).toContain("pwd");
+    x.dataHandler?.("\r");
+    engine.signal("INT");
+    await flush();
+    await flush();
+    // A signal from the engine does not empty the type-ahead; the key does.
+    expect(execute.mock.calls.map((c) => c[0])).toEqual(["sleep 100", "pwd"]);
+  });
+});
+
+describe("the control keys of the extra-keys bar (B28, AC13)", () => {
+  const html = readFileSync(resolve(__dirname, "../../index.html"), "utf8");
+
+  it("index.html has ^C and ^D first in the bar, with labels", () => {
+    const keys = /<div class="keys"[\s\S]*?<\/div>/.exec(html)?.[0] ?? "";
+    const first = [...keys.matchAll(/data-k="([^"]+)"/g)].map((m) => m[1]);
+    expect(first.slice(0, 2)).toEqual(["ctrl-c", "ctrl-d"]);
+    expect(keys).toContain('aria-label="Control C: stop the command"');
+    expect(keys).toContain('aria-label="Control D: end of input"');
+  });
+
+  function wire(t: GameTerminal) {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="keys"><button type="button" data-k="ctrl-c">^C</button><button type="button" data-k="ctrl-d">^D</button></div>`,
+    );
+    const bar = document.getElementById("keys") as HTMLElement;
+    bindExtraKeys(bar, t);
+    return (k: string) =>
+      bar
+        .querySelector(`[data-k="${k}"]`)
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+  }
+
+  it("^C stops sleep 100 with status 130", async () => {
+    const { x, t, engine } = await setup();
+    const press = wire(t);
+    x.dataHandler?.("sleep 100\r");
+    await flush();
+    press("ctrl-c");
+    await flush();
+    await flush();
+    expect(engine.busy()).toBe(false);
+    expect(engine.state.lastCode).toBe(130);
+  });
+
+  it("^C at a prompt with typed text gives ^C and a new prompt", async () => {
+    const { x, t, engine } = await setup();
+    const press = wire(t);
+    await send(x, "echo half");
+    press("ctrl-c");
+    await flush();
+    expect(x.written).toContain("^C");
+    expect(engine.state.lastCode).toBe(130);
+  });
+
+  it("^D ends cat", async () => {
+    const { x, t, engine } = await setup();
+    const press = wire(t);
+    x.dataHandler?.("cat\r");
+    await flush();
+    x.dataHandler?.("abc\r");
+    await flush();
+    press("ctrl-d");
+    await flush();
+    await flush();
+    expect(engine.busy()).toBe(false);
+    expect(engine.state.lastCode).toBe(0);
+  });
+
+  it("^D at an empty prompt runs exit", async () => {
+    const { t, execute } = await setup();
+    const press = wire(t);
+    press("ctrl-d");
+    await flush();
+    await flush();
+    expect(execute).toHaveBeenCalledWith("exit");
+  });
+});
+
+describe("output flow control (B15)", () => {
+  it("gives a promise while xterm is more than 256 KB behind, and ends it when xterm catches up", async () => {
+    const { x, t } = await setup();
+    x.holdWrites = true;
+    const chunk = (n: number) => ({
+      kind: "chunk" as const,
+      chunk: { stream: "stdout" as const, text: "a".repeat(n) },
+    });
+    expect(t.output(chunk(100 * 1024))).toBeUndefined();
+    const held = t.output(chunk(200 * 1024));
+    expect(held).toBeInstanceOf(Promise);
+    let freed = false;
+    void (held as Promise<void>).then(() => (freed = true));
+    await flush();
+    expect(freed).toBe(false);
+    // xterm writes the chunks: 300 KB fall to 0.
+    x.pending.splice(0).forEach((cb) => cb());
+    await flush();
+    expect(freed).toBe(true);
+  });
+
+  it("stops yes from growing the page memory: the engine waits for xterm", async () => {
+    const { x, engine } = await setup();
+    x.holdWrites = true;
+    x.dataHandler?.("yes\r");
+    await new Promise((r) => setTimeout(r, 50));
+    const held = x.written.length;
+    await new Promise((r) => setTimeout(r, 50));
+    // xterm has not written; the engine wrote about 256 KB and waits.
+    expect(x.written.length).toBe(held);
+    expect(held).toBeLessThan(2 * 1024 * 1024);
+    expect(engine.busy()).toBe(true);
+    x.dataHandler?.("\x03");
+    x.holdWrites = false;
+    x.pending.splice(0).forEach((cb) => cb());
+    await flush();
+    await flush();
+    expect(engine.busy()).toBe(false);
   });
 });

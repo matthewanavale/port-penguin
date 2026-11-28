@@ -388,3 +388,31 @@ describe("extra keys and hint chips (AC8)", () => {
     });
   });
 });
+
+describe("Ctrl-D (B27)", () => {
+  it("is end of input on an empty line", () => {
+    const ed = editor("");
+    expect(ed.input("\x04")).toEqual([{ type: "eof" }]);
+  });
+
+  it("deletes the character under the cursor on a non-empty line", () => {
+    const ed = editor("abc", 1);
+    expect(ed.input("\x04")).toEqual([]);
+    expect({ line: ed.line, cursor: ed.cursor }).toEqual({
+      line: "ac",
+      cursor: 1,
+    });
+  });
+
+  it("does nothing at the end of a non-empty line", () => {
+    const ed = editor("abc");
+    expect(ed.input("\x04")).toEqual([]);
+    expect(ed.line).toBe("abc");
+  });
+
+  it("leaves Ctrl-Z and Ctrl-backslash without a handler at the prompt", () => {
+    const ed = editor("ab");
+    expect(ed.input("\x1a\x1c")).toEqual([]);
+    expect(ed.line).toBe("ab");
+  });
+});

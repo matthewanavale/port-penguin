@@ -9,6 +9,8 @@ export type EditorAction =
   | { type: "submit"; line: string }
   | { type: "interrupt"; line: string }
   | { type: "clear" }
+  /** Ctrl-D on an empty line: end of input (B27). */
+  | { type: "eof" }
   | { type: "listing"; line: string; items: string[] };
 
 export interface LineEditorOptions {
@@ -205,6 +207,11 @@ export function createLineEditor(opts: LineEditorOptions): LineEditor {
           break;
         case "\x0c":
           actions.push({ type: "clear" });
+          break;
+        case "\x04":
+          // B27, as readline: end of input on an empty line, else delete under the cursor.
+          if (line === "") actions.push({ type: "eof" });
+          else key("delete");
           break;
         case "\t":
           actions.push(...complete());
